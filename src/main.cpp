@@ -1,157 +1,215 @@
-//*************for using TSDF as signed distance*********************
-
-#include "readtxt.h"
-#include "Cell.h"
-#include "Fusion.h"
-#include "MeshSample.h"
-#include "CIsoSurface.h"
-#include "SignedDistance.h"
+///*************real-time reconstruction*********************/
 #include "HpdPointCloudDisplay.h"
+#include "LasOperator.h"
+#include "SectorPartition.h"
+#include "ExplicitRec.h"
+#include "GHPR.h"
+#include <iostream>
+#include <cmath>
 
 
-int main(){
 
-	//raw point clouds
-	pcl::PointCloud<pcl::PointXYZ>::Ptr pFileCloud (new pcl::PointCloud<pcl::PointXYZ>);
-	std::vector<Point3D> point3d;
-	//read data
-	HPDpointclouddataread("bunny.las", pFileCloud, point3d, 1);
-	point3d.clear();
-	//clear raw data and smapling
-	pcl::PointCloud<pcl::PointXYZ>::Ptr pRawCloud(new pcl::PointCloud<pcl::PointXYZ>);
-	SamplePoints(*pFileCloud, *pRawCloud, 1);
-	pFileCloud->clear();
-
-	//******voxelization********
-	Voxelization oVoxeler(*pRawCloud);
-	//set the number of voxels
-	oVoxeler.GetIntervalNum(60,60,60);
-	//voxelize the space
-	oVoxeler.VoxelizeSpace();
-
-	//******set fusion model********
-	Fusion oFusion;
-	//signed distance of each node
-	//this map is constantly updated
-	oFusion.SetAccDisSize(oVoxeler.m_pCornerCloud->points.size(), oVoxeler.m_fDefault);
+int main() {
 
 
-	//******viewpoints********
-	pcl::PointCloud<pcl::PointXYZ>::Ptr pViewPoints(new pcl::PointCloud<pcl::PointXYZ>);
+	std::vector<Point3D> vScenePoints;
+	pcl::PointCloud<pcl::PointXYZ>::Ptr pSceneCloud(new pcl::PointCloud<pcl::PointXYZ>);
+	HPDpointclouddataread("Cassette.las", pSceneCloud, vScenePoints);
+
 	pcl::PointXYZ oViewPoint;
 	//x 0.535947 y  0.62239 z 0.535947 bunny
 	//x 0.457275 y  0.500000 z 1.814216 Cassette.las
 	//x 0.0 -y 0.0 z 0.0 scene1oneframe.las
-	oViewPoint.x = 0.535947;
-	oViewPoint.y = 0.62239;
-	oViewPoint.z = 0.535947;
-	pViewPoints->points.push_back(oViewPoint);
-	oViewPoint.x = 0.535947;
-	oViewPoint.y = -0.62239;
-	oViewPoint.z = 0.535947;
-	pViewPoints->points.push_back(oViewPoint);
-	oViewPoint.x = -0.535947;
-	oViewPoint.y = 0.62239;
-	oViewPoint.z = -0.535947;
-	pViewPoints->points.push_back(oViewPoint);
-	oViewPoint.x = 0.335947;
-	oViewPoint.y = 0.12239;
-	oViewPoint.z = 0.535947;
-	pViewPoints->points.push_back(oViewPoint);
-	oViewPoint.x = 0.235947;
-	oViewPoint.y = 0.92239;
-	oViewPoint.z = -0.835947;
-	pViewPoints->points.push_back(oViewPoint);
-	
+	oViewPoint.x = 0.457275;
+	oViewPoint.y = 0.500000;
+	oViewPoint.z = 1.814216;
 
-	//******compute signed distance********
-	for (int i = 1; i != 2; ++i){
+	ExplicitRec oExplicitBuilder;
+	oExplicitBuilder.HorizontalSectorSize(12);
+	oExplicitBuilder.SetViewPoint(oViewPoint);
+	oExplicitBuilder.FrameReconstruction(*pSceneCloud);
 
-		//***compute signed distance of a glance***
-		//compute signed distance of a query nodes(voxels)
-		SignedDistance oSDer;
-		std::vector<float> vCornerSignedDis = oSDer.PointBasedGlance(pRawCloud, pViewPoints->points[i], oVoxeler);
-		std::vector<float> vCornerWeigt(vCornerSignedDis.size(),1.0f);
-
-		//***fusion a glance result to global nodes (map)***
-		oFusion.UnionMinimalFusion(vCornerSignedDis);
-		//oFusion.CorrosionFusion(vCornerSignedDis, vSDMap);
-		std::cout << "Finish the " << i << "th viewpoint" << std::endl;
-	}
-
-
-	//******construction********
-	//marching cuber
-	CIsoSurface<float> oMarchingCuber;
-	oMarchingCuber.GenerateSurface(oFusion.m_vAccDis, 0,
-		                           oVoxeler.m_iFinalVoxelNum.ixnum - 1, oVoxeler.m_iFinalVoxelNum.iynum - 1, oVoxeler.m_iFinalVoxelNum.iznum - 1, 
-		                           oVoxeler.m_oVoxelLength.x, oVoxeler.m_oVoxelLength.y, oVoxeler.m_oVoxelLength.z);
-
-
-	//******output********
-	pcl::PolygonMesh oCBModel;
-	oMarchingCuber.OutputMesh(oVoxeler.m_oOriCorner, oCBModel);
-
-	pcl::io::savePLYFileBinary("cb_res.ply", oCBModel);
-	std::cout << "the number of final faces after reconstruction: " << oCBModel.polygons.size() << std::endl;
-	//*****display part*****
-	WritePointCloudTxt("result_corner.txt", *oVoxeler.m_pCornerCloud, oFusion.m_vAccDis);
-
-	pcl::PointCloud<pcl::PointXYZ>::Ptr pInnerClouds(new pcl::PointCloud<pcl::PointXYZ>);
-	std::vector<float> vInnerValue;
-	for (int i = 0; i != oVoxeler.m_pCornerCloud->size(); ++i){
-		if (oFusion.m_vAccDis[i]<0.0){
-			pInnerClouds->push_back(oVoxeler.m_pCornerCloud->points[i]);
-			vInnerValue.push_back(oFusion.m_vAccDis[i]);
-		}
-	}
-	WritePointCloudTxt("inner_corner.txt", *pInnerClouds, vInnerValue);
-
-	pcl::PointCloud<pcl::PointXYZ>::Ptr pOutlierClouds(new pcl::PointCloud<pcl::PointXYZ>);
-	std::vector<float> vOutlierValue;
-	for (int i = 0; i != oVoxeler.m_pCornerCloud->size(); ++i){
-		if (oFusion.m_vAccDis[i] >= 0.0){
-			pOutlierClouds->push_back(oVoxeler.m_pCornerCloud->points[i]);
-			vOutlierValue.push_back(oFusion.m_vAccDis[i]);
-		}
-	}
-	WritePointCloudTxt("Outlier_corner.txt", *pOutlierClouds, vOutlierValue);
-
-	pcl::PointCloud<pcl::PointXYZ>::Ptr pOutDisClouds(new pcl::PointCloud<pcl::PointXYZ>);
-	std::vector<float> vFinalCornerValue;
-	for (int i = 0; i != oVoxeler.m_pCornerCloud->size(); ++i){
-		if (oFusion.m_vAccDis[i] != 0.0){
-			pOutDisClouds->push_back(oVoxeler.m_pCornerCloud->points[i]);
-			vFinalCornerValue.push_back(oFusion.m_vAccDis[i]);
-		}
-	}
-	WritePointCloudTxt("final_corner_value.txt", *pOutDisClouds, vFinalCornerValue);
-	
-	//pcl::PolygonMesh MeshModel;
-	//pcl::toPCLPointCloud2(*pRawCloud,MeshModel.cloud);
-	//MeshModel.polygons = oSDer.m_vSurfaceIdxs;
-	//pcl::io::savePLYFileBinary("reconstruction_res.ply", MeshModel);
-
-	//******display********
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
-    HpdDisplay hpdisplay;
-	//viewer = hpdisplay.Showclassification(mc->m_vCornerCloud, vInner, "assign");
-	viewer = hpdisplay.Showfeatureresult(*oVoxeler.m_pCornerCloud, oFusion.m_vAccDis, "redgreen");
-	//viewer = hpdisplay.Showclassification(pVoxelCorners, "assign");
-	viewer->addSphere(oViewPoint, 0.02, 0.0, 0.0, 1.0, "viewpointer");	
-	//viewer->addPolygonMesh<pcl::PointXYZ>(pRawCloud, oSDer.m_vSurfaceIdxs, "polyline");
+	HpdDisplay hpdisplay;
+	//viewer=hpdisplay.Showsimplecolor(occloud,"grey");
+	viewer = hpdisplay.Showclassification(vScenePoints, "random");
+	//viewer = hpdisplay.Showclassification(vScenePoints, "random");
+	viewer->addSphere(oViewPoint, 0.2, 0.0, 0.0, 1.0, "viewpointer");
+	//cloud->points.push_back(oViewPoint);
+	for (int i = 0; i != oExplicitBuilder.m_vAllSectorClouds.size(); ++i){
 
+		std::stringstream sMeshStream;
+		sMeshStream << i << "_sec_mesh";
+		std::string sMeshName;
+		sMeshStream >> sMeshName;
+		viewer->addPolygonMesh<pcl::PointXYZ>(oExplicitBuilder.m_vAllSectorClouds[i], oExplicitBuilder.m_vAllSectorFaces[i], sMeshName);
 
-	while (!viewer->wasStopped()){
-
-		viewer->spinOnce ();
-	
 	}
-	
+
+	while (!viewer->wasStopped())
+	{
+		viewer->spinOnce();
+	}
+
 	return 0;
 
-
 }
+
+
+////*************for using TSDF as signed distance*********************
+//
+//#include "readtxt.h"
+//#include "Cell.h"
+//#include "Fusion.h"
+//#include "MeshSample.h"
+//#include "CIsoSurface.h"
+//#include "SignedDistance.h"
+//#include "HpdPointCloudDisplay.h"
+//
+//
+//int main(){
+//
+//	//raw point clouds
+//	pcl::PointCloud<pcl::PointXYZ>::Ptr pFileCloud (new pcl::PointCloud<pcl::PointXYZ>);
+//	std::vector<Point3D> point3d;
+//	//read data
+//	HPDpointclouddataread("bunny.las", pFileCloud, point3d, 1);
+//	point3d.clear();
+//	//clear raw data and smapling
+//	pcl::PointCloud<pcl::PointXYZ>::Ptr pRawCloud(new pcl::PointCloud<pcl::PointXYZ>);
+//	SamplePoints(*pFileCloud, *pRawCloud, 1);
+//	pFileCloud->clear();
+//
+//	//******voxelization********
+//	Voxelization oVoxeler(*pRawCloud);
+//	//set the number of voxels
+//	oVoxeler.GetIntervalNum(60,60,60);
+//	//voxelize the space
+//	oVoxeler.VoxelizeSpace();
+//
+//	//******set fusion model********
+//	Fusion oFusion;
+//	//signed distance of each node
+//	//this map is constantly updated
+//	oFusion.SetAccDisSize(oVoxeler.m_pCornerCloud->points.size(), oVoxeler.m_fDefault);
+//
+//
+//	//******viewpoints********
+//	pcl::PointCloud<pcl::PointXYZ>::Ptr pViewPoints(new pcl::PointCloud<pcl::PointXYZ>);
+//	pcl::PointXYZ oViewPoint;
+//	//x 0.535947 y  0.62239 z 0.535947 bunny
+//	//x 0.457275 y  0.500000 z 1.814216 Cassette.las
+//	//x 0.0 -y 0.0 z 0.0 scene1oneframe.las
+//	oViewPoint.x = 0.535947;
+//	oViewPoint.y = 0.62239;
+//	oViewPoint.z = 0.535947;
+//	pViewPoints->points.push_back(oViewPoint);
+//	oViewPoint.x = 0.535947;
+//	oViewPoint.y = -0.62239;
+//	oViewPoint.z = 0.535947;
+//	pViewPoints->points.push_back(oViewPoint);
+//	oViewPoint.x = -0.535947;
+//	oViewPoint.y = 0.62239;
+//	oViewPoint.z = -0.535947;
+//	pViewPoints->points.push_back(oViewPoint);
+//	oViewPoint.x = 0.335947;
+//	oViewPoint.y = 0.12239;
+//	oViewPoint.z = 0.535947;
+//	pViewPoints->points.push_back(oViewPoint);
+//	oViewPoint.x = 0.235947;
+//	oViewPoint.y = 0.92239;
+//	oViewPoint.z = -0.835947;
+//	pViewPoints->points.push_back(oViewPoint);
+//	
+//
+//	//******compute signed distance********
+//	for (int i = 1; i != 2; ++i){
+//
+//		//***compute signed distance of a glance***
+//		//compute signed distance of a query nodes(voxels)
+//		SignedDistance oSDer;
+//		std::vector<float> vCornerSignedDis = oSDer.PointBasedGlance(pRawCloud, pViewPoints->points[i], oVoxeler);
+//		std::vector<float> vCornerWeigt(vCornerSignedDis.size(),1.0f);
+//
+//		//***fusion a glance result to global nodes (map)***
+//		oFusion.UnionMinimalFusion(vCornerSignedDis);
+//		//oFusion.CorrosionFusion(vCornerSignedDis, vSDMap);
+//		std::cout << "Finish the " << i << "th viewpoint" << std::endl;
+//	}
+//
+//
+//	//******construction********
+//	//marching cuber
+//	CIsoSurface<float> oMarchingCuber;
+//	oMarchingCuber.GenerateSurface(oFusion.m_vAccDis, 0,
+//		                           oVoxeler.m_iFinalVoxelNum.ixnum - 1, oVoxeler.m_iFinalVoxelNum.iynum - 1, oVoxeler.m_iFinalVoxelNum.iznum - 1, 
+//		                           oVoxeler.m_oVoxelLength.x, oVoxeler.m_oVoxelLength.y, oVoxeler.m_oVoxelLength.z);
+//
+//
+//	//******output********
+//	pcl::PolygonMesh oCBModel;
+//	oMarchingCuber.OutputMesh(oVoxeler.m_oOriCorner, oCBModel);
+//
+//	pcl::io::savePLYFileBinary("cb_res.ply", oCBModel);
+//	std::cout << "the number of final faces after reconstruction: " << oCBModel.polygons.size() << std::endl;
+//	//*****display part*****
+//	WritePointCloudTxt("result_corner.txt", *oVoxeler.m_pCornerCloud, oFusion.m_vAccDis);
+//
+//	pcl::PointCloud<pcl::PointXYZ>::Ptr pInnerClouds(new pcl::PointCloud<pcl::PointXYZ>);
+//	std::vector<float> vInnerValue;
+//	for (int i = 0; i != oVoxeler.m_pCornerCloud->size(); ++i){
+//		if (oFusion.m_vAccDis[i]<0.0){
+//			pInnerClouds->push_back(oVoxeler.m_pCornerCloud->points[i]);
+//			vInnerValue.push_back(oFusion.m_vAccDis[i]);
+//		}
+//	}
+//	WritePointCloudTxt("inner_corner.txt", *pInnerClouds, vInnerValue);
+//
+//	pcl::PointCloud<pcl::PointXYZ>::Ptr pOutlierClouds(new pcl::PointCloud<pcl::PointXYZ>);
+//	std::vector<float> vOutlierValue;
+//	for (int i = 0; i != oVoxeler.m_pCornerCloud->size(); ++i){
+//		if (oFusion.m_vAccDis[i] >= 0.0){
+//			pOutlierClouds->push_back(oVoxeler.m_pCornerCloud->points[i]);
+//			vOutlierValue.push_back(oFusion.m_vAccDis[i]);
+//		}
+//	}
+//	WritePointCloudTxt("Outlier_corner.txt", *pOutlierClouds, vOutlierValue);
+//
+//	pcl::PointCloud<pcl::PointXYZ>::Ptr pOutDisClouds(new pcl::PointCloud<pcl::PointXYZ>);
+//	std::vector<float> vFinalCornerValue;
+//	for (int i = 0; i != oVoxeler.m_pCornerCloud->size(); ++i){
+//		if (oFusion.m_vAccDis[i] != 0.0){
+//			pOutDisClouds->push_back(oVoxeler.m_pCornerCloud->points[i]);
+//			vFinalCornerValue.push_back(oFusion.m_vAccDis[i]);
+//		}
+//	}
+//	WritePointCloudTxt("final_corner_value.txt", *pOutDisClouds, vFinalCornerValue);
+//	
+//	//pcl::PolygonMesh MeshModel;
+//	//pcl::toPCLPointCloud2(*pRawCloud,MeshModel.cloud);
+//	//MeshModel.polygons = oSDer.m_vSurfaceIdxs;
+//	//pcl::io::savePLYFileBinary("reconstruction_res.ply", MeshModel);
+//
+//	//******display********
+//	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
+//    HpdDisplay hpdisplay;
+//	//viewer = hpdisplay.Showclassification(mc->m_vCornerCloud, vInner, "assign");
+//	viewer = hpdisplay.Showfeatureresult(*oVoxeler.m_pCornerCloud, oFusion.m_vAccDis, "redgreen");
+//	//viewer = hpdisplay.Showclassification(pVoxelCorners, "assign");
+//	viewer->addSphere(oViewPoint, 0.02, 0.0, 0.0, 1.0, "viewpointer");	
+//	//viewer->addPolygonMesh<pcl::PointXYZ>(pRawCloud, oSDer.m_vSurfaceIdxs, "polyline");
+//
+//
+//	while (!viewer->wasStopped()){
+//
+//		viewer->spinOnce ();
+//	
+//	}
+//	
+//	return 0;
+//
+//
+//}
 
 
 ////*************for using convex hull distance as signed distance*********************
@@ -416,6 +474,9 @@ int main(){
 
 
 
+
+
+
 /////*************for one scene*********************/
 //#include "HpdPointCloudDisplay.h"
 //#include "LasOperator.h"
@@ -437,9 +498,9 @@ int main(){
 //	//x 0.535947 y  0.62239 z 0.535947 bunny
 //	//x 0.457275 y  0.500000 z 1.814216 Cassette.las
 //	//x 0.0 -y 0.0 z 0.0 scene1oneframe.las
-//	oViewPoint.x = 0.457275;
-//	oViewPoint.y = 0.500000;
-//	oViewPoint.z = 1.814216;
+//	oViewPoint.x = 0.0;
+//	oViewPoint.y = 0.0;
+//	oViewPoint.z = 0.0;
 //
 //	std::vector<std::vector<int>> oPointSecIdxs;
 //	DivideSector oSectorDivider(20);
@@ -450,7 +511,7 @@ int main(){
 //	std::vector<std::vector<pcl::Vertices>> vFaces;
 //
 //	for (int i = 0; i != oPointSecIdxs.size(); ++i) {
-//		
+//
 //		pcl::PointCloud<pcl::PointXYZ>::Ptr vOneSectionCloud(new pcl::PointCloud<pcl::PointXYZ>);
 //		//get a point clouds in one section
 //		for (int j = 0; j != oPointSecIdxs[i].size(); ++j) {
@@ -496,9 +557,6 @@ int main(){
 //	return 0;
 //
 //}
-
-
-
 
 
 ////*************for one object*********************

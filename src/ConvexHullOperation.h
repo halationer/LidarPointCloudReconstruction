@@ -69,7 +69,7 @@ public:
 	void CaculateTriangleNormal(const pcl::PointXYZ & oPZero, const pcl::PointXYZ & oPOne, const pcl::PointXYZ & oPTwo,
 		FacePara & oFacePara);
 	//reload, caculate triangle face normal with a normal input and a point triangle in face, and also a reference point to calibration
-	void ConvexHullOperation::CaculateTriangleNormal(const Eigen::Vector3f & oRefPoint, const pcl::PointNormal & oPNormal,
+	void CaculateTriangleNormal(const Eigen::Vector3f & oRefPoint, const pcl::PointNormal & oPNormal,
 		pcl::PointXYZ & oPoint, FacePara & oFacePara);
 
 	//compute the center point based on A given triangle vertices
