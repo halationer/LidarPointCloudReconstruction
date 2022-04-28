@@ -35,11 +35,15 @@ int main() {
 	oExplicitBuilder.SetViewPoint(oViewPoint);
 	oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal);
 
+	int iVerticesNum;
+	int iFacesNum;
+	oExplicitBuilder.CountNumber(iVerticesNum, iFacesNum);
+
 	pcl::io::savePLYFileASCII("sampled_clouds.ply", *oExplicitBuilder.m_pCenterNormal);
 
-	std::cout << "Number of input points: " << pSceneCloud->points.size() << std::endl;
-	std::cout << "Number of vertices: " << oExplicitBuilder.m_vAllSectorClouds.size() << std::endl;
-	std::cout << "Number of reconstructed meshes: " << oExplicitBuilder.m_vAllSectorFaces.size() << std::endl;
+	std::cout << "Number of input points: " << pRawCloud->points.size() << std::endl;
+	std::cout << "Number of vertices: " << iVerticesNum << std::endl;
+	std::cout << "Number of reconstructed meshes: " << iFacesNum << std::endl;
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 	HpdDisplay hpdisplay;

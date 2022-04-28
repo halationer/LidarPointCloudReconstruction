@@ -140,7 +140,7 @@ void ExplicitRec::RemovePseudoFaces(const pcl::PointCloud<pcl::PointXYZ> & vCent
 
 
 /*=======================================
-FrameReconstruction(const pcl::PointCloud<pcl::PointXYZ> & vSceneCloud)
+FrameReconstruction
 Input: vSceneCloud - one frame point clouds
 Outout: vScenePNormal - input point with mesh normal
 Output: none
@@ -267,6 +267,32 @@ void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZ> & vSc
 		}
 
 	}//end  i != vPointSecIdxs.size()
+
+}
+
+
+/*=======================================
+CountNumber
+Input: iVerticesNum - total number of points/vertices
+Outout: iFacesNum - total number of faces
+Output: none
+Function: count number of points and faces on all sector, respectively
+========================================*/
+void ExplicitRec::CountNumber(int & iVerticesNum, int & iFacesNum){
+
+	//define output
+	iVerticesNum = 0;
+	iFacesNum = 0;
+
+	//point number
+	for (int i = 0; i != m_vAllSectorClouds.size(); ++i){
+		iVerticesNum += m_vAllSectorClouds[i]->points.size();
+	}
+
+	//face number
+	for (int i = 0; i != m_vAllSectorFaces.size(); ++i){
+		iFacesNum += m_vAllSectorFaces[i].size();
+	}
 
 }
 

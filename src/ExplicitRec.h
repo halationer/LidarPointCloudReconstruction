@@ -54,6 +54,9 @@ public:
 	//reconstruction of one frame scanning point cloud and ouput mesh normal
 	void FrameReconstruction(const pcl::PointCloud<pcl::PointXYZ> & vSceneCloud, pcl::PointCloud<pcl::PointNormal> & vScenePNormal);
 
+	//count the number of points
+	void CountNumber(int & iVerticesNum, int & iFacesNum);
+
 	//remove one frame data
 	void ClearData();
 
