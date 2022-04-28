@@ -3,6 +3,7 @@
 #include "LasOperator.h"
 #include "SectorPartition.h"
 #include "ExplicitRec.h"
+#include "SignedDistance.h"
 #include "GHPR.h"
 #include <iostream>
 #include <cmath>
@@ -14,20 +15,31 @@ int main() {
 
 	std::vector<Point3D> vScenePoints;
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pSceneCloud(new pcl::PointCloud<pcl::PointXYZ>);
-	HPDpointclouddataread("Cassette.las", pSceneCloud, vScenePoints);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr pRawCloud(new pcl::PointCloud<pcl::PointXYZ>);
+
+	HPDpointclouddataread("scene1oneframe.las", pRawCloud, vScenePoints);
+
+	SamplePoints(*pRawCloud, *pSceneCloud, 3);
 
 	pcl::PointXYZ oViewPoint;
 	//x 0.535947 y  0.62239 z 0.535947 bunny
 	//x 0.457275 y  0.500000 z 1.814216 Cassette.las
 	//x 0.0 -y 0.0 z 0.0 scene1oneframe.las
-	oViewPoint.x = 0.457275;
-	oViewPoint.y = 0.500000;
-	oViewPoint.z = 1.814216;
+	oViewPoint.x = 0.0;
+	oViewPoint.y = 0.0;
+	oViewPoint.z = 0.0;
 
+	pcl::PointCloud<pcl::PointNormal>::Ptr pFramePNormal(new pcl::PointCloud<pcl::PointNormal>);
 	ExplicitRec oExplicitBuilder;
 	oExplicitBuilder.HorizontalSectorSize(12);
 	oExplicitBuilder.SetViewPoint(oViewPoint);
-	oExplicitBuilder.FrameReconstruction(*pSceneCloud);
+	oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal);
+
+	pcl::io::savePLYFileASCII("sampled_clouds.ply", *oExplicitBuilder.m_pCenterNormal);
+
+	std::cout << "Number of input points: " << pSceneCloud->points.size() << std::endl;
+	std::cout << "Number of vertices: " << oExplicitBuilder.m_vAllSectorClouds.size() << std::endl;
+	std::cout << "Number of reconstructed meshes: " << oExplicitBuilder.m_vAllSectorFaces.size() << std::endl;
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 	HpdDisplay hpdisplay;
@@ -45,6 +57,9 @@ int main() {
 		viewer->addPolygonMesh<pcl::PointXYZ>(oExplicitBuilder.m_vAllSectorClouds[i], oExplicitBuilder.m_vAllSectorFaces[i], sMeshName);
 
 	}
+
+	viewer->addPointCloudNormals<pcl::PointNormal>(pFramePNormal, 1, 0.4f, "normal");
+	pcl::io::savePLYFileASCII("cloudswithnormal.ply", *pFramePNormal);
 
 	while (!viewer->wasStopped())
 	{

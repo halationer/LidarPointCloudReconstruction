@@ -53,10 +53,11 @@ public:
 	//then it is a mean least squares
 	void KinectFusion(const std::vector<float> & vCurrentDis, std::vector<float> & vWeights);
 
+	//
 	void ConvexBasedFusion(const std::vector<float> & vCurrentDis, std::vector<float> & vDisMap);
 
-
-	void Fusion::UnionMinimalFusion(const std::vector<float> & vCurrentDis);
+	//
+	void UnionMinimalFusion(const std::vector<float> & vCurrentDis);
 
 	//*******data********
 	std::vector<float> m_vAccDis;
