@@ -1,12 +1,10 @@
 #ifndef EXPLICITREC_H
 #define EXPLICITREC_H
 #include "GHPR.h"
-#include "Cell.h"
 #include "SectorPartition.h"
 #include "MeshOperation.h"
 #include "MeshSample.h"
-#include "Polar.h"
-#include "readtxt.h"
+
 
 class ExplicitRecParam{
 
