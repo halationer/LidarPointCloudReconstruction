@@ -95,7 +95,7 @@ bool FrameRecon::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
   nodeHandle.param("odom_in_topic", m_sOdomTopic, std::string("/odometry/filtered"));
 
   //input point cloud topic
-  nodeHandle.param("cloud_topic", m_sCloudTopic, std::string("/cloud_points"));
+  nodeHandle.param("cloud_in_topic", m_sCloudTopic, std::string("/cloud_points"));
 
   //point cloud sampling number
   nodeHandle.param("sample_pcframe_num", m_iFrameSmpNum, 1);
@@ -105,7 +105,7 @@ bool FrameRecon::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
   //height of viewpoint
   double dViewZOffset;
-  nodeHandle.param("pastview_zoffset", dViewZOffset, 0.0);
+  nodeHandle.param("viewp_zoffset", dViewZOffset, 0.0);
   m_fViewZOffset = float(dViewZOffset);
   
   //explicit reconstruction related
