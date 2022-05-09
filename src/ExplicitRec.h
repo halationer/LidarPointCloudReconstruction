@@ -3,7 +3,8 @@
 #include "GHPR.h"
 #include "SectorPartition.h"
 #include "MeshOperation.h"
-#include "MeshSample.h"
+#define PI 3.1415926
+//#include "MeshSample.h"
 
 
 class ExplicitRecParam{

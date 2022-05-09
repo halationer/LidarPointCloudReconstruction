@@ -37,8 +37,7 @@ Others: m_oCnfdnSolver - (f_fSigma - the computed radius of robot
 *************************************************/
 FrameRecon::FrameRecon(ros::NodeHandle & node,
                        ros::NodeHandle & nodeHandle):
-                       m_iTrajFrameNum(0),
-                       m_bOutNodeFileFlag(false){
+                       m_iTrajFrameNum(0){
 
   //read parameters
   ReadLaunchParams(nodeHandle);
@@ -90,7 +89,7 @@ Others: none
 bool FrameRecon::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
   //output file name
-  nodeHandle.param("file_outputpath", m_sFileHead, std::string("./"));
+  //nodeHandle.param("file_outputpath", m_sFileHead, std::string("./"));
 
   //input odom topic
   nodeHandle.param("odom_in_topic", m_sOdomTopic, std::string("/odometry/filtered"));
@@ -131,7 +130,7 @@ Output: none
 Return: none
 Others: none
 *************************************************/
-
+/*
 void FrameRecon::PublishPointCloud(pcl::PointCloud<pcl::PointXYZ> & vCloud){
   
 	//publish obstacle points
@@ -146,7 +145,7 @@ void FrameRecon::PublishPointCloud(pcl::PointCloud<pcl::PointXYZ> & vCloud){
   m_oCloudPublisher.publish(vCloudData);
 
 }
-
+*/
 
 /*************************************************
 Function: HandleRightLaser
@@ -172,7 +171,7 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 
 		////a point clouds in PCL type
 		pcl::PointCloud<pcl::PointXYZ> vInputCloud;
-		pcl::PointCloud<pcl::PointXYZ>::Ptr vOneCloud(new pcl::PointCloud<pcl::PointXYZ>);
+		pcl::PointCloud<pcl::PointXYZ>::Ptr pRawCloud(new pcl::PointCloud<pcl::PointXYZ>);
 		////message from ROS type to PCL type
 		pcl::fromROSMsg(vLaserData, vInputCloud);
 
@@ -183,18 +182,25 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 			oArgPoint.x = vInputCloud.points[i].z;
 			oArgPoint.y = vInputCloud.points[i].x;
 			oArgPoint.z = vInputCloud.points[i].y;
-			vOneCloud->points.push_back(oArgPoint);
+			pRawCloud->points.push_back(oArgPoint);
 
 		}		
 
 		//if have corresponding trajectory point (viewpoint)
-		if (vOdomHistory.size()){
+		pcl::PointXYZ oCurrentViewP;
+
+		if (m_vOdomHistory.size()){
 			//
 			oCurrentViewP = ComputeQueryTraj(vLaserData.header.stamp);
-			//
+		
+		//else waiting for sync
+		}else{
+
+			return;
 		}
 		
-		SamplePoints(*pRawCloud, *pSceneCloud, m_iSampleInPCNum);
+		pcl::PointCloud<pcl::PointXYZ>::Ptr pSceneCloud(new pcl::PointCloud<pcl::PointXYZ>);
+		SamplePoints(*pRawCloud, *pSceneCloud, m_iSampleInPNum);
 		
 		pcl::PointCloud<pcl::PointNormal>::Ptr pFramePNormal(new pcl::PointCloud<pcl::PointNormal>);
 
@@ -210,9 +216,10 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		pcl::toROSMsg(vGroundCloud, vGroundPub);
 		vGroundPub.header.frame_id = "camera_init";
 		vGroundPub.header.stamp = vLaserData.header.stamp;
-		m_oGroundPub.publish(vGroundPub);
+		//m_oGroundPub.publish(vGroundPub);
 	}
 
+	return;
 
 }
 
@@ -235,7 +242,7 @@ void FrameRecon::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 {
 
 	//count input frames
-	m_iTrajPointNum++;
+	//m_iTrajPointNum++;
 
 	//save the into the memory
 	//save the position of trajectory
@@ -246,7 +253,7 @@ void FrameRecon::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 	//save record time
 	oOdomPoint.oTimeStamp = oTrajectory.header.stamp;
 
-	vOdomHistory.push(oOdomPoint);
+	m_vOdomHistory.push(oOdomPoint);
 
 }
 
@@ -300,29 +307,29 @@ pcl::PointXYZ FrameRecon::ComputeQueryTraj(const ros::Time & oQueryTime){
 	//index
 	int iTrajIdx = 0;
 	//time different
-	double timeDiff = (oQueryTime - vOdomHistory[iTrajIdx].oTimeStamp).toSec();
+	double timeDiff = (oQueryTime - m_vOdomHistory[iTrajIdx].oTimeStamp).toSec();
 	//search the most recent time
-	while (iTrajIdx < vOdomHistory.size() - 1 && timeDiff > 0) {
+	while (iTrajIdx < m_vOdomHistory.size() - 1 && timeDiff > 0) {
 		//increase index
 		iTrajIdx++;
 		//time different
-		timeDiff = (oQueryTime - vOdomHistory[iTrajIdx].oTimeStamp).toSec();
+		timeDiff = (oQueryTime - m_vOdomHistory[iTrajIdx].oTimeStamp).toSec();
 	}
 
 	//if the querytime is out of the stored time section 
 	if (iTrajIdx == 0 || timeDiff > 0) {
 		//turn back zero
-		oResTraj.x = vOdomHistory[iTrajIdx].oLocation.x;
-		oResTraj.y = vOdomHistory[iTrajIdx].oLocation.y;
-		oResTraj.z = vOdomHistory[iTrajIdx].oLocation.z;
+		oResTraj.x = m_vOdomHistory[iTrajIdx].oLocation.x;
+		oResTraj.y = m_vOdomHistory[iTrajIdx].oLocation.y;
+		oResTraj.z = m_vOdomHistory[iTrajIdx].oLocation.z;
 
 	}else {//if it is between two stored times
 		//get the ratio
-		//ROS_INFO("Trajtime between: %f and %f", vOdomHistory[iTrajIdx].oTimeStamp.toSec(), vOdomHistory[iTrajIdx - 1].oTimeStamp.toSec());
+		//ROS_INFO("Trajtime between: %f and %f", m_vOdomHistory[iTrajIdx].oTimeStamp.toSec(), m_vOdomHistory[iTrajIdx - 1].oTimeStamp.toSec());
 
-		float ratio = -timeDiff / (vOdomHistory[iTrajIdx].oTimeStamp - vOdomHistory[iTrajIdx - 1].oTimeStamp).toSec();
+		float ratio = -timeDiff / (m_vOdomHistory[iTrajIdx].oTimeStamp - m_vOdomHistory[iTrajIdx - 1].oTimeStamp).toSec();
 		//interpolate an accuracy value
-		InterpolateTraj(vOdomHistory[iTrajIdx], vOdomHistory[iTrajIdx - 1], ratio, oResTraj);
+		InterpolateTraj(m_vOdomHistory[iTrajIdx], m_vOdomHistory[iTrajIdx - 1], ratio, oResTraj);
 	}
 
 	return oResTraj;

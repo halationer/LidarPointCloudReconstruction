@@ -38,7 +38,7 @@ struct RosTimePoint{
 	// The global trajectory position in 3D space. 
 	pcl::PointXYZ oLocation;
 
-}
+};
 
 //******************************************************************
 // this class below is to compute topological guidance map based on SLAM
@@ -71,7 +71,7 @@ class FrameRecon{
   //Reads and verifies the ROS parameters.
   bool ReadLaunchParams(ros::NodeHandle & nodeHandle);  
 
-  void SamplePoints(const pcl::PointCloud<pcl::PointXYZ> & vCloud, pcl::PointCloud<pcl::PointXYZ> & vNewCloud, int iSampleNum, bool bIntervalSamp);
+  void SamplePoints(const pcl::PointCloud<pcl::PointXYZ> & vCloud, pcl::PointCloud<pcl::PointXYZ> & vNewCloud, int iSampleNum, bool bIntervalSamp = true);
 
   //*************handler function*************
   //handle the trajectory information
@@ -84,6 +84,14 @@ class FrameRecon{
   //*************Output function*************
   //publish point clouds
   void PublishPointCloud(pcl::PointCloud<pcl::PointXYZ> & vCloud);
+
+  //*******odom related*******
+  //Trajectory line interpolation
+  void InterpolateTraj(const RosTimePoint & oCurrent, const RosTimePoint & oPast, const float& fRatio,
+  pcl::PointXYZ & oInter);
+
+  //Query the nearest trajectory point
+  pcl::PointXYZ ComputeQueryTraj(const ros::Time & oQueryTime);
 
 
  private:
@@ -109,10 +117,13 @@ class FrameRecon{
   unsigned int m_iPCFrameCount;
 
   //frame sampling
-  unsigned int m_iFrameSmpNum;
+  int m_iFrameSmpNum;
 
   //sampling number of input point clouds
-  unsigned int m_iSampleInPNum;
+  int m_iSampleInPNum;
+
+  //sampling number of sector
+  int m_iSectorNum;
   
   //***for output point cloud topic***
   //point cloud publisher for test
