@@ -1,3 +1,4 @@
+
 cmake_minimum_required(VERSION 2.8.3)
 project(frame_reconstruction)
 
@@ -11,15 +12,17 @@ add_compile_options(-std=c++11)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  pcl_ros
-  roscpp
-  rospy
-  sensor_msgs
-  std_msgs
-  nav_msgs
-  tf
+             pcl_ros
+             roscpp
+             rospy
+             sensor_msgs
+             std_msgs
+             nav_msgs
+             tf
+             geometry_msgs
+             sensor_msgs
+             filters
 )
-
 
 catkin_package(
 #  INCLUDE_DIRS include
@@ -29,16 +32,17 @@ catkin_package(
 )
 
 
-
-
 include_directories(
-# include
-  ${catkin_INCLUDE_DIRS}
-  src
+	include
+    ${catkin_INCLUDE_DIRS}
+    #${OCTOMAP_INCLUDE_DIRS}
 )
 
 
+aux_source_directory(src DIR_SRCS)
+
 ###### build ########
-add_executable(frame_reconstruction src/FrameRecon.cpp src/main.cpp)
+add_executable(frame_reconstruction ${DIR_SRCS})
+
 
 target_link_libraries(frame_reconstruction ${catkin_LIBRARIES} ${PCL_LIBRARIES})
