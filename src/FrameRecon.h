@@ -14,14 +14,16 @@
 #include <pcl_conversions/pcl_conversions.h>
 
 //polygon related
-#include <geometry_msgs/PolygonStamped.h>
-#include <geometry_msgs/Point32.h>
+
+#include <visualization_msgs/Marker.h>
+
 
 //project related
 #include "GHPR.h"
 #include "SectorPartition.h"
 #include "ExplicitRec.h"
 #include "CircularVector.h"
+
 
 // Trajectory state data. 
 struct RosTimePoint{
@@ -83,7 +85,12 @@ class FrameRecon{
 
   //*************Output function*************
   //publish point clouds
-  void PublishPointCloud(pcl::PointCloud<pcl::PointXYZ> & vCloud);
+  void PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud);
+  //reload, publish point clouds with labels
+  void PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures);
+
+  //publish meshes
+  void PublishMeshs();
 
   //*******odom related*******
   //Trajectory line interpolation
@@ -93,15 +100,33 @@ class FrameRecon{
   //Query the nearest trajectory point
   pcl::PointXYZ ComputeQueryTraj(const ros::Time & oQueryTime);
 
+  //output point cloud for test
+  void OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, bool bAllRecord = false);
+
+  //reload, output point cloud with given feature for test
+  void OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures, bool bAllRecord = false);
+
 
  private:
+
+  //***file related***
+  std::string m_sFileHead;
+
+  //full name of output txt that records the point clouds
+  std::stringstream m_sOutPCFileName; 
+
+  //whether the file is generated or not
+  bool m_bOutPCFileFlag;
+  
+  //ouput file
+  std::ofstream m_oOutPCFile;
 
   //***for input odom topic***
   //the m_oOdomSuber subscirber is to hearinput  odometry topic
   ros::Subscriber m_oOdomSuber;
 
   //the name of input odometry topic (robot trajectory)
-  std::string m_sOdomTopic;
+  std::string m_sInOdomTopic;
 
   unsigned int m_iTrajFrameNum;
 
@@ -110,11 +135,28 @@ class FrameRecon{
   ros::Subscriber m_oCloudSuber;
 
   //the name of input point cloud topic 
-  std::string m_sCloudTopic; 
+  std::string m_sInCloudTopic; 
 
 
-  //How many frames of point cloud have been calculated cumulatively
-  unsigned int m_iPCFrameCount;
+  //***for output cloud topic***
+  //output point cloud topic
+  std::string m_sOutCloudTopic;
+
+  //output point cloud frame
+  std::string m_sOutCloudTFId;
+
+  //point cloud publisher for test
+  ros::Publisher m_oCloudPublisher;
+
+  //***for output mesh***
+  //output point cloud topic
+  std::string m_sOutMeshTopic;
+
+  //output point cloud frame
+  std::string m_sOutMeshTFId;
+
+  //polygon publisher for test
+  ros::Publisher m_oMeshPublisher;
 
   //frame sampling
   int m_iFrameSmpNum;
@@ -124,23 +166,22 @@ class FrameRecon{
 
   //sampling number of sector
   int m_iSectorNum;
-  
-  //***for output point cloud topic***
-  //point cloud publisher for test
-  ros::Publisher m_oCloudPublisher;
 
   //**frenquency related**
 
   float m_fViewZOffset;//z offset of odom to lidar sensor
   
-  //the frame count of trajectory point
-
-
   //explicit reconstruction
   ExplicitRec m_oExplicitBuilder;
 
   //circle vector of odom
   CircularVector<RosTimePoint> m_vOdomHistory;
+
+  //How many frames of point cloud have been calculated cumulatively
+  unsigned int m_iPCFrameCount;
+
+    //frame count
+  unsigned int m_iTrajCount;
 
 
 

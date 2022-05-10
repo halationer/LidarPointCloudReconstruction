@@ -272,6 +272,175 @@ void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZ> & vSc
 
 
 /*=======================================
+OutputAllMeshes
+Input: none
+Outout: MeshModel - mesh of all point clouds
+Function: combine mesh from each sector and output mesh results
+========================================*/
+void ExplicitRec::OutputAllMeshes(pcl::PolygonMesh & MeshModel){
+
+	//new a point idx in scene point clouds
+	std::vector<std::vector<int>> vPointInAllDataIdx;
+	vPointInAllDataIdx.reserve(m_vAllSectorClouds.size());
+	
+	std::vector<int> vEmptyVec;
+	for (int i = 0; i != m_vAllSectorClouds.size(); ++i)
+		vPointInAllDataIdx.push_back(vEmptyVec);
+
+	pcl::PointCloud<pcl::PointXYZ>::Ptr pAllCloud(new pcl::PointCloud<pcl::PointXYZ>);
+
+	int iPNum = 0;
+	
+	//for each sector
+	for (int i = 0; i != m_vAllSectorClouds.size(); ++i){
+
+		//for each point in a sector
+		for (int j = 0; j != m_vAllSectorClouds[i]->points.size(); ++j){
+			
+			//get the point
+			pAllCloud->points.push_back(m_vAllSectorClouds[i]->points[j]);
+			
+			//get point index in all point clouds
+			vPointInAllDataIdx[i].push_back(iPNum);
+			iPNum++;
+
+		}//end j
+
+	}//end i
+
+	//relaitionships of vertexs in all point clouds
+	std::vector<pcl::Vertices> oPolygons;
+
+	//for each sector
+	for (int i = 0; i != m_vAllSectorFaces.size(); ++i){
+		
+		//for each face
+		for (int j = 0; j != m_vAllSectorFaces[i].size(); ++j){
+
+			pcl::Vertices oOneFace;
+
+			//for each face vertex id
+			for (int k = 0; k != m_vAllSectorFaces[i][j].vertices.size(); ++k){
+				
+				//vertex id in each sector
+				int iVertexSectorIdx = m_vAllSectorFaces[i][j].vertices[k];
+
+				//vertex id in all data
+				int iVertexGlobalIdx = vPointInAllDataIdx[i][iVertexSectorIdx];
+
+				//get a vertex
+				oOneFace.vertices.push_back(iVertexGlobalIdx);
+					
+			}//end k
+
+			oPolygons.push_back(oOneFace);
+		
+		}//end j
+
+	}//end i
+
+	//get the polygon
+	pcl::toPCLPointCloud2(*pAllCloud, MeshModel.cloud);
+	MeshModel.polygons = oPolygons;
+
+	//pcl::io::savePLYFileBinary("reconstruction_res.ply", MeshModel);
+
+}
+
+/*=======================================
+OutputAllMeshes
+Input: none
+Outout: vCloud - points presenting face relationship (point repeatable)
+Function: output all vertices in a point repeatable way using three-point arrangement
+========================================*/
+void ExplicitRec::OutputAllMeshes(pcl::PointCloud<pcl::PointXYZ> & vCloud){
+
+	//relaitionships of vertexs in all point clouds
+	 vCloud.points.clear();
+
+	//for each sector
+	for (int i = 0; i != m_vAllSectorFaces.size(); ++i){
+
+		//for each face
+		for (int j = 0; j != m_vAllSectorFaces[i].size(); ++j){
+
+			//for each face vertex id
+			for (int k = 0; k != m_vAllSectorFaces[i][j].vertices.size(); ++k){
+
+				//vertex id in each sector
+				int iVertexSectorIdx = m_vAllSectorFaces[i][j].vertices[k];
+
+				//vertex id in all data
+				vCloud.points.push_back(m_vAllSectorClouds[i]->points[iVertexSectorIdx]);
+
+			}//end k
+
+		}//end j
+
+	}//end i
+
+}
+
+/*=======================================
+OutputClouds reload
+Input: none
+Output: vCloud - all processed point
+vNorSectLabels - sector index of each processed point
+Function: output the all processed point
+========================================*/
+void ExplicitRec::OutputClouds(pcl::PointCloud<pcl::PointXYZ> & vCloud){
+
+	vCloud.clear();
+
+	//for each sector
+	for (int i = 0; i != m_vAllSectorClouds.size(); ++i){
+
+		//for each point in a sector
+		for (int j = 0; j != m_vAllSectorClouds[i]->points.size(); ++j){
+
+			//get the point
+			vCloud.points.push_back(m_vAllSectorClouds[i]->points[j]);
+
+		}//end j
+
+	}//end i
+
+}
+
+/*=======================================
+OutputClouds reload
+Input: none
+Output: vCloud - all processed point 
+vNorSectLabels - sector index of each processed point 
+Function: output processed point with labels
+========================================*/
+void ExplicitRec::OutputClouds(pcl::PointCloud<pcl::PointXYZ> & vCloud, std::vector<float> & vNorSectLabels){
+
+	vCloud.clear();
+
+	//for each sector
+	for (int i = 0; i != m_vAllSectorClouds.size(); ++i){
+		
+		//compute the normalized sector label
+		float fNorSecLabel = float(i) / float(m_iSectNum);
+
+		//for each point in a sector
+		for (int j = 0; j != m_vAllSectorClouds[i]->points.size(); ++j){
+
+			//get the point
+			vCloud.points.push_back(m_vAllSectorClouds[i]->points[j]);	
+
+			//get the label
+			vNorSectLabels.push_back(fNorSecLabel);
+
+		}//end j
+
+	}//end i
+
+}
+
+
+/*=======================================
 CountNumber
 Input: iVerticesNum - total number of points/vertices
 Outout: iFacesNum - total number of faces
@@ -308,6 +477,8 @@ void ExplicitRec::ClearData(){
 	m_vAllSectorClouds.clear();
 
 	m_vAllSectorFaces.clear();
+
+	m_pCenterNormal->clear();
 
 
 }

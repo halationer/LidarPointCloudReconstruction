@@ -18,25 +18,26 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
 <launch>
 
+    <arg name="fileoutputpath" default="/home/ludy/" />
+
     <arg name="cloudintopic" default="/velodyne_cloud_registered" />
 
     <arg name="odomintopic" default="/integrated_to_init" />
 
-    <!--arg name="lidarouttopic" default="/slam_points" /-->
-    <!--arg name="trajouttopic" default="/husky_velocity_controller/odom" /-->
+    <arg name="cloudoutopic" default="/processed_clouds" />
 
-    <!--arg name="odomtargetframe" default="odom" /-->
-    <!--arg name="odomrawframe" default="camera_init" /-->
-    <!--arg name="cloudstargetframe" default="odom"/-->
-    <!--arg name="cloudsrawframe" default="camera_init"/-->
+    <arg name="polygonoutopic" default="/reconstructed_meshs" />
+
+    <arg name="outcloudtfid" default="camera_init"/>
+
+    <arg name="polygontfid" default="camera_init"/>
 
     <arg name="samplepcframenum"  default="1" />
+
     <arg name="sampleinpnum"  default="1" />
+
     <arg name="sectornum"  default="12" />
-    <!-- height offset-->
-    <!-- this value is obtained using rosrun tf traget_frame source_frame-->
-    <!--arg name="odomzoffset" default="0.0"/--> 
-    <!-- this value is obtained by camera_init-base_link-(base_link-base_footprint)- -->
+
     <arg name="pointzoffset" default="0.0"/> 
 
 <!-- frame_reconstruction node in frame_reconstruction pkg-->
@@ -44,18 +45,20 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <!-- parameters-->	
 
+        <param name="file_outputpath" type="string" value="$(arg fileoutputpath)"  />
+
         <!-- define input topic name-->
 		<param name="cloud_in_topic" type="string" value="$(arg cloudintopic)"  />
 
 		<param name="odom_in_topic" type="string" value="$(arg odomintopic)" />
 
         <!-- define output topic name-->
-	    <!--param name="lidarout_topic" type="string" value="$(arg lidarouttopic)" /-->
-		<!--param name="trajout_topic" type="string" value="/slam_odom" /-->
-		<!--param name="trajout_topic" type="string" value="$(arg trajouttopic)" /-->
+        <param name="cloud_out_topic" type="string" value="$(arg cloudoutopic)" />
+
+        <param name="polygon_out_topic" type="string" value="$(arg polygonoutopic)" />
 		
         <!-- frame id related-->
-	    <param name="sample_pcframe_num" type="string" value="$(arg samplepcframenum)" />
+	    <param name="sample_pcframe_num" type="int" value="$(arg samplepcframenum)" />
 
         <!-- sampling number-->
 	    <param name="sample_inputpoints_num"  type="int" value="$(arg sampleinpnum)" />
@@ -66,6 +69,14 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
         <param name="viewp_zoffset" type="double" value="$(arg pointzoffset)"/>
 
+        <!-- tf id related-->
+        <param name="outcloud_tf_id" type="string" value="$(arg outcloudtfid)" />
+
+        <param name="polygon_tf_id" type="string" value="$(arg polygontfid)" />
+
+
 	</node>
 
 </launch>
+
+

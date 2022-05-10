@@ -4,7 +4,6 @@
 #include "SectorPartition.h"
 #include "MeshOperation.h"
 #define PI 3.1415926
-//#include "MeshSample.h"
 
 
 class ExplicitRecParam{
@@ -52,6 +51,16 @@ public:
 
 	//reconstruction of one frame scanning point cloud and ouput mesh normal
 	void FrameReconstruction(const pcl::PointCloud<pcl::PointXYZ> & vSceneCloud, pcl::PointCloud<pcl::PointNormal> & vScenePNormal);
+
+	//combine and output all vertices
+	void OutputAllMeshes(pcl::PolygonMesh & MeshModel);
+	//reload, output all vertices in a point repeatable way using three-point arrangement
+	void OutputAllMeshes(pcl::PointCloud<pcl::PointXYZ> & vCloud);
+
+	//output point clouds
+	void OutputClouds(pcl::PointCloud<pcl::PointXYZ> & vCloud);
+	//output point clouds with features
+	void OutputClouds(pcl::PointCloud<pcl::PointXYZ> & vCloud, std::vector<float> & vNorSectLabel);
 
 	//count the number of points
 	void CountNumber(int & iVerticesNum, int & iFacesNum);
