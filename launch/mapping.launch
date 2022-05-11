@@ -18,15 +18,18 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
 <launch>
 
+    <!--Use simulated time to prevent the public time of the TF structure from being unable to match with other messages-->
+    <param name="use_sim_time" value="true"/>
+
     <arg name="fileoutputpath" default="/home/ludy/" />
 
-    <arg name="cloudintopic" default="/slam_points" />
+    <arg name="cloudintopic" default="/slam_points"/>
 
     <arg name="odomintopic" default="/slam_odom" />
 
     <arg name="cloudoutopic" default="/processed_clouds" />
 
-    <arg name="polygonoutopic" default="/frame_meshs" />
+    <arg name="polygonoutopic" default="/reconstructed_meshs" />
 
     <arg name="outcloudtfid" default="map"/>
 
@@ -39,6 +42,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="sectornum"  default="12" />
 
     <arg name="pointzoffset" default="0.0"/> 
+
+    <!--- TF -->
+    <node pkg="tf" type="static_transform_publisher" name="camera_init_to_map"  args="0 0 0 1.570795 0 1.570795 /map /camera_init 10" />
 
     <!-- frame_reconstruction node in frame_reconstruction pkg-->
     <node name="frame_reconstruction" pkg="frame_reconstruction" type="frame_reconstruction" output="screen">
@@ -76,6 +82,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
 
 	</node>
+
+    <!-- rosbag related: replay with rate = 1 speed up-->
+    <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 /home/ludy/DataSets/Loam/nsh_indoor_outdoor.bag"/>
 
 
 </launch>

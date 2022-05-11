@@ -290,19 +290,9 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 	if (!(m_iPCFrameCount%m_iFrameSmpNum)){
 
 		////a point clouds in PCL type
-		pcl::PointCloud<pcl::PointXYZ>::Ptr pSLAMCloud(new pcl::PointCloud<pcl::PointXYZ>);
 		pcl::PointCloud<pcl::PointXYZ>::Ptr pRawCloud(new pcl::PointCloud<pcl::PointXYZ>);
 		////message from ROS type to PCL type
-		pcl::fromROSMsg(vLaserData, *pSLAMCloud);
-		for(int i=0;i!=pSLAMCloud->points.size();++i){
-
-			pcl::PointXYZ oPoint;
-			oPoint.x = pSLAMCloud->points[i].z;
-			oPoint.y = pSLAMCloud->points[i].x;
-			oPoint.z = pSLAMCloud->points[i].y;
-			pRawCloud->points.push_back(oPoint);
-
-		}
+		pcl::fromROSMsg(vLaserData, *pRawCloud);
 
 		//if have corresponding trajectory point (viewpoint)
 		pcl::PointXYZ oCurrentViewP;
@@ -369,9 +359,9 @@ void FrameRecon::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 	//save the into the memory
 	//save the position of trajectory
 	RosTimePoint oOdomPoint;
-	oOdomPoint.oLocation.x = oTrajectory.pose.pose.position.z;
-	oOdomPoint.oLocation.y = oTrajectory.pose.pose.position.x;
-	oOdomPoint.oLocation.z = oTrajectory.pose.pose.position.y;
+	oOdomPoint.oLocation.x = oTrajectory.pose.pose.position.x;
+	oOdomPoint.oLocation.y = oTrajectory.pose.pose.position.y;
+	oOdomPoint.oLocation.z = oTrajectory.pose.pose.position.z;
 
 	//save record time
 	oOdomPoint.oTimeStamp = oTrajectory.header.stamp;
