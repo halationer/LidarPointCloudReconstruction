@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<!--
+Software License Agreement (BSD)
+
+\file      publish_SLAM_res.launch
+\authors   Pengdi Huang <alualu628628@163.com>
+\copyright Copyright (c) 2019, XXX, All rights reserved.
+
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WAR-
+RANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, IN-
+DIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<launch>
+
+    <arg name="fileoutputpath" default="/home/ludy/" />
+
+    <arg name="cloudintopic" default="/slam_points" />
+
+    <arg name="odomintopic" default="/slam_odom" />
+
+    <arg name="cloudoutopic" default="/processed_clouds" />
+
+    <arg name="polygonoutopic" default="/frame_meshs" />
+
+    <arg name="outcloudtfid" default="map"/>
+
+    <arg name="polygontfid" default="map"/>
+
+    <arg name="samplepcframenum"  default="1" />
+
+    <arg name="sampleinpnum"  default="1" />
+
+    <arg name="sectornum"  default="12" />
+
+    <arg name="pointzoffset" default="0.0"/> 
+
+    <!-- frame_reconstruction node in frame_reconstruction pkg-->
+    <node name="frame_reconstruction" pkg="frame_reconstruction" type="frame_reconstruction" output="screen">
+
+        <!-- parameters-->	
+
+        <param name="file_outputpath" type="string" value="$(arg fileoutputpath)"  />
+
+        <!-- define input topic name-->
+		<param name="cloud_in_topic" type="string" value="$(arg cloudintopic)"  />
+
+		<param name="odom_in_topic" type="string" value="$(arg odomintopic)" />
+
+        <!-- define output topic name-->
+        <param name="cloud_out_topic" type="string" value="$(arg cloudoutopic)" />
+
+        <param name="polygon_out_topic" type="string" value="$(arg polygonoutopic)" />
+		
+        <!-- frame id related-->
+	    <param name="sample_pcframe_num" type="int" value="$(arg samplepcframenum)" />
+
+        <!-- sampling number-->
+	    <param name="sample_inputpoints_num"  type="int" value="$(arg sampleinpnum)" />
+
+        <param name="sector_num"  type="int" value="$(arg sectornum)" />
+
+	    <!--param name="odom_zoffset" type="double" value="$(arg odomzoffset)" /-->
+
+        <param name="viewp_zoffset" type="double" value="$(arg pointzoffset)"/>
+
+        <!-- tf id related-->
+        <param name="outcloud_tf_id" type="string" value="$(arg outcloudtfid)" />
+
+        <param name="polygon_tf_id" type="string" value="$(arg polygontfid)" />
+
+
+	</node>
+
+
+</launch>
+
+
