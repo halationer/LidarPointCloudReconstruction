@@ -10,6 +10,7 @@ Panels:
         - /PointCloud21
         - /Odometry2
         - /PointCloud22
+        - /Marker1
       Splitter Ratio: 0.5
     Tree Height: 729
   - Class: rviz/Selection
@@ -211,6 +212,14 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /frame_meshs
+      Name: Marker
+      Namespaces:
+        "": true
+      Queue Size: 100
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -239,25 +248,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 79.84272766113281
+      Distance: 148.45240783691406
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 19.257373809814453
-        Y: 62.41807174682617
-        Z: 1.424099627911346e-5
+        X: 0.5883378386497498
+        Y: 8.425389289855957
+        Z: 1.2612132195499726e-5
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.10479649901390076
+      Pitch: 0.9147961735725403
       Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 1.2203859090805054
+      Yaw: 0.610388457775116
     Saved: ~
 Window Geometry:
   Displays:
@@ -276,4 +285,4 @@ Window Geometry:
     collapsed: false
   Width: 1389
   X: 281
-  Y: 110
+  Y: 80

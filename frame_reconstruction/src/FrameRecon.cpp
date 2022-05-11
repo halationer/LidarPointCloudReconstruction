@@ -52,8 +52,15 @@ FrameRecon::~FrameRecon() {
 	//define ouput ply file name
 	m_sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply"; 
 
+    //output to the screen
+	std::cout << "Please do not force closing the programe, the process is writing output PLY file." << std::endl;
+	std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
+	std::cout << "The output file is " << m_sOutPCNormalFileName.str() << std::endl;
+
 	//output point clouds with computed normals to the files when the node logs out
 	pcl::io::savePLYFileASCII(m_sOutPCNormalFileName.str(), m_vMapPCN);
+
+	std::cout << "Output is complete! The process will be automatically terminated. Thank you for waiting. " << std::endl;
 
 }
 
