@@ -1,6 +1,5 @@
 #include "FrameRecon.h"
 
-//*********************************Initialization function*********************************
 
 /*************************************************
 Function: FrameRecon
@@ -11,29 +10,6 @@ Table Accessed: none
 Table Updated: none
 Input: node - a ros node class
      nodeHandle - a private ros node class
-Return: Parameter initialization
-Others: m_oCnfdnSolver - (f_fSigma - the computed radius of robot
-                        f_fGHPRParam - the parameter of GHPR algorithm
-                        f_fVisTermThr - the threshold of visbility term - useless
-                        f_fMinNodeThr - minimum value to generate node
-                          m_fTraversWeight - traverel weight
-                          m_fExploreWeight - visibility weight
-                          m_fDisWeight - distance term weight
-                          m_fBoundWeight - bound term weight)
-      m_pBoundCloud - a point clouds storing the received boundary points
-      m_pObstacleCloud - a point clouds storing the received obstacle points
-      m_iTrajFrameNum - record received odometry frame
-      m_iGroundFrames - record received ground point cloud frame
-      m_iBoundFrames - record received boundary point cloud frame
-      m_iObstacleFrames - record received obstacle point cloud frame 
-      m_iComputedFrame - record computed times of processing point cloud frame
-      m_iNodeTimes - count node generation times
-      m_iAncherCount - count visited anchor in a trip 
-      m_iOdomSampingNum - smapling number of odometry points
-      m_bGridMapReadyFlag - a flag indicating the grid map has been initialized (true) or not (false)
-      m_bCoverFileFlag - a flag indicating whether an coverage file is generated (true) or not (false)
-      m_bOutTrajFileFlag - a flag indicating whether an out trajectroy file is generated
-      m_bAnchorGoalFlag - a flag indicating the robot is moving Moving on a local optimization path
 *************************************************/
 FrameRecon::FrameRecon(ros::NodeHandle & node,
                        ros::NodeHandle & nodeHandle):
@@ -68,12 +44,16 @@ Called By: main function of project
 Table Accessed: none
 Table Updated: none
 Input: none
-Output: none
-Return: none
-Others: none
+Output: a file storing the point clouds with correct normal for accurate reconstruction
 *************************************************/
 
 FrameRecon::~FrameRecon() {
+
+	//define ouput ply file name
+	m_sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply"; 
+
+	//output point clouds with computed normals to the files when the node logs out
+	pcl::io::savePLYFileASCII(m_sOutPCNormalFileName.str(), m_vMapPCN);
 
 }
 
@@ -346,26 +326,9 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		m_oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal);
 
 		//************output value******************
-		pcl::PointCloud<pcl::PointXYZ> vResCloud;
-		
-		/*
-		for(int i=0;i!=pFramePNormal->points.size();++i){
-			pcl::PointXYZ oPoint;
-			oPoint.x = pFramePNormal->points[i].x;
-			oPoint.y = pFramePNormal->points[i].y;
-			oPoint.z = pFramePNormal->points[i].z;
-			vResCloud.points.push_back(oPoint);
-		}*/
-
-		//std::vector<float> vNorSectLabel;
-		//m_oExplicitBuilder.OutputClouds(vResCloud, vNorSectLabel);
-		//vResCloud.points.push_back(oCurrentViewP);
-		//vNorSectLabel.push_back(1.1);
-		//vResCloud.points.push_back(oCurrentViewP);
-
-		//publish ground points
-		//PublishPointCloud(vResCloud, vNorSectLabel);
-		//OutputPCFile(vResCloud, vNorSectLabel, true);
+		for(int i=0;i!=pFramePNormal->points.size();++i)
+			m_vMapPCN.points.push_back(pFramePNormal->points[i]);
+				
 
 		PublishMeshs();
 
@@ -554,6 +517,7 @@ void FrameRecon::OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, boo
     //generate a output file if possible
 	if( m_bOutPCFileFlag || bAllRecord){
 
+		m_sOutPCFileName.clear();
 	    //set the current time stamp as a file name
 		//m_sOutPCFileName << m_sFileHead << "PC_" << ros::Time::now() << ".txt"; 
 
@@ -607,6 +571,7 @@ void FrameRecon::OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, con
     //generate a output file if possible
 	if( m_bOutPCFileFlag || bAllRecord){
 
+		m_sOutPCFileName.clear();
 	    //set the current time stamp as a file name
 		//m_sOutPCFileName << m_sFileHead << "PC_" << ros::Time::now() << ".txt"; 
 

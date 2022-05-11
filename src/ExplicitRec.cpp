@@ -9,9 +9,7 @@ ExplicitRec::ExplicitRec() :m_bElevationFlag(false),m_pCenterNormal(new pcl::Poi
 
 
 ExplicitRec::~ExplicitRec(){
-
-
-
+	
 
 }
 

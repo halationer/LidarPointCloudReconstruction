@@ -96,6 +96,8 @@ private:
 	//the elevation value of the viewpoint has been obtained
 	bool m_bElevationFlag;
 
+	//
+
 
 
 };

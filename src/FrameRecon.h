@@ -11,6 +11,10 @@
 
 //pcl related
 #include "pcl_ros/transforms.h"  
+
+#include <pcl/io/pcd_io.h>         
+#include <pcl/io/ply_io.h>         
+#include <pcl/point_types.h> 
 #include <pcl_conversions/pcl_conversions.h>
 
 //polygon related
@@ -121,6 +125,9 @@ class FrameRecon{
   //ouput file
   std::ofstream m_oOutPCFile;
 
+  //output point cloud with normal
+  std::stringstream m_sOutPCNormalFileName; 
+
   //***for input odom topic***
   //the m_oOdomSuber subscirber is to hearinput  odometry topic
   ros::Subscriber m_oOdomSuber;
@@ -180,10 +187,16 @@ class FrameRecon{
   //How many frames of point cloud have been calculated cumulatively
   unsigned int m_iPCFrameCount;
 
-    //frame count
+  //frame count
   unsigned int m_iTrajCount;
 
+  //map point clouds with normals
+  //accumulated processed point cloud
+  pcl::PointCloud<pcl::PointNormal> m_vMapPCN;
 
+  //features of map point clouds
+  //Features can be specified
+  std::vector<float> m_vMapPCFeas;
 
   
 };
