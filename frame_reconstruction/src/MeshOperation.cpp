@@ -396,3 +396,5 @@ void MeshOperation::NormalMatrixToPCL(const pcl::PointCloud<pcl::PointXYZ> & vPo
 	}//end else
 
 }
+
+

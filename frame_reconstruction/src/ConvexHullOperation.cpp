@@ -118,11 +118,11 @@ pcl::Normal ConvexHullOperation::CaculateTriangleNormal(pcl::PointXYZ & oPZero,
 
 
 /*=======================================
-CaculateTriangleNormal
+CaculateTriangleNormal, reload
 Input: oPZero, oPOne, oPTwo - p0, p1, p2 in pcl type
        oInnerP - a reference point
-Output: oFacePara - normal vector and d parameter
-Function: triangular plane equation calculation with a base point (reference)
+Output: oFacePara - normal vector OPPOSITE of reference point and d parameter
+Function: triangular plane equation calculation with a base point (reference) 
 ========================================*/
 void ConvexHullOperation::CaculateTriangleNormal(const pcl::PointXYZ & oPZero,
 	                                       const pcl::PointXYZ & oPOne, 
@@ -178,6 +178,84 @@ void ConvexHullOperation::CaculateTriangleNormal(const pcl::PointXYZ & oPZero,
 		//recompute D
 		oFacePara.fDparam = oFacePara.oNormal.dot(oZeroVec);
 		oFacePara.fDparam = -1.0f*oFacePara.fDparam;
+
+	}
+
+	return;
+
+}
+
+
+/*=======================================
+CaculateTriangleNormal
+Input: vVertices - vertice point
+      oInnerP - a reference point
+	  vOneMeshVertexIdxs - vertex indexes
+Output: oFacePara - normal vector SAME with reference point and d parameter
+        vOneMeshVertexIdxs - vertex indexes after winding the orders
+Function: triangular plane equation calculation with a base point (reference) and also change the vertex order
+========================================*/
+void ConvexHullOperation::CaculateTriangleNormal(const pcl::PointCloud<pcl::PointXYZ> & vVertices,
+	                                                                const pcl::PointXYZ & oInnerP,
+															   pcl::Vertices & vOneMeshVertexIdxs,
+												                             FacePara & oFacePara){
+
+	
+	//point cloud 
+	pcl::PointXYZ oPZero = vVertices.points[vOneMeshVertexIdxs.vertices[0]];
+	pcl::PointXYZ oPOne = vVertices.points[vOneMeshVertexIdxs.vertices[1]];
+	pcl::PointXYZ oPTwo = vVertices.points[vOneMeshVertexIdxs.vertices[2]];
+
+	//vector A and B
+	Eigen::Vector3f oAvec(oPOne.x - oPZero.x, oPOne.y - oPZero.y, oPOne.z - oPZero.z);
+	Eigen::Vector3f oBvec(oPTwo.x - oPOne.x, oPTwo.y - oPOne.y, oPTwo.z - oPOne.z);
+
+	//cross product of vector A and vector B
+	oFacePara.oNormal = oAvec.cross(oBvec);
+	//compute the norm of normal
+	float fLen = oFacePara.oNormal.norm();
+
+	//Normalization
+	if (fLen == 0.0){
+		//throw Exception();
+		std::cout << "something wrong on normal vector calculation!" << std::endl;
+	}
+	else{
+		//normalization by using norm
+		oFacePara.oNormal(0) = oFacePara.oNormal(0) / fLen;
+		oFacePara.oNormal(1) = oFacePara.oNormal(1) / fLen;
+		oFacePara.oNormal(2) = oFacePara.oNormal(2) / fLen;
+	}
+
+	//compute the D parameter of plane formula
+	//Based on the general equations of the plane: Axi + Byi + Czi + D = 0, we have
+	//D =-(Axi + Byi + Czi), i can be 0,1,2,....n (n=2 in hand)
+	Eigen::Vector3f oZeroVec(oPZero.x, oPZero.y, oPZero.z);
+	//Axi + Byi + Czi is a dot product
+	oFacePara.fDparam = oFacePara.oNormal.dot(oZeroVec);
+	//take a negative number
+	oFacePara.fDparam = -1.0f*oFacePara.fDparam;
+
+	//correct the normal direction
+	//make the normal vectors uniformly face outwards based on a reference point
+	Eigen::Vector3f oRefPoint(oInnerP.x, oInnerP.y, oInnerP.z);
+	//Calculate the distance and direction of the reference point to the plane
+	//d = Ax_ref + By_ref + Cz_ref + D
+	float fDis = PointToFaceDis(oRefPoint, oFacePara.oNormal, oFacePara.fDparam);
+
+	//If the reference point and the normal direction are in the same side of a plane, 
+	//take the opposite direction of the raw normal vector as the new normal vector
+	if (fDis < 0){
+		//recompute normal vector n + n' = 0
+		oFacePara.oNormal(0) = -1.0f* oFacePara.oNormal(0);
+		oFacePara.oNormal(1) = -1.0f* oFacePara.oNormal(1);
+		oFacePara.oNormal(2) = -1.0f* oFacePara.oNormal(2);
+		//recompute D
+		oFacePara.fDparam = oFacePara.oNormal.dot(oZeroVec);
+		oFacePara.fDparam = -1.0f*oFacePara.fDparam;
+
+		WindingOrder(vOneMeshVertexIdxs);
+
 	}
 
 	return;
@@ -444,16 +522,17 @@ void ConvexHullOperation::ComputeAllFaceParams(const pcl::PointCloud<pcl::PointX
 
 /*=======================================
 ComputeAllFaceParams
-Input: vVertices - vertices of all triangular planes (no duplicates)
-vMeshVertexIdxs - vertex index for each face, p.s., each face has three vertices
-Output: m_oCenterPoint - center point of all faces as reference point
-m_oMatN - a matrix of all face vectors
-m_vfD - A vector of D parameter values
+Input: oViewPoint - a reference point
+        vVertices - points
+		vMeshVertexIdxs - vertex index
+Output: vMeshVertexIdxs - a series of mesh vertice index after winding each face vertex orders
+             oMatNormal - a matrix of all face vectors
+               vfDParam - A vector of D parameter values
 Function: compute the parameters of all plane equations and save them in matrix form, which is convenient for subsequent calculations
 ========================================*/
 void ConvexHullOperation::ComputeAllFaceParams(const pcl::PointXYZ & oViewPoint,
 	                                           const pcl::PointCloud<pcl::PointXYZ> & vVertices,
-	                                           const std::vector<pcl::Vertices> & vMeshVertexIdxs,
+	                                           std::vector<pcl::Vertices> & vMeshVertexIdxs,
 											   Eigen::MatrixXf & oMatNormal,
 											   Eigen::VectorXf & vfDParam){
 
@@ -470,10 +549,9 @@ void ConvexHullOperation::ComputeAllFaceParams(const pcl::PointXYZ & oViewPoint,
 		//compute the parameters of plane equation 
 		//the normal vector consistently faces outside the face (different side from center point)
 		FacePara oOneFaceParam;
-		CaculateTriangleNormal(vVertices.points[vMeshVertexIdxs[i].vertices[0]],
-			                   vVertices.points[vMeshVertexIdxs[i].vertices[1]],
-			                   vVertices.points[vMeshVertexIdxs[i].vertices[2]], 
-							   oViewPoint, oOneFaceParam);
+
+		//compute the normal and change vertex order
+		CaculateTriangleNormal(vVertices, oViewPoint, vMeshVertexIdxs[i], oOneFaceParam);
 
 		//get normal vector
 		//**test**Check if it is possible to directly assign a column vector to a row vector in Eigen lib 
@@ -885,5 +963,25 @@ void ConvexHullOperation::GetPCLNormal(pcl::PointCloud<pcl::Normal>::Ptr & pFace
 		oOneNormal.normal_z = m_oConvertMatN(i, 2);
 		pFaceNormal->push_back(oOneNormal);
 	}
+
+}
+
+
+
+
+/*=======================================
+WindingOrder
+Input: pcl::Vertices - triangle vertex
+Output: pcl::Vertices - Triangle vertices after changing order
+Function: change the order of triangle vertices
+========================================*/
+void ConvexHullOperation::WindingOrder(pcl::Vertices & vVertices){
+
+	//exchange the vertice orders
+	int iTemp = vVertices.vertices[1];
+
+	vVertices.vertices[1] = vVertices.vertices[2];
+
+	vVertices.vertices[2] = iTemp;
 
 }

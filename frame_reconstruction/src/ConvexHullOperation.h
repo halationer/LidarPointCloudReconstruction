@@ -65,6 +65,9 @@ public:
 	//reload, caculate triangle face normal with a reference point
 	void CaculateTriangleNormal(const pcl::PointXYZ & oPZero, const pcl::PointXYZ & oPOne, const pcl::PointXYZ & oPTwo, 
 		const pcl::PointXYZ & oInnerP, FacePara & oFacePara);
+	//reload, caculate triangle face normal with a reference point
+	void CaculateTriangleNormal(const pcl::PointCloud<pcl::PointXYZ> & vVertices,const pcl::PointXYZ & oInnerP, 
+		pcl::Vertices & vOneMeshVertexIdxs, FacePara & oFacePara);
 	//reload, caculate triangle face normal without a reference point
 	void CaculateTriangleNormal(const pcl::PointXYZ & oPZero, const pcl::PointXYZ & oPOne, const pcl::PointXYZ & oPTwo,
 		FacePara & oFacePara);
@@ -85,7 +88,7 @@ public:
 	void ComputeAllFaceParams(const pcl::PointCloud<pcl::PointXYZ> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs, pcl::PointXYZ & oCenterPoint,
 		                      Eigen::MatrixXf & oMatNormal,Eigen::VectorXf & vfDParam);
 	//Calculate equation parameters for all faces with a given viewpoint (reference)
-	void ComputeAllFaceParams(const pcl::PointXYZ & oViewPoint, const pcl::PointCloud<pcl::PointXYZ> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs,
+	void ComputeAllFaceParams(const pcl::PointXYZ & oViewPoint, const pcl::PointCloud<pcl::PointXYZ> & vVertices, std::vector<pcl::Vertices> & vMeshVertexIdxs,
 		                      Eigen::MatrixXf & oMatNormal, Eigen::VectorXf & vfDParam);
 	//Calculate right direction normal for all faces correspoding to a given viewpoint (reference)
 	void ComputeAllFaceParams(const pcl::PointXYZ & oViewPoint, const pcl::PointCloud<pcl::PointNormal> & vPNormals,
@@ -120,6 +123,9 @@ public:
 
 	//get the normal vector in pcl
 	void GetPCLNormal(pcl::PointCloud<pcl::Normal>::Ptr & pFaceNormal);
+
+	//exchange vertex order to render the face
+	void WindingOrder(pcl::Vertices & vVertices);
 
 	//a matrix where each row stores the normal vector of a face in converted space
 	//convex hull after convertion

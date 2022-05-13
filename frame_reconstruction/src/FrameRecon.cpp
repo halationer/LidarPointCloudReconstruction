@@ -53,6 +53,9 @@ FrameRecon::~FrameRecon() {
 	m_sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply"; 
 
     //output to the screen
+    std::cout << std::endl;
+    std::cout << std::endl;
+    std::cout << "********************************************************************************" << std::endl;
 	std::cout << "Please do not force closing the programe, the process is writing output PLY file." << std::endl;
 	std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
 	std::cout << "The output file is " << m_sOutPCNormalFileName.str() << std::endl;
@@ -319,7 +322,7 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		
 		pcl::PointCloud<pcl::PointNormal>::Ptr pFramePNormal(new pcl::PointCloud<pcl::PointNormal>);
 
-		m_oExplicitBuilder.SetViewPoint(oCurrentViewP);
+		m_oExplicitBuilder.SetViewPoint(oCurrentViewP, m_fViewZOffset);
 		m_oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal);
 
 		//************output value******************

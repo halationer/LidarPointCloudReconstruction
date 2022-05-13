@@ -9,7 +9,9 @@ ExplicitRec::ExplicitRec() :m_bElevationFlag(false),m_pCenterNormal(new pcl::Poi
 
 
 ExplicitRec::~ExplicitRec(){
-	
+
+
+
 
 }
 
@@ -41,8 +43,14 @@ void ExplicitRec::SetViewPoint(const pcl::PointXYZ & oViewPoint, float fViewElev
 	m_oViewPoint.y = oViewPoint.y;
 	m_oViewPoint.z = oViewPoint.z;
 
-	//the elevation value of the viewpoint has been obtained
-	m_bElevationFlag = true;
+	//If the height of the laser scanner above the ground is known
+	if(fViewElevation){
+
+		m_fViewElevation = fViewElevation;
+		//the elevation value of the viewpoint has been obtained
+		m_bElevationFlag = true;
+
+	}
 
 }
 
@@ -169,100 +177,109 @@ void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZ> & vSc
 	//triangular face in each sector
 	for (int i = 0; i != vPointSecIdxs.size(); ++i) {
 
-		//point clouds inside one sector
-		pcl::PointCloud<pcl::PointXYZ>::Ptr pSectorCloud(new pcl::PointCloud<pcl::PointXYZ>);
-		//get a point clouds in one section
-		for (int j = 0; j != vPointSecIdxs[i].size(); ++j) {
-			//get point index
-			int iSecPointInAllIdx = vPointSecIdxs[i][j];
-			//construct point clouds
-			pSectorCloud->points.push_back(vSceneCloud.points[iSecPointInAllIdx]);
-		}
+		//If the points in a sector is sufficient to calculate
+		if (vPointSecIdxs[i].size() > m_iSectorMinPNum){
 
-		//if (m_bElevationFlag){
-		//	pcl::PointXYZ oViewGroundP;
-		//	oViewGroundP.x = m_oViewPoint.x;
-		//	oViewGroundP.y = m_oViewPoint.y;
-		//	oViewGroundP.z = m_oViewPoint.z - m_fViewElevation;
-		//	pSectorCloud->points.push_back(oViewGroundP);
-		//}
+			//point clouds inside one sector
+			pcl::PointCloud<pcl::PointXYZ>::Ptr pSectorCloud(new pcl::PointCloud<pcl::PointXYZ>);
+			//get a point clouds in one section
+			for (int j = 0; j != vPointSecIdxs[i].size(); ++j) {
+				//get point index
+				int iSecPointInAllIdx = vPointSecIdxs[i][j];
+				//construct point clouds
+				pSectorCloud->points.push_back(vSceneCloud.points[iSecPointInAllIdx]);
+			}
 
-	//******Mesh building******
-		//***GHPR mesh building***
-		GHPR hpdhpr(m_oViewPoint, m_GHPRParam);
+			if (m_bElevationFlag){
+				pcl::PointXYZ oViewGroundP;
+				oViewGroundP.x = m_oViewPoint.x;
+				oViewGroundP.y = m_oViewPoint.y;
+				oViewGroundP.z = m_oViewPoint.z - m_fViewElevation;
+				pSectorCloud->points.push_back(oViewGroundP);
+			}
 
-		//perform reconstruction
-		hpdhpr.Compute(pSectorCloud);
+			//******Mesh building******
+			//***GHPR mesh building***
+			GHPR hpdhpr(m_oViewPoint, m_GHPRParam);
+
+			//perform reconstruction
+			hpdhpr.Compute(pSectorCloud);
+
+			//get the surfaces that are not connected to the viewpoint
+			std::vector<pcl::Vertices> vOneFaces;
+			vOneFaces = hpdhpr.ConstructSurfaceIdx();
+
+			//***start the mesh related operation***
+			//center point of each faces
+			pcl::PointCloud<pcl::PointXYZ>::Ptr pCenterPoints(new pcl::PointCloud<pcl::PointXYZ>);
+
+			//face normals
+			Eigen::MatrixXf oMatNormal;
+
+			//face parameters d
+			Eigen::VectorXf vfDParam;
+
+			//face status - whether the face is wrong
+			std::vector<bool> vTrueFaceStatus(vOneFaces.size(), true);
+
+			//face weight, e.g., confidence for each face
+			//the confidence is higher, if the laser beam is orthophoto the surface 
+			std::vector<float> vFaceWeight(vOneFaces.size(), 0.0f);
+
+			//new a mesh operation object
+			MeshOperation oMeshOper;
+
+			//compute the centerpoint of each faces
+			//The centerpoint re-represents its face
+			oMeshOper.ComputeCenterPoint(*pSectorCloud, vOneFaces, *pCenterPoints);
+
+			//compute the normal vector of each face for its centerpoint
+			//the normal vector will be facing away from the viewpoint
+			oMeshOper.ComputeAllFaceParams(m_oViewPoint, *pSectorCloud, vOneFaces, oMatNormal, vfDParam);
+
+			//Remove pseudo triangles according to scanning rules of LiDAR
+			RemovePseudoFaces(*pCenterPoints, vOneFaces, oMatNormal, vTrueFaceStatus, vFaceWeight);
+
+			//point adj
+			pcl::PointCloud<pcl::PointNormal> vCombinedNormal;
+
+			//propagate the normal vector to each vertex
+			//linearly compute weighted neighboring normal vector
+			oMeshOper.LocalFaceNormal(*pSectorCloud, vOneFaces, oMatNormal, m_oViewPoint, vCombinedNormal);
+
+			//***record data***
+			//output normal
+			oMeshOper.NormalMatrixToPCL(*pCenterPoints, oMatNormal, *m_pCenterNormal, true);
+
+			//Record the remaining triangles
+			std::vector<pcl::Vertices> vOneNewFaces;
+			for (int j = 0; j != vTrueFaceStatus.size(); ++j){
+
+				if (vTrueFaceStatus[j]){
+					pcl::Vertices oOneFace(vOneFaces[j]);
+					vOneNewFaces.push_back(oOneFace);
+				}//end if
+
+			}//end for j != vTrueFaceStatus.size()
+
+			//collect the vertices and faces in each sector
+			m_vAllSectorClouds.push_back(pSectorCloud);
+			m_vAllSectorFaces.push_back(vOneNewFaces);
+
+			//output
+			for (int j = 0; j != vCombinedNormal.size(); ++j)
+				vScenePNormal.points.push_back(vCombinedNormal.points[j]);
 		
-		//get the surfaces that are not connected to the viewpoint
-		std::vector<pcl::Vertices> vOneFaces;
-		vOneFaces = hpdhpr.ConstructSurfaceIdx();
+		}else{
+			
+			pcl::PointCloud<pcl::PointXYZ>::Ptr pSectorCloud(new pcl::PointCloud<pcl::PointXYZ>);
+			m_vAllSectorClouds.push_back(pSectorCloud);
 
-		//***start the mesh related operation***
-		//center point of each faces
-		pcl::PointCloud<pcl::PointXYZ>::Ptr pCenterPoints(new pcl::PointCloud<pcl::PointXYZ>);
-
-		//face normals
-		Eigen::MatrixXf oMatNormal;
-
-		//face parameters d
-		Eigen::VectorXf vfDParam;
-
-		//face status - whether the face is wrong
-		std::vector<bool> vTrueFaceStatus(vOneFaces.size(),true);
-
-		//face weight, e.g., confidence for each face
-		//the confidence is higher, if the laser beam is orthophoto the surface 
-		std::vector<float> vFaceWeight(vOneFaces.size(), 0.0f);
+			std::vector<pcl::Vertices> vOneNewFaces;
+			m_vAllSectorFaces.push_back(vOneNewFaces);
 		
-		//new a mesh operation object
-		MeshOperation oMeshOper;
+		}//end if vPointSecIdxs[i].size() > m_iSectorMinPNum
 		
-		//compute the centerpoint of each faces
-		//The centerpoint re-represents its face
-		oMeshOper.ComputeCenterPoint(*pSectorCloud, vOneFaces,*pCenterPoints);
-
-		//compute the normal vector of each face for its centerpoint
-		//the normal vector will be facing away from the viewpoint
-		oMeshOper.ComputeAllFaceParams(m_oViewPoint, *pSectorCloud, vOneFaces, oMatNormal, vfDParam);
-
-		//Remove pseudo triangles according to scanning rules of LiDAR
-		RemovePseudoFaces(*pCenterPoints, vOneFaces, oMatNormal, vTrueFaceStatus, vFaceWeight);
-
-		//point adj
-		pcl::PointCloud<pcl::PointNormal> vCombinedNormal;
-
-		//propagate the normal vector to each vertex
-		//linearly compute weighted neighboring normal vector
-		oMeshOper.LocalFaceNormal(*pSectorCloud, vOneFaces, oMatNormal, m_oViewPoint, vCombinedNormal);
-
-		//***record data***
-		//output normal
-		oMeshOper.NormalMatrixToPCL(*pCenterPoints, oMatNormal, *m_pCenterNormal, true);
-
-		//Record the remaining triangles
-		std::vector<pcl::Vertices> vOneNewFaces;
-		for (int j = 0; j != vTrueFaceStatus.size(); ++j){
-		
-			if (vTrueFaceStatus[j]){
-				pcl::Vertices oOneFace(vOneFaces[j]);
-				vOneNewFaces.push_back(oOneFace);
-			}//end if
-		
-		}//end for j != vTrueFaceStatus.size()
-
-		//collect the vertices and faces in each sector
-		m_vAllSectorClouds.push_back(pSectorCloud);
-		m_vAllSectorFaces.push_back(vOneNewFaces);
-
-		//for point normal output
-		for (int j = 0; j != vCombinedNormal.size(); ++j){
-			pcl::PointNormal oOnePN(vCombinedNormal.points[j]);
-			oOnePN.normal_x *= -1.0f;
-			oOnePN.normal_y *= -1.0f;
-			oOnePN.normal_z *= -1.0f;
-			vScenePNormal.points.push_back(oOnePN);
-		}
 
 	}//end  i != vPointSecIdxs.size()
 
@@ -475,8 +492,6 @@ void ExplicitRec::ClearData(){
 	m_vAllSectorClouds.clear();
 
 	m_vAllSectorFaces.clear();
-
-	m_pCenterNormal->clear();
 
 
 }

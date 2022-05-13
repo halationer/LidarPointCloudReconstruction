@@ -35,6 +35,7 @@ public:
 
 	//convert the normal vector represented by the matrix to the normal vector of the point cloud
 	void NormalMatrixToPCL(const pcl::PointCloud<pcl::PointXYZ> & vPoints, const Eigen::MatrixXf & oMatNormal, pcl::PointCloud<pcl::PointNormal> & vPointNormal, bool bReversed = false);
+
 	
 private:
 
