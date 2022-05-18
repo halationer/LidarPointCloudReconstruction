@@ -30,8 +30,11 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <!-- launch SLAM_to_map-->
     <include file="$(find slam_trans)/launch/SLAM_to_map.launch" />
 
-    <!-- launch reconstruction-->
+    <!-- launch frame reconstruction-->
     <include file="$(find frame_reconstruction)/launch/reconstruction.launch" />
+
+    <!-- launch frame fusion-->
+    <include file="$(find frames_fusion)/launch/fusion.launch" />
 
     <!-- rosbag related: replay with rate = 1 speed up-->
     <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 /home/ludy/DataSets/Loam/nsh_indoor_outdoor.bag"/>

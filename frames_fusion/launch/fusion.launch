@@ -20,11 +20,11 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="fileoutputpath" default="/home/ludy/" />
 
-    <arg name="cloudintopic" default="/slam_points" />
+    <arg name="cloudintopic" default="/frame_cloudnormals" />
 
     <arg name="odomintopic" default="/slam_odom" />
 
-    <arg name="cloudoutopic" default="/frame_cloudnormals" />
+    <arg name="cloudoutopic" default="/processed_clouds" />
 
     <arg name="polygonoutopic" default="/frame_meshs" />
 
@@ -40,32 +40,32 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="pointzoffset" default="0.0"/> 
 
-    <!-- frame_reconstruction node in frame_reconstruction pkg-->
-    <node name="frame_reconstruction" pkg="frame_reconstruction" type="frame_reconstruction" output="screen">
+    <!-- frames_fusion node in frames_fusion pkg-->
+    <node name="frames_fusion" pkg="frames_fusion" type="frames_fusion" output="screen">
 
-        <!-- parameters-->	
+        <!-- parameters-->  
 
         <param name="file_outputpath" type="string" value="$(arg fileoutputpath)"  />
 
         <!-- define input topic name-->
-		<param name="cloud_in_topic" type="string" value="$(arg cloudintopic)"  />
+        <param name="cloud_in_topic" type="string" value="$(arg cloudintopic)"  />
 
-		<param name="odom_in_topic" type="string" value="$(arg odomintopic)" />
+        <param name="odom_in_topic" type="string" value="$(arg odomintopic)" />
 
         <!-- define output topic name-->
         <param name="cloud_out_topic" type="string" value="$(arg cloudoutopic)" />
 
         <param name="polygon_out_topic" type="string" value="$(arg polygonoutopic)" />
-		
+        
         <!-- frame id related-->
-	    <param name="sample_pcframe_num" type="int" value="$(arg samplepcframenum)" />
+        <param name="sample_pcframe_num" type="int" value="$(arg samplepcframenum)" />
 
         <!-- sampling number-->
-	    <param name="sample_inputpoints_num"  type="int" value="$(arg sampleinpnum)" />
+        <param name="sample_inputpoints_num"  type="int" value="$(arg sampleinpnum)" />
 
         <param name="sector_num"  type="int" value="$(arg sectornum)" />
 
-	    <!--param name="odom_zoffset" type="double" value="$(arg odomzoffset)" /-->
+        <!--param name="odom_zoffset" type="double" value="$(arg odomzoffset)" /-->
 
         <param name="viewp_zoffset" type="double" value="$(arg pointzoffset)"/>
 
@@ -75,9 +75,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <param name="polygon_tf_id" type="string" value="$(arg polygontfid)" />
 
 
-	</node>
+    </node>
 
 
 </launch>
-
-

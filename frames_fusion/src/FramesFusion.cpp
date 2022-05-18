@@ -1,9 +1,9 @@
-#include "FrameRecon.h"
+#include "FramesFusion.h"
 
 
 /*************************************************
-Function: FrameRecon
-Description: constrcution function for FrameRecon class
+Function: FramesFusion
+Description: constrcution function for FramesFusion class
 Calls: all member functions
 Called By: main function of project
 Table Accessed: none
@@ -11,7 +11,7 @@ Table Updated: none
 Input: node - a ros node class
      nodeHandle - a private ros node class
 *************************************************/
-FrameRecon::FrameRecon(ros::NodeHandle & node,
+FramesFusion::FramesFusion(ros::NodeHandle & node,
                        ros::NodeHandle & nodeHandle):
                        m_iTrajFrameNum(0){
 
@@ -20,15 +20,15 @@ FrameRecon::FrameRecon(ros::NodeHandle & node,
 
 	//***subscriber related*** 
 	//subscribe (hear) the odometry information (trajectory)
-	m_oOdomSuber = nodeHandle.subscribe(m_sInOdomTopic, 1, &FrameRecon::HandleTrajectory, this);
+	m_oOdomSuber = nodeHandle.subscribe(m_sInOdomTopic, 1, &FramesFusion::HandleTrajectory, this);
 
 	//subscribe (hear) the point cloud topic 
-	m_oCloudSuber = nodeHandle.subscribe(m_sInCloudTopic, 1, &FrameRecon::HandlePointClouds, this);
+	m_oCloudSuber = nodeHandle.subscribe(m_sInCloudTopic, 1, &FramesFusion::HandlePointClouds, this);
 
 	//***publisher related*** 
 	//publish point cloud after processing
 	m_oCloudPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sOutCloudTopic, 1, true);
-	
+
   	//publish polygon constructed from one frame point cloud
 	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::Marker>(m_sOutMeshTopic, 1);
 
@@ -37,8 +37,8 @@ FrameRecon::FrameRecon(ros::NodeHandle & node,
 
 
 /*************************************************
-Function: ~FrameRecon
-Description: deconstrcution function for FrameRecon class
+Function: ~FramesFusion
+Description: deconstrcution function for FramesFusion class
 Calls: all member functions
 Called By: main function of project
 Table Accessed: none
@@ -47,9 +47,8 @@ Input: none
 Output: a file storing the point clouds with correct normal for accurate reconstruction
 *************************************************/
 
-FrameRecon::~FrameRecon() {
+FramesFusion::~FramesFusion() {
 
-	/*
 	//define ouput ply file name
 	m_sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply"; 
 
@@ -65,7 +64,6 @@ FrameRecon::~FrameRecon() {
 	pcl::io::savePLYFileASCII(m_sOutPCNormalFileName.str(), m_vMapPCN);
 
 	std::cout << "Output is complete! The process will be automatically terminated. Thank you for waiting. " << std::endl;
-	*/
 
 }
 
@@ -84,7 +82,7 @@ Return: none
 Others: none
 *************************************************/
 
-bool FrameRecon::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
+bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
   //output file name
   nodeHandle.param("file_outputpath", m_sFileHead, std::string("./"));
@@ -150,7 +148,7 @@ Output: none
 Return: none
 Others: none
 *************************************************/
-void FrameRecon::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud){
+void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud){
   
 	//publish obstacle points
 	sensor_msgs::PointCloud2 vCloudData;
@@ -173,41 +171,12 @@ Calls: none
 Called By: ComputeConfidence()
 Table Accessed: none
 Table Updated: none
-Input: vCloud - a point clouds with its corresponding normals for publication
-Output: none
-Return: none
-Others: none
-*************************************************/
-void FrameRecon::PublishPointCloud(const pcl::PointCloud<pcl::PointNormal> & vCloudNormal){
-
-    //convert to pc2 message
-	sensor_msgs::PointCloud2 vCloudData;
-
-	pcl::toROSMsg(vCloudNormal, vCloudData);
-
-	//other informations
-	vCloudData.header.frame_id = m_sOutCloudTFId;
-
-	vCloudData.header.stamp = ros::Time::now();
-
-	//publish
-	m_oCloudPublisher.publish(vCloudData);
-
-}
-
-/*************************************************
-Function: PublishPointCloud
-Description: publish point clouds (mainly used for display and test)
-Calls: none
-Called By: ComputeConfidence()
-Table Accessed: none
-Table Updated: none
 Input: vCloud - a point clouds to be published
 Output: none
 Return: none
 Others: none
 *************************************************/
-void FrameRecon::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures){
+void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures){
   
 	//get colors
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr  pColorClouds (new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -256,7 +225,7 @@ Output: none
 Return: none
 Others: none
 *************************************************/
-void FrameRecon::PublishMeshs(){
+void FramesFusion::PublishMeshs(){
   	
   	//new a visual message
 	visualization_msgs::Marker oMeshMsgs;
@@ -325,51 +294,19 @@ Output: a point clouds are almost the same with raw point clouds but only their 
 Return: none
 Others: none
 *************************************************/
-void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
+void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 {
 
 	if (!(m_iPCFrameCount%m_iFrameSmpNum)){
 
 		////a point clouds in PCL type
-		pcl::PointCloud<pcl::PointXYZ>::Ptr pRawCloud(new pcl::PointCloud<pcl::PointXYZ>);
+		pcl::PointCloud<pcl::PointNormal>::Ptr pFramePN(new pcl::PointCloud<pcl::PointNormal>);
 		////message from ROS type to PCL type
-		pcl::fromROSMsg(vLaserData, *pRawCloud);
+		pcl::fromROSMsg(vLaserData, *pFramePN);
 
-		//if have corresponding trajectory point (viewpoint)
-		pcl::PointXYZ oCurrentViewP;
-
-		if (m_vOdomHistory.size()){
-			//
-			oCurrentViewP = ComputeQueryTraj(vLaserData.header.stamp);
-		
-		//else waiting for sync
-		}else{
-
-			return;
-		}
-		
-		pcl::PointCloud<pcl::PointXYZ>::Ptr pSceneCloud(new pcl::PointCloud<pcl::PointXYZ>);
-		SamplePoints(*pRawCloud, *pSceneCloud, m_iSampleInPNum);
-		
-		pcl::PointCloud<pcl::PointNormal>::Ptr pFramePNormal(new pcl::PointCloud<pcl::PointNormal>);
-
-		m_oExplicitBuilder.SetViewPoint(oCurrentViewP, m_fViewZOffset);
-		m_oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal);
-
-		//************output value******************
-		for(int i=0;i!=pFramePNormal->points.size();++i)
-			m_vMapPCN.points.push_back(pFramePNormal->points[i]);
-				
-
-		//output the visiable result
-		PublishMeshs();
-
-		//output the points and normals 
-		PublishPointCloud(*pFramePNormal);
-
-		//clear this frame result
-		m_oExplicitBuilder.ClearData();
-
+		//merge one frame data
+		for(int i = 0; i != pFramePN->points.size(); ++i)
+			m_vMapPCN.push_back(pFramePN->points[i]);
 
 		//count
 		m_iPCFrameCount++;
@@ -395,7 +332,7 @@ Output: a point clouds are almost the same with raw point clouds but only their 
 Return: none
 Others: none
 *************************************************/
-void FrameRecon::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
+void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 {
 
 	//count input frames
@@ -417,6 +354,7 @@ void FrameRecon::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 
 }
 
+/*
 /*************************************************
 Function: InterpolateTraj
 Description: a callback function in below:
@@ -430,7 +368,7 @@ Output: a point clouds are almost the same with raw point clouds but only their 
 Return: none
 Others: none
 *************************************************/
-void FrameRecon::InterpolateTraj(const RosTimePoint & oCurrent, const RosTimePoint & oPast, const float& fRatio,
+void FramesFusion::InterpolateTraj(const RosTimePoint & oCurrent, const RosTimePoint & oPast, const float& fRatio,
 	pcl::PointXYZ & oInter){
 
 
@@ -457,7 +395,7 @@ Output: a point clouds are almost the same with raw point clouds but only their 
 Return: none
 Others: none
 *************************************************/
-pcl::PointXYZ FrameRecon::ComputeQueryTraj(const ros::Time & oQueryTime){
+pcl::PointXYZ FramesFusion::ComputeQueryTraj(const ros::Time & oQueryTime){
 
 	pcl::PointXYZ oResTraj;
 	//clear the output
@@ -507,7 +445,7 @@ Output: vNewCloud - the sampled point clouds
 Function: Sample a point clouds. Note that tthe given maximum total number guarantes the number of sampled point is smaller than it
 However, it is not guaranteed that the number of sampled point could be equal to the given maximum total number
 ========================================*/
-void FrameRecon::SamplePoints(const pcl::PointCloud<pcl::PointXYZ> & vCloud, pcl::PointCloud<pcl::PointXYZ> & vNewCloud, int iSampleNum, bool bIntervalSamp){
+void FramesFusion::SamplePoints(const pcl::PointCloud<pcl::PointXYZ> & vCloud, pcl::PointCloud<pcl::PointXYZ> & vNewCloud, int iSampleNum, bool bIntervalSamp){
 
 	vNewCloud.clear();
 
@@ -547,7 +485,7 @@ Output: a point cloud txt file
 Return: none
 Others: none
 *************************************************/
-void FrameRecon::OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, bool bAllRecord){
+void FramesFusion::OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, bool bAllRecord){
   
     //generate a output file if possible
 	if( m_bOutPCFileFlag || bAllRecord){
@@ -601,7 +539,7 @@ Output: a point cloud txt file
 Return: none
 Others: none
 *************************************************/
-void FrameRecon::OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures, bool bAllRecord){
+void FramesFusion::OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures, bool bAllRecord){
   
     //generate a output file if possible
 	if( m_bOutPCFileFlag || bAllRecord){

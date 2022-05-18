@@ -1,5 +1,5 @@
-#ifndef FRAMERECON_H
-#define FRAMERECON_H
+#ifndef FramesFusion_H
+#define FramesFusion_H
 
 #include <string>
 #include <ctime>
@@ -62,17 +62,17 @@ struct RosTimePoint{
 // Email: alualu628628@gmail.com
 //******************************************************************
 
-class FrameRecon{
+class FramesFusion{
 
  public:
 
   //*************Initialization function*************
   //Constructor
-  FrameRecon(ros::NodeHandle & node,
+  FramesFusion(ros::NodeHandle & node,
               ros::NodeHandle & nodeHandle);
 
   //Destructor
-  virtual ~FrameRecon();
+  virtual ~FramesFusion();
 
   //Reads and verifies the ROS parameters.
   bool ReadLaunchParams(ros::NodeHandle & nodeHandle);  
@@ -92,16 +92,13 @@ class FrameRecon{
   void PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud);
   //reload, publish point clouds with labels
   void PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures);
-   //reload, publish point clouds with labels
-  void PublishPointCloud(const pcl::PointCloud<pcl::PointNormal> & vCloudNormal);
 
   //publish meshes
   void PublishMeshs();
 
   //*******odom related*******
   //Trajectory line interpolation
-  void InterpolateTraj(const RosTimePoint & oCurrent, const RosTimePoint & oPast, const float& fRatio,
-  pcl::PointXYZ & oInter);
+  void InterpolateTraj(const RosTimePoint & oCurrent, const RosTimePoint & oPast, const float& fRatio, pcl::PointXYZ & oInter);
 
   //Query the nearest trajectory point
   pcl::PointXYZ ComputeQueryTraj(const ros::Time & oQueryTime);
