@@ -24,8 +24,8 @@
 
 //project related
 #include "GHPR.h"
-#include "SectorPartition.h"
-#include "ExplicitRec.h"
+#include "Cell.h"
+#include "CIsoSurface.h"
 #include "CircularVector.h"
 
 
@@ -79,13 +79,11 @@ class FramesFusion{
 
   void SamplePoints(const pcl::PointCloud<pcl::PointXYZ> & vCloud, pcl::PointCloud<pcl::PointXYZ> & vNewCloud, int iSampleNum, bool bIntervalSamp = true);
 
-  //*************handler function*************
-  //handle the trajectory information
-  //ConfidenceValue calculation is triggered as soon as receving odom data
-  void HandleTrajectory(const nav_msgs::Odometry & oTrajectory);
-
+  //*************points function*************
   //handle the ground point clouds topic
   void HandlePointClouds(const sensor_msgs::PointCloud2 & vCloudRosData);
+
+  void GetNearClouds(float fNearLengths);
 
   //*************Output function*************
   //publish point clouds
@@ -95,13 +93,6 @@ class FramesFusion{
 
   //publish meshes
   void PublishMeshs();
-
-  //*******odom related*******
-  //Trajectory line interpolation
-  void InterpolateTraj(const RosTimePoint & oCurrent, const RosTimePoint & oPast, const float& fRatio, pcl::PointXYZ & oInter);
-
-  //Query the nearest trajectory point
-  pcl::PointXYZ ComputeQueryTraj(const ros::Time & oQueryTime);
 
   //output point cloud for test
   void OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, bool bAllRecord = false);
@@ -127,14 +118,6 @@ class FramesFusion{
   //output point cloud with normal
   std::stringstream m_sOutPCNormalFileName; 
 
-  //***for input odom topic***
-  //the m_oOdomSuber subscirber is to hearinput  odometry topic
-  ros::Subscriber m_oOdomSuber;
-
-  //the name of input odometry topic (robot trajectory)
-  std::string m_sInOdomTopic;
-
-  unsigned int m_iTrajFrameNum;
 
   //***for input point cloud topic***
   //the m_oCloudSuber subscirber is to hear input point cloud topic
@@ -164,21 +147,14 @@ class FramesFusion{
   //polygon publisher for test
   ros::Publisher m_oMeshPublisher;
 
+  //nearby length
+  float m_fNearLengths;
+
   //frame sampling
   int m_iFrameSmpNum;
 
   //sampling number of input point clouds
   int m_iSampleInPNum;
-
-  //sampling number of sector
-  int m_iSectorNum;
-
-  //**frenquency related**
-
-  float m_fViewZOffset;//z offset of odom to lidar sensor
-  
-  //explicit reconstruction
-  ExplicitRec m_oExplicitBuilder;
 
   //circle vector of odom
   CircularVector<RosTimePoint> m_vOdomHistory;

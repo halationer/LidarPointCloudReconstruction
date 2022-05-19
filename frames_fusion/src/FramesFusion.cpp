@@ -12,22 +12,18 @@ Input: node - a ros node class
      nodeHandle - a private ros node class
 *************************************************/
 FramesFusion::FramesFusion(ros::NodeHandle & node,
-                       ros::NodeHandle & nodeHandle):
-                       m_iTrajFrameNum(0){
+                       ros::NodeHandle & nodeHandle){
 
 	//read parameters
 	ReadLaunchParams(nodeHandle);
 
 	//***subscriber related*** 
-	//subscribe (hear) the odometry information (trajectory)
-	m_oOdomSuber = nodeHandle.subscribe(m_sInOdomTopic, 1, &FramesFusion::HandleTrajectory, this);
-
 	//subscribe (hear) the point cloud topic 
 	m_oCloudSuber = nodeHandle.subscribe(m_sInCloudTopic, 1, &FramesFusion::HandlePointClouds, this);
 
 	//***publisher related*** 
 	//publish point cloud after processing
-	m_oCloudPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sOutCloudTopic, 1, true);
+	//m_oCloudPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sOutCloudTopic, 1, true);
 
   	//publish polygon constructed from one frame point cloud
 	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::Marker>(m_sOutMeshTopic, 1);
@@ -87,12 +83,8 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
   //output file name
   nodeHandle.param("file_outputpath", m_sFileHead, std::string("./"));
 
-  //input odom topic
-  nodeHandle.param("odom_in_topic", m_sInOdomTopic, std::string("/odometry/filtered"));
-
   //input point cloud topic
   nodeHandle.param("cloud_in_topic", m_sInCloudTopic, std::string("/cloud_points"));
-
 
   //input odom topic
   nodeHandle.param("cloud_out_topic", m_sOutCloudTopic, std::string("/processed_clouds"));
@@ -106,27 +98,17 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
   //input point cloud topic
   nodeHandle.param("polygon_tf_id", m_sOutMeshTFId, std::string("camera_init"));
 
+  //nearbt lengths
+  nodeHandle.param("polygon_tf_id", m_fNearLengths, 20.0f);
+
   //point cloud sampling number
   nodeHandle.param("sample_pcframe_num", m_iFrameSmpNum, 1);
 
   //point cloud sampling number
   nodeHandle.param("sample_inputpoints_num", m_iSampleInPNum, 1);
 
-  //height of viewpoint
-  double dViewZOffset;
-  nodeHandle.param("viewp_zoffset", dViewZOffset, 0.0);
-  m_fViewZOffset = float(dViewZOffset);
-  
-  //explicit reconstruction related
-  //number of sectors
-  nodeHandle.param("sector_num", m_iSectorNum, 1);
-  m_oExplicitBuilder.HorizontalSectorSize(m_iSectorNum);
-
   //count processed point cloud frame
   m_iPCFrameCount = 0;
-
-  //count processed odom frame
-  m_iTrajCount = 0;
 
   //true indicates the file has not been generated
   m_bOutPCFileFlag = true;
@@ -258,8 +240,8 @@ void FramesFusion::PublishMeshs(){
 	//repeatable vertices
 	pcl::PointCloud<pcl::PointXYZ> vMeshVertices;
 
-	//get the reconstruted mesh
-	m_oExplicitBuilder.OutputAllMeshes(vMeshVertices);
+	//*****need to add**********
+
 
 	//convert to publishable message
 	for (int k = 0; k < vMeshVertices.points.size(); ++k){
@@ -297,142 +279,63 @@ Others: none
 void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 {
 
-	if (!(m_iPCFrameCount%m_iFrameSmpNum)){
+	//a point clouds in PCL type
+	pcl::PointCloud<pcl::PointNormal>::Ptr pFramePN(new pcl::PointCloud<pcl::PointNormal>);
+	//message from ROS type to PCL type
+	pcl::fromROSMsg(vLaserData, *pFramePN);
 
-		////a point clouds in PCL type
-		pcl::PointCloud<pcl::PointNormal>::Ptr pFramePN(new pcl::PointCloud<pcl::PointNormal>);
-		////message from ROS type to PCL type
-		pcl::fromROSMsg(vLaserData, *pFramePN);
+	//merge one frame data
+	for(int i = 0; i != pFramePN->points.size(); ++i)
+		m_vMapPCN.push_back(pFramePN->points[i]);
 
-		//merge one frame data
-		for(int i = 0; i != pFramePN->points.size(); ++i)
-			m_vMapPCN.push_back(pFramePN->points[i]);
+	/*
+	//******voxelization********
+	Voxelization oVoxeler(*pRawCloud);
+	//set the number of voxels
+	oVoxeler.GetIntervalNum(60, 60, 60);
+	//voxelize the space
+	oVoxeler.VoxelizeSpace();
 
-		//count
-		m_iPCFrameCount++;
+	//******set fusion model********
+	Fusion oFusion;
+	//signed distance of each node
+	//this map is constantly updated
+	oFusion.SetAccDisSize(oVoxeler.m_pCornerCloud->points.size(), oVoxeler.m_fDefault);
 
+
+	//******compute signed distance********
+	for (int i = 1; i != 2; ++i){
+
+		//***compute signed distance of a glance***
+		//compute signed distance of a query nodes(voxels)
+		SignedDistance oSDer;
+		std::vector<float> vCornerSignedDis = oSDer.PointBasedGlance(pRawCloud, pViewPoints->points[i], oVoxeler);
+		std::vector<float> vCornerWeigt(vCornerSignedDis.size(), 1.0f);
+
+		//***fusion a glance result to global nodes (map)***
+		oFusion.UnionMinimalFusion(vCornerSignedDis);
+		//oFusion.CorrosionFusion(vCornerSignedDis, vSDMap);
+		std::cout << "Finish the " << i << "th viewpoint" << std::endl;
 	}
+
+
+	//******construction********
+	//marching cuber
+	CIsoSurface<float> oMarchingCuber;
+	oMarchingCuber.GenerateSurface(oFusion.m_vAccDis, 0,
+		oVoxeler.m_iFinalVoxelNum.ixnum - 1, oVoxeler.m_iFinalVoxelNum.iynum - 1, oVoxeler.m_iFinalVoxelNum.iznum - 1,
+		oVoxeler.m_oVoxelLength.x, oVoxeler.m_oVoxelLength.y, oVoxeler.m_oVoxelLength.z);
+	*/
+
+	//count
+	m_iPCFrameCount++;
+
 
 	return;
 
 }
 
 
-
-/*************************************************
-Function: HandleTrajectory
-Description: a callback function in below:
-m_oOdomSuber = node.subscribe(m_sOdomTopic, 5, &GroundExtraction::HandleTrajectory, this);
-Calls: none
-Called By: TransformLaserInOdom, which is the construction function
-Table Accessed: none
-Table Updated: none
-Input: rawpoint, a 3d point with pcl point type
-Output: a point clouds are almost the same with raw point clouds but only their timestamp values are modified
-Return: none
-Others: none
-*************************************************/
-void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
-{
-
-	//count input frames
-	//m_iTrajPointNum++;
-
-	//save the into the memory
-	//save the position of trajectory
-	RosTimePoint oOdomPoint;
-	oOdomPoint.oLocation.x = oTrajectory.pose.pose.position.x;
-	oOdomPoint.oLocation.y = oTrajectory.pose.pose.position.y;
-	oOdomPoint.oLocation.z = oTrajectory.pose.pose.position.z;
-
-	//save record time
-	oOdomPoint.oTimeStamp = oTrajectory.header.stamp;
-
-	m_vOdomHistory.push(oOdomPoint);
-
-	m_iTrajCount++;
-
-}
-
-/*
-/*************************************************
-Function: InterpolateTraj
-Description: a callback function in below:
-m_oOdomSuber = node.subscribe(m_sOdomTopic, 5, &GroundExtraction::HandleTrajectory, this);
-Calls: none
-Called By: TransformLaserInOdom, which is the construction function
-Table Accessed: none
-Table Updated: none
-Input: rawpoint, a 3d point with pcl point type
-Output: a point clouds are almost the same with raw point clouds but only their timestamp values are modified
-Return: none
-Others: none
-*************************************************/
-void FramesFusion::InterpolateTraj(const RosTimePoint & oCurrent, const RosTimePoint & oPast, const float& fRatio,
-	pcl::PointXYZ & oInter){
-
-
-	//The ratio is from the interpolated value to oCurrent value 
-	//Complementary ratio
-	float fCompRatio = 1 - fRatio;
-	//p+(c-p)(1-r)
-	oInter.x = oCurrent.oLocation.x * fCompRatio + oPast.oLocation.x * fRatio;
-	oInter.y = oCurrent.oLocation.y * fCompRatio + oPast.oLocation.y * fRatio;
-	oInter.z = oCurrent.oLocation.z * fCompRatio + oPast.oLocation.z * fRatio;
-
-}
-
-/*************************************************
-Function: ComputeQueryTraj
-Description: a callback function in below:
-m_oOdomSuber = node.subscribe(m_sOdomTopic, 5, &GroundExtraction::HandleTrajectory, this);
-Calls: none
-Called By: TransformLaserInOdom, which is the construction function
-Table Accessed: none
-Table Updated: none
-Input: rawpoint, a 3d point with pcl point type
-Output: a point clouds are almost the same with raw point clouds but only their timestamp values are modified
-Return: none
-Others: none
-*************************************************/
-pcl::PointXYZ FramesFusion::ComputeQueryTraj(const ros::Time & oQueryTime){
-
-	pcl::PointXYZ oResTraj;
-	//clear the output
-	oResTraj.x = 0.0;
-	oResTraj.y = 0.0;
-	oResTraj.z = 0.0;
-	//index
-	int iTrajIdx = 0;
-	//time different
-	double timeDiff = (oQueryTime - m_vOdomHistory[iTrajIdx].oTimeStamp).toSec();
-	//search the most recent time
-	while (iTrajIdx < m_vOdomHistory.size() - 1 && timeDiff > 0) {
-		//increase index
-		iTrajIdx++;
-		//time different
-		timeDiff = (oQueryTime - m_vOdomHistory[iTrajIdx].oTimeStamp).toSec();
-	}
-
-	//if the querytime is out of the stored time section 
-	if (iTrajIdx == 0 || timeDiff > 0) {
-		//turn back zero
-		oResTraj.x = m_vOdomHistory[iTrajIdx].oLocation.x;
-		oResTraj.y = m_vOdomHistory[iTrajIdx].oLocation.y;
-		oResTraj.z = m_vOdomHistory[iTrajIdx].oLocation.z;
-
-	}else {//if it is between two stored times
-		//get the ratio
-		//ROS_INFO("Trajtime between: %f and %f", m_vOdomHistory[iTrajIdx].oTimeStamp.toSec(), m_vOdomHistory[iTrajIdx - 1].oTimeStamp.toSec());
-
-		float ratio = -timeDiff / (m_vOdomHistory[iTrajIdx].oTimeStamp - m_vOdomHistory[iTrajIdx - 1].oTimeStamp).toSec();
-		//interpolate an accuracy value
-		InterpolateTraj(m_vOdomHistory[iTrajIdx], m_vOdomHistory[iTrajIdx - 1], ratio, oResTraj);
-	}
-
-	return oResTraj;
-
-}
   
 
 /*=======================================
