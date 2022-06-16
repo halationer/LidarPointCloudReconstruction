@@ -81,7 +81,6 @@ class FrameRecon{
 
   //*************handler function*************
   //handle the trajectory information
-  //ConfidenceValue calculation is triggered as soon as receving odom data
   void HandleTrajectory(const nav_msgs::Odometry & oTrajectory);
 
   //handle the ground point clouds topic

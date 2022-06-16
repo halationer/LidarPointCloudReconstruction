@@ -12,7 +12,7 @@ Input: node - a ros node class
      nodeHandle - a private ros node class
 *************************************************/
 FramesFusion::FramesFusion(ros::NodeHandle & node,
-                       ros::NodeHandle & nodeHandle){
+                       ros::NodeHandle & nodeHandle):m_iOdomCount(0){
 
 	//read parameters
 	ReadLaunchParams(nodeHandle);
@@ -80,40 +80,51 @@ Others: none
 
 bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
-  //output file name
-  nodeHandle.param("file_outputpath", m_sFileHead, std::string("./"));
+ 	//output file name
+ 	nodeHandle.param("file_outputpath", m_sFileHead, std::string("./"));
 
-  //input point cloud topic
-  nodeHandle.param("cloud_in_topic", m_sInCloudTopic, std::string("/cloud_points"));
+ 	//input point cloud topic
+	nodeHandle.param("cloud_in_topic", m_sInCloudTopic, std::string("/cloud_points"));
 
-  //input odom topic
-  nodeHandle.param("cloud_out_topic", m_sOutCloudTopic, std::string("/processed_clouds"));
+	//input odom topic
+	nodeHandle.param("cloud_out_topic", m_sOutCloudTopic, std::string("/processed_clouds"));
 
-  //input point cloud topic
-  nodeHandle.param("outcloud_tf_id", m_sOutCloudTFId, std::string("camera_init"));
+	//input point cloud topic
+	nodeHandle.param("outcloud_tf_id", m_sOutCloudTFId, std::string("map"));
 
-  //input odom topic
-  nodeHandle.param("polygon_out_topic", m_sOutMeshTopic, std::string("/processed_clouds"));
+	//input odom topic
+	nodeHandle.param("polygon_out_topic", m_sOutMeshTopic, std::string("/processed_clouds"));
 
-  //input point cloud topic
-  nodeHandle.param("polygon_tf_id", m_sOutMeshTFId, std::string("camera_init"));
+	//input point cloud topic
+	nodeHandle.param("polygon_tf_id", m_sOutMeshTFId, std::string("map"));
 
-  //nearbt lengths
-  nodeHandle.param("polygon_tf_id", m_fNearLengths, 20.0f);
+	//nearbt lengths
+	nodeHandle.param("voxel_total_size", m_fNearLengths, 20.0f);
+	m_fNearLengths = m_fNearLengths/2.0f;
 
-  //point cloud sampling number
-  nodeHandle.param("sample_pcframe_num", m_iFrameSmpNum, 1);
+	//point cloud sampling number
+	nodeHandle.param("sample_pcframe_num", m_iFrameSmpNum, 1);
 
-  //point cloud sampling number
-  nodeHandle.param("sample_inputpoints_num", m_iSampleInPNum, 1);
+	//point cloud sampling number
+	nodeHandle.param("sample_inputpoints_num", m_iSampleInPNum, 1);
 
-  //count processed point cloud frame
-  m_iPCFrameCount = 0;
+	//nearby mesh update period in second
+	nodeHandle.param("mesh_update_period", m_fNearMeshPeriod, 2.0f);
 
-  //true indicates the file has not been generated
-  m_bOutPCFileFlag = true;
+	//side length of cube (voxel)
+  	float fCubeSize;
+  	nodeHandle.param("voxel_cube_size", fCubeSize, 0.5f);
+ 	m_oVoxelRes.x = fCubeSize;
+	m_oVoxelRes.y = fCubeSize;
+	m_oVoxelRes.z = fCubeSize;
 
-  return true;
+	//count processed point cloud frame
+	m_iPCFrameCount = 0;
+
+	//true indicates the file has not been generated
+	m_bOutPCFileFlag = true;
+
+	return true;
 
 }
 
@@ -195,6 +206,9 @@ void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vClo
 	m_oCloudPublisher.publish(vCloudData);
 
 }
+
+
+
 /*************************************************
 Function: PublishPointCloud
 Description: publish point clouds (mainly used for display and test)
@@ -207,8 +221,11 @@ Output: none
 Return: none
 Others: none
 *************************************************/
-void FramesFusion::PublishMeshs(){
+void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
   	
+	pcl::PointCloud<pcl::PointXYZ> vPublishCloud;
+	pcl::fromPCLPointCloud2 (oMeshModel.cloud, vPublishCloud);
+
   	//new a visual message
 	visualization_msgs::Marker oMeshMsgs;
 	
@@ -233,35 +250,171 @@ void FramesFusion::PublishMeshs(){
 
 	std_msgs::ColorRGBA color;
 	color.a = 1;
-	color.r = 255;
-	color.g = 255;
-	color.b = 255;
+	color.r = 0.0;
+	color.g = 255.0;
+	color.b = 0.0;
 	
-	//repeatable vertices
-	pcl::PointCloud<pcl::PointXYZ> vMeshVertices;
+	//for each face
+	for (int i = 0; i != oMeshModel.polygons.size(); ++i){
 
-	//*****need to add**********
+		//for each face vertex id
+		for (int j = 0; j != oMeshModel.polygons[i].vertices.size(); ++j){
+
+			//vertex id in each sector
+			int iVertexIdx =  oMeshModel.polygons[i].vertices[j];
+
+					//temp point
+    		geometry_msgs::Point oPTemp;
+        	oPTemp.x = vPublishCloud.points[iVertexIdx].x;
+        	oPTemp.y = vPublishCloud.points[iVertexIdx].y;
+        	oPTemp.z = vPublishCloud.points[iVertexIdx].z;
+
+        	//color
+       		oMeshMsgs.points.push_back(oPTemp);
+        	oMeshMsgs.color = color;
+
+		}//end k
+
+	}//end j
 
 
-	//convert to publishable message
-	for (int k = 0; k < vMeshVertices.points.size(); ++k){
-
-		//temp point
-    	geometry_msgs::Point oPTemp;
-        oPTemp.x = vMeshVertices.points[k].x;
-        oPTemp.y = vMeshVertices.points[k].y;
-        oPTemp.z = vMeshVertices.points[k].z;
-
-        //color
-        oMeshMsgs.points.push_back(oPTemp);
-        oMeshMsgs.color = color;
-
-	}//end k
+	
 
 	m_oMeshPublisher.publish(oMeshMsgs);
 
 }
 
+ 
+
+/*************************************************
+Function: EuclideanDistance
+Description: calculate the Euclidean distance between two points
+Calls: none
+Called By: NearbyClouds
+Table Accessed: none
+Table Updated: none
+Input: oBasedP - point a
+           oTargetP - point b
+Output: distance between two points
+Return: sqrt(fDis)
+Others: none
+*************************************************/
+ float FramesFusion::EuclideanDistance(const pcl::PointXYZ & oBasedP, const pcl::PointNormal & oTargetP){
+
+ 	 float fDis = (oBasedP.x - oTargetP.x)*(oBasedP.x - oTargetP.x)
+              	+ (oBasedP.y - oTargetP.y)*(oBasedP.y - oTargetP.y)
+              	+ (oBasedP.z - oTargetP.z)*(oBasedP.z - oTargetP.z);
+
+ 	 return sqrt(fDis);
+
+}
+
+
+/*************************************************
+Function: NearbyClouds
+Description: Get the neighboring points based on the given distance
+Calls: none
+Called By: NearbyClouds
+Table Accessed: none
+Table Updated: none
+Input: pRawCloud - input point clouds
+          oBasedP - a query point
+          fLength - the neighboring distance
+Output:  pNearCloud - the neighboring points near the query point
+Return: none
+Others: none
+*************************************************/
+void FramesFusion::NearbyClouds(const pcl::PointCloud<pcl::PointNormal> & pRawCloud, const pcl::PointXYZ & oBasedP, pcl::PointCloud<pcl::PointNormal> & pNearCloud, float fLength){
+
+	pNearCloud.clear();
+			
+	for (int i = 0; i != pRawCloud.points.size(); ++i){
+		
+		if (EuclideanDistance(oBasedP, pRawCloud.points[i]) <= fLength)
+			pNearCloud.push_back(pRawCloud.points[i]);
+
+	}
+
+};
+
+/*************************************************
+Function: SurroundModeling
+Description: Build surface models based on surrounding points with computed normals
+Calls: none
+Called By: 
+Table Accessed: none
+Table Updated: none
+Input: pRawCloud - input point clouds
+          oBasedP - a query point
+          fLength - the neighboring distance
+Output:  pNearCloud - the neighboring points near the query point
+Return: none
+Others: none
+*************************************************/
+void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel){
+
+	//output mesh
+	//oCBModel.cloud.clear();
+	oCBModel.polygons.clear();
+
+	//get the target points for construction
+	pcl::PointCloud<pcl::PointNormal>::Ptr pNearCloud(new pcl::PointCloud<pcl::PointNormal>);
+
+	//based on received point cloud and normal vector
+	//get the target point cloud to be modeled
+	NearbyClouds(m_vMapPCN, oBasedP, *pNearCloud, m_fNearLengths);
+
+	//******voxelization********
+	//set voxelization parameters based on point cloud extent
+	Voxelization oVoxeler(*pNearCloud);
+	
+	//set the number of voxels
+	//set voxel resolution or voxel size
+	//oVoxeler.GetIntervalNum(100,100,100);
+	oVoxeler.GetResolution(m_oVoxelRes);
+
+	//voxelize the space
+	oVoxeler.VoxelizeSpace();
+
+	//using signed distance
+	SignedDistance oSDer;
+
+	//compute signed distance based on centroids and its normals within voxels
+	std::vector<float> vSignedDis = oSDer.NormalBasedGlance(pNearCloud, oVoxeler);
+
+	//record non-empty voxels
+	std::vector<bool> vVoxelStatus;
+	oVoxeler.OutputNonEmptyVoxels(vVoxelStatus);
+
+	//clear accelerated data
+	oVoxeler.ClearMiddleData();
+
+	//******construction********
+	//marching cuber
+	CIsoSurface<float> oMarchingCuber;
+	//get surface mesh based on voxel related algorithm
+	oMarchingCuber.GenerateSurface(vSignedDis, vVoxelStatus, 0,
+			                       oVoxeler.m_iFinalVoxelNum.ixnum - 1, oVoxeler.m_iFinalVoxelNum.iynum - 1, oVoxeler.m_iFinalVoxelNum.iznum - 1, 
+			                       oVoxeler.m_oVoxelLength.x, oVoxeler.m_oVoxelLength.y, oVoxeler.m_oVoxelLength.z);
+
+	//move the mesh position to the actual starting point
+	pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
+	oMarchingCuber.OutputMesh(oVoxeler.m_oOriCorner, oCBModel, pMCResultCloud);
+
+
+	//new a mesh operation object for re-order the triangle vertex
+	MeshOperation oReOrder;
+
+	//compute the normal vector of each face for its centerpoint
+	//the normal vector will be facing away from the viewpoint
+	Eigen::MatrixXf oMCMatNormal;
+	Eigen::VectorXf vMCfDParam;
+
+	//note a bug releases
+	//sometimes the triangular generated by the CB algorithm has two same vertices but does not affect the result
+	oReOrder.ComputeAllFaceParams(oBasedP, *pMCResultCloud, oCBModel.polygons, oMCMatNormal, vMCfDParam);
+
+}
 
 /*************************************************
 Function: HandleRightLaser
@@ -287,45 +440,6 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 	//merge one frame data
 	for(int i = 0; i != pFramePN->points.size(); ++i)
 		m_vMapPCN.push_back(pFramePN->points[i]);
-
-	/*
-	//******voxelization********
-	Voxelization oVoxeler(*pRawCloud);
-	//set the number of voxels
-	oVoxeler.GetIntervalNum(60, 60, 60);
-	//voxelize the space
-	oVoxeler.VoxelizeSpace();
-
-	//******set fusion model********
-	Fusion oFusion;
-	//signed distance of each node
-	//this map is constantly updated
-	oFusion.SetAccDisSize(oVoxeler.m_pCornerCloud->points.size(), oVoxeler.m_fDefault);
-
-
-	//******compute signed distance********
-	for (int i = 1; i != 2; ++i){
-
-		//***compute signed distance of a glance***
-		//compute signed distance of a query nodes(voxels)
-		SignedDistance oSDer;
-		std::vector<float> vCornerSignedDis = oSDer.PointBasedGlance(pRawCloud, pViewPoints->points[i], oVoxeler);
-		std::vector<float> vCornerWeigt(vCornerSignedDis.size(), 1.0f);
-
-		//***fusion a glance result to global nodes (map)***
-		oFusion.UnionMinimalFusion(vCornerSignedDis);
-		//oFusion.CorrosionFusion(vCornerSignedDis, vSDMap);
-		std::cout << "Finish the " << i << "th viewpoint" << std::endl;
-	}
-
-
-	//******construction********
-	//marching cuber
-	CIsoSurface<float> oMarchingCuber;
-	oMarchingCuber.GenerateSurface(oFusion.m_vAccDis, 0,
-		oVoxeler.m_iFinalVoxelNum.ixnum - 1, oVoxeler.m_iFinalVoxelNum.iynum - 1, oVoxeler.m_iFinalVoxelNum.iznum - 1,
-		oVoxeler.m_oVoxelLength.x, oVoxeler.m_oVoxelLength.y, oVoxeler.m_oVoxelLength.z);
-	*/
 
 	//count
 	m_iPCFrameCount++;
@@ -372,6 +486,72 @@ void FramesFusion::SamplePoints(const pcl::PointCloud<pcl::PointXYZ> & vCloud, p
 
 	//output
 	return;
+
+}
+
+
+/*************************************************
+Function: HandleTrajectory
+Description: a callback function in below:
+m_oOdomSuber = node.subscribe(m_sOdomTopic, 5, &GroundExtraction::HandleTrajectory, this);
+Calls: none
+Called By: TransformLaserInOdom, which is the construction function
+Table Accessed: none
+Table Updated: none
+Input: rawpoint, a 3d point with pcl point type
+Output: a point clouds are almost the same with raw point clouds but only their timestamp values are modified
+Return: none
+Others: none
+*************************************************/
+void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
+{
+
+	//a flag indicates whether to calculate this odom
+	bool bComputeFlag = false;
+
+	//count input frames
+	if(!m_iOdomCount){
+
+		//initialize the time of last calculation as beginning
+		m_oLastModelingTime = oTrajectory.header.stamp;
+		//need to compute
+		bComputeFlag = true;
+
+	}else{
+
+		//compute the time difference
+		ros::Duration oModelduration = oTrajectory.header.stamp - m_oLastModelingTime;
+
+		//
+		if(oModelduration.toSec() > m_fNearMeshPeriod)
+			//
+			bComputeFlag = true;
+
+	}
+
+	m_iOdomCount++;
+
+	//if it is in the calculation period
+	//it would end this function and wait for the next input	
+	if(!bComputeFlag)
+		return;
+	
+	//if need to be updated
+	//get the newest information
+	m_oLastModelingTime = oTrajectory.header.stamp;
+
+	//save the position of trajectory
+	RosTimePoint oOdomPoint;
+	oOdomPoint.oLocation.x = oTrajectory.pose.pose.position.x;
+	oOdomPoint.oLocation.y = oTrajectory.pose.pose.position.y;
+	oOdomPoint.oLocation.z = oTrajectory.pose.pose.position.z;
+
+	//get the reconstructed surfaces
+	pcl::PolygonMesh oNearbyMeshes;
+	SurroundModeling(oOdomPoint.oLocation, oNearbyMeshes);
+
+	//output the nearby surfaces
+	PublishMeshs(oNearbyMeshes);
 
 }
 

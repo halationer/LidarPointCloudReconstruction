@@ -218,7 +218,7 @@ void ConvexHullOperation::CaculateTriangleNormal(const pcl::PointCloud<pcl::Poin
 	//Normalization
 	if (fLen == 0.0){
 		//throw Exception();
-		std::cout << "something wrong on normal vector calculation!" << std::endl;
+		//std::cout << "something wrong on normal vector calculation!" << std::endl;
 	}
 	else{
 		//normalization by using norm
@@ -310,6 +310,34 @@ void ConvexHullOperation::CaculateTriangleNormal(const Eigen::Vector3f & oRefPoi
 	return ;
 
 }
+
+/*=======================================
+CaculateTriangleNormal
+Input: oPZero, oPOne, oPTwo - p0, p1, p2 in pcl type
+oInnerP - a reference point
+Output: oFacePara - normal vector and d parameter
+Function: triangular plane equation calculation with a base point (reference)
+========================================*/
+void ConvexHullOperation::CaculateTriangleNormal(const pcl::PointNormal & oPNormal, FacePara & oFacePara){
+
+
+	//compute the D parameter of plane formula
+	//Based on the general equations of the plane: Axi + Byi + Czi + D = 0, we have
+	//D =-(Axi + Byi + Czi), i can be 0,1,2,....n (n=2 in hand)
+	Eigen::Vector3f oZeroVec(oPNormal.x, oPNormal.y, oPNormal.z);
+
+	//Axi + Byi + Czi is a dot product
+	oFacePara.oNormal(0) = oPNormal.normal_x;
+	oFacePara.oNormal(1) = oPNormal.normal_y;
+	oFacePara.oNormal(2) = oPNormal.normal_z;
+	oFacePara.fDparam = oFacePara.oNormal.dot(oZeroVec);
+	//take a negative number
+	oFacePara.fDparam = -1.0f*oFacePara.fDparam;
+
+	return;
+
+}
+
 
 /*=======================================
 CaculateTriangleNormal
@@ -568,6 +596,40 @@ void ConvexHullOperation::ComputeAllFaceParams(const pcl::PointXYZ & oViewPoint,
 
 /*=======================================
 ComputeAllFaceParams
+Input: vPNormals - point cloud with a correct normal vector
+Output: vFaceParams - all parameters of the plane equation
+Function: calculate the implicit plane equation where the point with normal vector is given
+========================================*/
+void ConvexHullOperation::ComputeAllFaceParams(const pcl::PointCloud<pcl::PointNormal> & vPNormals, std::vector<FacePara> & vFaceParams){
+
+	//define output
+	vFaceParams.clear();
+	vFaceParams.reserve(vPNormals.points.size());
+
+	//to each face
+	for (int i = 0; i != vPNormals.size(); ++i){
+
+		//set point and parameters
+		pcl::PointXYZ oPoint;
+		FacePara oFacePara;
+
+		//the normal vector consistently faces outside the face (different side from reference point)
+		CaculateTriangleNormal(vPNormals[i], oFacePara);
+
+		//get parameters of face in which the nearest point is
+		vFaceParams.push_back(oFacePara);
+
+	}
+
+	//parameters have beeb computed
+	bParamFlag = true;
+
+}
+
+
+
+/*=======================================
+ComputeAllFaceParams
 Input: vVertices - vertices of all triangular planes (no duplicates)
 vMeshVertexIdxs - vertex index for each face, p.s., each face has three vertices
 Output: m_oCenterPoint - center point of all faces as reference point
@@ -575,8 +637,8 @@ m_oMatN - a matrix of all face vectors
 m_vfD - A vector of D parameter values
 Function: compute the parameters of all plane equations and save them in matrix form, which is convenient for subsequent calculations
 ========================================*/
-void ConvexHullOperation::ComputeAllFaceParams(const pcl::PointXYZ & oViewPoint,const pcl::PointCloud<pcl::PointNormal> & vPNormals,
-	                                                   pcl::PointCloud<pcl::PointXYZ> & vClouds, std::vector<FacePara> & vFaceParams){
+void ConvexHullOperation::ComputeAllFaceParams(const pcl::PointXYZ & oViewPoint, const pcl::PointCloud<pcl::PointNormal> & vPNormals,
+	pcl::PointCloud<pcl::PointXYZ> & vClouds, std::vector<FacePara> & vFaceParams){
 
 	//define output
 	vFaceParams.clear();

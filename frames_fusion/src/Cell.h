@@ -31,6 +31,10 @@ public:
 
 	// Constructor and destructor.
 	Voxelization(const pcl::PointCloud<pcl::PointXYZ> & vCloud);
+
+	// Constructor and destructor.
+	Voxelization(const pcl::PointCloud<pcl::PointNormal> & vCloud);
+
 	~Voxelization();
 
 	//set the expand voxel number of boundary
@@ -47,6 +51,9 @@ public:
 	//transfor 3d index to 1D index
 	int Tran3DIdxTo1D(const IndexinAxis & o3DIdx);
 
+	//transfor 3d index to 1D index
+	IndexinAxis Tran1DIdxTo3D(const int & i1DIdx);
+
 	//given a 3d index, compute the corner idex if this query voxel
 	void CornerIdxs(const IndexinAxis & o3DIdx, std::vector<int> & vNeighborIdxs);
 
@@ -59,6 +66,9 @@ public:
 	//get the corner value of bounding box;
 	void BoundingBoxValue(const pcl::PointCloud<pcl::PointXYZ> & vCloud);
 
+	//get the corner value of bounding box;
+	void BoundingBoxValue(const pcl::PointCloud<pcl::PointNormal> & vCloud);
+
 	//voxelize the 3d space, generate voxels
 	void VoxelizeSpace();
 
@@ -69,8 +79,12 @@ public:
 
 	//voxelize the sampled point clouds
 	void VoxelizePoints(const pcl::PointCloud<pcl::PointXYZ> & vSampledCloud);
+	//voxelize the sampled point clouds
+	void VoxelizePoints(const pcl::PointCloud<pcl::PointNormal> & vSampledCloud);
 	//voxelize the sampled point clouds and also the raw point clouds
 	void VoxelizePoints(const pcl::PointCloud<pcl::PointXYZ> & vSampledCloud, const pcl::PointCloud<pcl::PointXYZ> & vCloud);
+
+	void OutputNonEmptyVoxels(std::vector<bool> & vVoxelStatus);
 
 	//get the nodes near the surface
 	//void FindNearNodes(const pcl::PointCloud<pcl::PointXYZ> & vCloud, pcl::PointCloud<pcl::PointXYZ> & vNearNodes);
@@ -103,6 +117,9 @@ public:
 
 	//the index of point in each voxel
 	std::vector <std::vector<int>> m_vVoxelPointIdx;
+
+	//
+	pcl::PointCloud<pcl::PointNormal>::Ptr m_pVoxelNormals;
 
 	//a vector indicates whether the corner is adjacent to the surface
 	std::vector<bool> m_vNearStatus;

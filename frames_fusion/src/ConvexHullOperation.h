@@ -60,20 +60,29 @@ public:
 	//reload, compute point to each face distance along with the direction relative to each normal vector
 	Eigen::VectorXf PointToFaceDis(const Eigen::Vector3f & vVecP, const Eigen::MatrixXf & oMatN, const Eigen::VectorXf & vfD);
 
+
+	//*************CaculateTriangleNormal***********
 	//calculate normal vectors of plane and triangular faces with pcl type output
 	pcl::Normal CaculateTriangleNormal(pcl::PointXYZ & oPZero, pcl::PointXYZ & oPOne, pcl::PointXYZ & oPTwo);
+
 	//reload, caculate triangle face normal with a reference point
 	void CaculateTriangleNormal(const pcl::PointXYZ & oPZero, const pcl::PointXYZ & oPOne, const pcl::PointXYZ & oPTwo, 
 		const pcl::PointXYZ & oInnerP, FacePara & oFacePara);
+
 	//reload, caculate triangle face normal with a reference point
 	void CaculateTriangleNormal(const pcl::PointCloud<pcl::PointXYZ> & vVertices,const pcl::PointXYZ & oInnerP, 
 		pcl::Vertices & vOneMeshVertexIdxs, FacePara & oFacePara);
+
 	//reload, caculate triangle face normal without a reference point
 	void CaculateTriangleNormal(const pcl::PointXYZ & oPZero, const pcl::PointXYZ & oPOne, const pcl::PointXYZ & oPTwo,
 		FacePara & oFacePara);
+
 	//reload, caculate triangle face normal with a normal input and a point triangle in face, and also a reference point to calibration
 	void CaculateTriangleNormal(const Eigen::Vector3f & oRefPoint, const pcl::PointNormal & oPNormal,
 		pcl::PointXYZ & oPoint, FacePara & oFacePara);
+
+	//reload, caculate triangle face normal with a normal input and a point in face, this function is to compute the D parameter of plan equation
+	void CaculateTriangleNormal(const pcl::PointNormal & oPNormal, FacePara & oFacePara);
 
 	//compute the center point based on A given triangle vertices
 	void ComputeCenterPoint(const pcl::PointCloud<pcl::PointXYZ> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs,
@@ -82,14 +91,18 @@ public:
 	void ComputeCenterPoint(const pcl::PointCloud<pcl::PointXYZ> & vVertices, pcl::PointXYZ & oCenterPoint);
 
 
+	//*************ComputeAllFaceParams***********
 	//Calculate equation parameters for all faces with a given center point (reference)
 	void ComputeAllFaceParams(const pcl::PointCloud<pcl::PointXYZ> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs, Eigen::MatrixXf & oMatNormal, Eigen::VectorXf & vfDParam);
+
 	//Calculate equation parameters for all faces without a given base point (reference)
 	void ComputeAllFaceParams(const pcl::PointCloud<pcl::PointXYZ> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs, pcl::PointXYZ & oCenterPoint,
 		                      Eigen::MatrixXf & oMatNormal,Eigen::VectorXf & vfDParam);
+
 	//Calculate equation parameters for all faces with a given viewpoint (reference)
 	void ComputeAllFaceParams(const pcl::PointXYZ & oViewPoint, const pcl::PointCloud<pcl::PointXYZ> & vVertices, std::vector<pcl::Vertices> & vMeshVertexIdxs,
 		                      Eigen::MatrixXf & oMatNormal, Eigen::VectorXf & vfDParam);
+
 	//Calculate right direction normal for all faces correspoding to a given viewpoint (reference)
 	void ComputeAllFaceParams(const pcl::PointXYZ & oViewPoint, const pcl::PointCloud<pcl::PointNormal> & vPNormals,
 		                              pcl::PointCloud<pcl::PointXYZ> & vClouds, std::vector<FacePara> & vFaceParams);
@@ -97,6 +110,9 @@ public:
 	//Calculate equation parameters for all faces with a given base point (reference)
 	void ComputeAllFaceParams(const pcl::PointCloud<pcl::PointXYZ> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs, pcl::PointXYZ & oCenterPoint, 
 		                     std::vector<FacePara> & vFaces);
+
+	//Calculate equation parameters for all faces with a given base point (reference)
+	void ComputeAllFaceParams(const pcl::PointCloud<pcl::PointNormal> & vPNormals, std::vector<FacePara> & vFaceParams);
 
 	//compute face params in two space
 	void FaceParamInTwoSpace(const pcl::PointCloud<pcl::PointXYZ> & vConvertVertices, const std::vector<pcl::Vertices> & vConvertMeshIdxs,

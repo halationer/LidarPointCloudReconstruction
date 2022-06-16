@@ -56,6 +56,8 @@ public:
 	// output reconstruction result
 	void OutputMesh(const pcl::PointXYZ & oOffset, pcl::PolygonMesh & oCBModel);
 
+	void OutputMesh(const pcl::PointXYZ & oOffset, pcl::PolygonMesh & oCBModel, pcl::PointCloud<pcl::PointXYZ>::Ptr & pMarchCuberCloud);
+
 	// The number of vertices which make up the isosurface.
 	unsigned int m_nVertices;
 
@@ -124,4 +126,3 @@ protected:
 
 };
 #endif // CISOSURFACE_H
-

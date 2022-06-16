@@ -5,7 +5,22 @@ Voxelization::Voxelization(const pcl::PointCloud<pcl::PointXYZ> & vCloud)
 	                  :m_fMinX(FLT_MAX),m_fMinY(FLT_MAX),m_fMinZ(FLT_MAX),
                     m_fMaxX(-FLT_MAX),m_fMaxY(-FLT_MAX),m_fMaxZ(-FLT_MAX),
 					m_fDefault(0.0), m_bParamFlag(false), m_fExpandNum(1.0),
-					m_pCornerCloud(new pcl::PointCloud<pcl::PointXYZ>){
+					m_pCornerCloud(new pcl::PointCloud<pcl::PointXYZ>),
+					m_pVoxelNormals(new pcl::PointCloud<pcl::PointNormal>){
+
+	BoundingBoxValue(vCloud);
+
+	m_vVoxelPointIdx.clear();
+
+}
+
+
+Voxelization::Voxelization(const pcl::PointCloud<pcl::PointNormal> & vCloud)
+	:m_fMinX(FLT_MAX), m_fMinY(FLT_MAX), m_fMinZ(FLT_MAX),
+	m_fMaxX(-FLT_MAX), m_fMaxY(-FLT_MAX), m_fMaxZ(-FLT_MAX),
+	m_fDefault(0.0), m_bParamFlag(false), m_fExpandNum(2.0),
+	m_pCornerCloud(new pcl::PointCloud<pcl::PointXYZ>),
+	m_pVoxelNormals(new pcl::PointCloud<pcl::PointNormal>){
 
 	BoundingBoxValue(vCloud);
 
@@ -100,6 +115,23 @@ int Voxelization::Tran3DIdxTo1D(const IndexinAxis & o3DIdx){
 
 /*=======================================
 BoundingBoxValue
+Input: i1DIdx - a given point clouds
+Output: m_fMinX,m_fMinY,m_fMinZ,m_fMaxX,m_fMaxY,m_fMaxZ - the maximum and minimum values of the point cloud on the three axes
+Function: Compute extrema of bounding box of input point clouds
+========================================*/
+IndexinAxis Voxelization::Tran1DIdxTo3D(const int & i1DIdx){
+
+	IndexinAxis o3DIdx;
+	o3DIdx.iznum = i1DIdx / (m_iFinalVoxelNum.iynum * m_iFinalVoxelNum.ixnum);
+	o3DIdx.iynum = (i1DIdx - o3DIdx.iznum * (m_iFinalVoxelNum.iynum * m_iFinalVoxelNum.ixnum)) / m_iFinalVoxelNum.ixnum;
+	o3DIdx.ixnum = i1DIdx - o3DIdx.iznum * (m_iFinalVoxelNum.iynum * m_iFinalVoxelNum.ixnum) - o3DIdx.iynum * m_iFinalVoxelNum.ixnum;
+
+	return o3DIdx;
+
+}
+
+/*=======================================
+BoundingBoxValue
 Input: vCloud - a given point clouds
 Output: m_fMinX,m_fMinY,m_fMinZ,m_fMaxX,m_fMaxY,m_fMaxZ - the maximum and minimum values of the point cloud on the three axes
 Function: Compute extrema of bounding box of input point clouds
@@ -158,6 +190,42 @@ Output: m_fMinX,m_fMinY,m_fMinZ,m_fMaxX,m_fMaxY,m_fMaxZ - the maximum and minimu
 Function: Compute extrema of bounding box of input point clouds
 ========================================*/
 void Voxelization::BoundingBoxValue(const pcl::PointCloud<pcl::PointXYZ> & vCloud){
+
+	//get the maximum and minimum value
+	for (int i = 0; i != vCloud.points.size(); ++i){
+
+		if (m_fMinX > vCloud.points[i].x)
+			m_fMinX = vCloud.points[i].x;
+		if (m_fMinY > vCloud.points[i].y)
+			m_fMinY = vCloud.points[i].y;
+		if (m_fMinZ > vCloud.points[i].z)
+			m_fMinZ = vCloud.points[i].z;
+		if (m_fMaxX < vCloud.points[i].x)
+			m_fMaxX = vCloud.points[i].x;
+		if (m_fMaxY < vCloud.points[i].y)
+			m_fMaxY = vCloud.points[i].y;
+		if (m_fMaxZ < vCloud.points[i].z)
+			m_fMaxZ = vCloud.points[i].z;
+	}
+	//collect the minimum value as a original point
+	m_oMinCorner.x = m_fMinX;
+	m_oMinCorner.y = m_fMinY;
+	m_oMinCorner.z = m_fMinZ;
+
+	//get the maximum value as a reference point
+	m_oMaxCorner.x = m_fMaxX;
+	m_oMaxCorner.y = m_fMaxY;
+	m_oMaxCorner.z = m_fMaxZ;
+
+}
+
+/*=======================================
+BoundingBoxValue
+Input: vCloud - a given point clouds
+Output: m_fMinX,m_fMinY,m_fMinZ,m_fMaxX,m_fMaxY,m_fMaxZ - the maximum and minimum values of the point cloud on the three axes
+Function: Compute extrema of bounding box of input point clouds
+========================================*/
+void Voxelization::BoundingBoxValue(const pcl::PointCloud<pcl::PointNormal> & vCloud){
 
 	//get the maximum and minimum value
 	for (int i = 0; i != vCloud.points.size(); ++i){
@@ -334,6 +402,47 @@ void Voxelization::VoxelizePoints(const pcl::PointCloud<pcl::PointXYZ> & vSample
 
 }
 
+/*=======================================
+VoxelizePoints
+Input: vCloud - a given point clouds
+Output: m_vNearStatus - a vector indicating whether the corner is a surface proximity point
+m_vVoxelPointIdx - point index within each voxel
+Function: voxelize a given sampling point
+========================================*/
+//compute a given point clouds belong to the corresponding voxel
+
+void Voxelization::VoxelizePoints(const pcl::PointCloud<pcl::PointNormal> & vSampledCloud){
+
+	//clear the voxel index
+	//voxel number is match with the corner number 
+	m_vVoxelPointIdx.clear();
+	m_vVoxelPointIdx.reserve(m_pCornerCloud->points.size());
+	//construct new voxel index
+	std::vector<int> vEmptyVec;
+	for (int i = 0; i != m_pCornerCloud->points.size(); ++i)
+		m_vVoxelPointIdx.push_back(vEmptyVec);
+
+	//get each point index
+	for (int i = 0; i != vSampledCloud.points.size(); ++i){
+
+		//3d index and 1d index of voxel in which it is 
+		IndexinAxis oP3DIndex;
+
+		pcl::PointXYZ oPoint;
+		oPoint.x = vSampledCloud.points[i].x;
+		oPoint.y = vSampledCloud.points[i].y;
+		oPoint.z = vSampledCloud.points[i].z;
+		int iVoxelIdx = PointBelongVoxel(oPoint, oP3DIndex);
+
+		//if this voxel is still a empty voxel
+		//the label its corner as near node for calculation of signed distance
+
+		//get data
+		m_vVoxelPointIdx[iVoxelIdx].push_back(i);
+
+	}//end for
+
+}
 
 /*=======================================
 VoxelizePoints
@@ -390,6 +499,22 @@ void Voxelization::VoxelizePoints(const pcl::PointCloud<pcl::PointXYZ> & vSample
 		m_vVoxelPointIdx[iVoxelIdx].push_back(i);
 
 	}//end for
+
+}
+
+
+void Voxelization::OutputNonEmptyVoxels(std::vector<bool> & vVoxelStatus){
+
+	vVoxelStatus.clear();
+	vVoxelStatus.resize(m_vVoxelPointIdx.size(), false);
+	
+	for (int i = 0; i != m_vVoxelPointIdx.size(); ++i){
+	
+		if (m_vVoxelPointIdx[i].size())
+			vVoxelStatus[i] = true;
+	
+	}
+
 
 }
 

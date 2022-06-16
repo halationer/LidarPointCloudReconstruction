@@ -160,3 +160,47 @@ void Fusion::UnionMinimalFusion(const std::vector<float> & vCurrentDis){
 
 
 }
+
+
+pcl::PointNormal Fusion::NormalFusion(const std::vector<int> & vPointIdx, const pcl::PointCloud<pcl::PointNormal> & vCloudNormal){
+
+	//Initialize output
+	pcl::PointNormal oOnePN;
+	oOnePN.x = 0.0f;
+	oOnePN.y = 0.0f;
+	oOnePN.z = 0.0f;
+	oOnePN.normal_x = 0.0f;
+	oOnePN.normal_y = 0.0f;
+	oOnePN.normal_z = 0.0f;
+
+	//linear increase
+	for (int i = 0; i != vPointIdx.size(); ++i){
+
+		int iVoxelPIdx = vPointIdx[i];
+	
+		oOnePN.x = oOnePN.x + vCloudNormal.points[iVoxelPIdx].x;
+		oOnePN.y = oOnePN.y + vCloudNormal.points[iVoxelPIdx].y;
+		oOnePN.z = oOnePN.z + vCloudNormal.points[iVoxelPIdx].z;
+		oOnePN.normal_x = oOnePN.normal_x + vCloudNormal.points[iVoxelPIdx].normal_x;
+		oOnePN.normal_y = oOnePN.normal_y + vCloudNormal.points[iVoxelPIdx].normal_y;
+		oOnePN.normal_z = oOnePN.normal_z + vCloudNormal.points[iVoxelPIdx].normal_z;
+	
+	}
+
+	
+	float fNum = float(vPointIdx.size());
+
+	if (vPointIdx.size()){
+		//take the mean
+		oOnePN.x = oOnePN.x / fNum;
+		oOnePN.y = oOnePN.y / fNum;
+		oOnePN.z = oOnePN.z / fNum;
+		oOnePN.normal_x = oOnePN.normal_x / fNum;
+		oOnePN.normal_y = oOnePN.normal_y / fNum;
+		oOnePN.normal_z = oOnePN.normal_z / fNum;
+	}
+
+	return oOnePN;
+
+
+}

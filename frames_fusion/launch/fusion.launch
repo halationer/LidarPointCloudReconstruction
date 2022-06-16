@@ -2,9 +2,9 @@
 <!--
 Software License Agreement (BSD)
 
-\file      publish_SLAM_res.launch
+\file      fusion.launch
 \authors   Pengdi Huang <alualu628628@163.com>
-\copyright Copyright (c) 2022, 05, All rights reserved.
+\copyright Copyright (c) 2022, 06, All rights reserved.
 
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WAR-
@@ -36,10 +36,12 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="sampleinpnum"  default="1" />
 
-    <arg name="sectornum"  default="12" />
+    <arg name="voxelcubesize" default="0.2"/> 
 
-    <arg name="pointzoffset" default="0.0"/> 
+    <arg name="voxeltotalsize" default="30.0"/> 
 
+    <arg name="meshuperiod" default="2.0"/> 
+    
     <!-- frames_fusion node in frames_fusion pkg-->
     <node name="frames_fusion" pkg="frames_fusion" type="frames_fusion" output="screen">
 
@@ -63,11 +65,14 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <!-- sampling number-->
         <param name="sample_inputpoints_num"  type="int" value="$(arg sampleinpnum)" />
 
-        <param name="sector_num"  type="int" value="$(arg sectornum)" />
+        <!-- voxel related-->
+        <param name="voxel_cube_size"  type="double" value="$(arg voxelcubesize)" />
 
-        <!--param name="odom_zoffset" type="double" value="$(arg odomzoffset)" /-->
+        <param name="voxel_total_size"  type="double" value="$(arg voxeltotalsize)" />
 
-        <param name="viewp_zoffset" type="double" value="$(arg pointzoffset)"/>
+        <!-- mesh related-->
+
+        <param name="mesh_update_period" type="double" value="$(arg meshuperiod)"/>
 
         <!-- tf id related-->
         <param name="outcloud_tf_id" type="string" value="$(arg outcloudtfid)" />
