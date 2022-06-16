@@ -21,6 +21,9 @@ FramesFusion::FramesFusion(ros::NodeHandle & node,
 	//subscribe (hear) the point cloud topic 
 	m_oCloudSuber = nodeHandle.subscribe(m_sInCloudTopic, 1, &FramesFusion::HandlePointClouds, this);
 
+	//subscribe (hear) the odometry information (trajectory)
+	m_oOdomSuber = nodeHandle.subscribe(m_sInOdomTopic, 1, &FramesFusion::HandleTrajectory, this);
+
 	//***publisher related*** 
 	//publish point cloud after processing
 	//m_oCloudPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sOutCloudTopic, 1, true);
@@ -87,13 +90,16 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	nodeHandle.param("cloud_in_topic", m_sInCloudTopic, std::string("/cloud_points"));
 
 	//input odom topic
+  	nodeHandle.param("odom_in_topic", m_sInOdomTopic, std::string("/odometry/filtered"));
+
+	//input odom topic
 	nodeHandle.param("cloud_out_topic", m_sOutCloudTopic, std::string("/processed_clouds"));
 
 	//input point cloud topic
 	nodeHandle.param("outcloud_tf_id", m_sOutCloudTFId, std::string("map"));
 
 	//input odom topic
-	nodeHandle.param("polygon_out_topic", m_sOutMeshTopic, std::string("/processed_clouds"));
+	nodeHandle.param("polygon_out_topic", m_sOutMeshTopic, std::string("/surrounding_meshes"));
 
 	//input point cloud topic
 	nodeHandle.param("polygon_tf_id", m_sOutMeshTFId, std::string("map"));

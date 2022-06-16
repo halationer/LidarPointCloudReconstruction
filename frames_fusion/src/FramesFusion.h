@@ -138,6 +138,13 @@ private:
       //the name of input point cloud topic 
       std::string m_sInCloudTopic; 
 
+      //***for input odom topic***
+      //the m_oOdomSuber subscirber is to hearinput  odometry topic
+      ros::Subscriber m_oOdomSuber;
+
+      //the name of input odometry topic (robot trajectory)
+      std::string m_sInOdomTopic;
+
       //***for output cloud topic***
       //output point cloud topic
       std::string m_sOutCloudTopic;

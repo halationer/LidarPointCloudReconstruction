@@ -26,7 +26,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="cloudoutopic" default="/processed_clouds" />
 
-    <arg name="polygonoutopic" default="/frame_meshs" />
+    <arg name="polygonoutopic" default="/surrounding_meshes" />
 
     <arg name="outcloudtfid" default="map"/>
 
