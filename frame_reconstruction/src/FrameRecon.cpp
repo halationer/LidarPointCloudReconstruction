@@ -282,9 +282,9 @@ void FrameRecon::PublishMeshs(){
 
 	std_msgs::ColorRGBA color;
 	color.a = 1;
-	color.r = 255;
-	color.g = 255;
-	color.b = 255;
+	color.r = 0.0;
+	color.g = 0.0;
+	color.b = 255.0;
 	
 	//repeatable vertices
 	pcl::PointCloud<pcl::PointXYZ> vMeshVertices;
