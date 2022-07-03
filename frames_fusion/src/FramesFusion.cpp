@@ -1,6 +1,13 @@
 #include "FramesFusion.h"
 
 
+namespace std {
+	const char* format_white = "\033[0m";
+	const char* format_yellow =  "\033[33m";
+	const char* format_red = "\033[31m";
+	const char* format_blue = "\033[34m";
+}
+
 /*************************************************
 Function: FramesFusion
 Description: constrcution function for FramesFusion class
@@ -12,7 +19,7 @@ Input: node - a ros node class
      nodeHandle - a private ros node class
 *************************************************/
 FramesFusion::FramesFusion(ros::NodeHandle & node,
-                       ros::NodeHandle & nodeHandle):m_iOdomCount(0){
+                       ros::NodeHandle & nodeHandle):m_iOdomCount(0), m_dAverageReconstructTime(0), m_dMaxReconstructTime(0),  m_iReconstructFrameNum(0){
 
 	//read parameters
 	ReadLaunchParams(nodeHandle);
@@ -26,7 +33,7 @@ FramesFusion::FramesFusion(ros::NodeHandle & node,
 
 	//***publisher related*** 
 	//publish point cloud after processing
-	//m_oCloudPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sOutCloudTopic, 1, true);
+	m_oCloudPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sOutCloudTopic, 1, true);
 
   	//publish polygon constructed from one frame point cloud
 	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::Marker>(m_sOutMeshTopic, 1);
@@ -48,6 +55,12 @@ Output: a file storing the point clouds with correct normal for accurate reconst
 
 FramesFusion::~FramesFusion() {
 
+	std::cout << std::format_blue
+	<< "Fused frame numbers: " << m_iReconstructFrameNum << std::endl
+	<< "Average recontime per frame: " << m_dAverageReconstructTime / m_iReconstructFrameNum << "ms"
+	<< ";\t Max frame time: " << m_dMaxReconstructTime << "ms"
+	<< std::format_white << std::endl;
+
 	//define ouput ply file name
 	m_sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply"; 
 
@@ -60,7 +73,13 @@ FramesFusion::~FramesFusion() {
 	std::cout << "The output file is " << m_sOutPCNormalFileName.str() << std::endl;
 
 	//output point clouds with computed normals to the files when the node logs out
-	pcl::io::savePLYFileASCII(m_sOutPCNormalFileName.str(), m_vMapPCN);
+	// pcl::io::savePLYFileASCII(m_sOutPCNormalFileName.str(), m_vMapPCN);
+
+	/** 
+		if the point cloud has too many points, ros may not wait it to save.
+		to solve this problem, change the file: /opt/ros/kinetic/lib/python2.7/dist-packages/roslaunch/nodeprocess.py
+			_TIMEOUT_SIGINT = 15.0  ->  _TIME_OUT_SIGINT = 60.0 
+	**/
 
 	std::cout << "Output is complete! The process will be automatically terminated. Thank you for waiting. " << std::endl;
 
@@ -147,7 +166,8 @@ Output: none
 Return: none
 Others: none
 *************************************************/
-void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud){
+template<class T>
+void FramesFusion::PublishPointCloud(const pcl::PointCloud<T> & vCloud){
   
 	//publish obstacle points
 	sensor_msgs::PointCloud2 vCloudData;
@@ -161,7 +181,9 @@ void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vClo
 	m_oCloudPublisher.publish(vCloudData);
 
 }
-
+// Make instances of the defined template function
+// template void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ>&);
+template void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointNormal>&);
 
 /*************************************************
 Function: PublishPointCloud
@@ -256,9 +278,9 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 
 	std_msgs::ColorRGBA color;
 	color.a = 1;
-	color.r = 0.0;
-	color.g = 255.0;
-	color.b = 0.0;
+	color.r = 1.0;
+	color.g = 1.0;
+	color.b = 0.2;
 	
 	//for each face
 	for (int i = 0; i != oMeshModel.polygons.size(); ++i){
@@ -282,9 +304,6 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 		}//end k
 
 	}//end j
-
-
-	
 
 	m_oMeshPublisher.publish(oMeshMsgs);
 
@@ -336,12 +355,26 @@ void FramesFusion::NearbyClouds(const pcl::PointCloud<pcl::PointNormal> & pRawCl
 			
 	for (int i = 0; i != pRawCloud.points.size(); ++i){
 		
-		if (EuclideanDistance(oBasedP, pRawCloud.points[i]) <= fLength)
+		if (EuclideanDistance(oBasedP, pRawCloud.points[i]) <= fLength) {
 			pNearCloud.push_back(pRawCloud.points[i]);
+			pNearCloud.points.rbegin()->data_c[3] = i; //record the rawcloud index in data_c[3]
+		}
 
 	}
 
 };
+
+void FramesFusion::FusionNormalBackToPoint(const pcl::PointCloud<pcl::PointNormal>& pNearCloud) {
+
+	MeshOperation m;
+	for(int i = 0; i != pNearCloud.size(); ++i) {
+		pcl::PointNormal& related_point = m_vMapPCN.points[pNearCloud.points[i].data_c[3]];
+		related_point.normal_x = related_point.normal_x + 0.3 * pNearCloud.points[i].normal_x;
+		related_point.normal_y = related_point.normal_y + 0.3 * pNearCloud.points[i].normal_y;
+		related_point.normal_z = related_point.normal_z + 0.3 * pNearCloud.points[i].normal_z;
+		m.VectorNormalization(related_point.normal_x, related_point.normal_y, related_point.normal_z);
+	}
+}
 
 /*************************************************
 Function: SurroundModeling
@@ -387,6 +420,9 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 
 	//compute signed distance based on centroids and its normals within voxels
 	std::vector<float> vSignedDis = oSDer.NormalBasedGlance(pNearCloud, oVoxeler);
+
+	//传回去
+	FusionNormalBackToPoint(*pNearCloud);
 
 	//record non-empty voxels
 	std::vector<bool> vVoxelStatus;
@@ -445,7 +481,13 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 
 	//merge one frame data
 	for(int i = 0; i != pFramePN->points.size(); ++i)
+	{
 		m_vMapPCN.push_back(pFramePN->points[i]);
+		
+		// if(m_vMapPCN.points[i].data_n[3] < 0.1)
+		// 	std::cout << m_vMapPCN.points[i].data_n[3] << " ";
+	}
+	// std::cout << "handle point finish" << std::endl;
 
 	//count
 	m_iPCFrameCount++;
@@ -554,11 +596,22 @@ void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 
 	//get the reconstructed surfaces
 	pcl::PolygonMesh oNearbyMeshes;
+
+	clock_t start_time = clock();
+	++m_iReconstructFrameNum;
 	SurroundModeling(oOdomPoint.oLocation, oNearbyMeshes);
+	clock_t frames_fusion_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
+	std::cout << std::format_blue 
+		<< "The No. " << m_iReconstructFrameNum 
+		<< ";\tframes_fusion_time: " << frames_fusion_time << "ms" 
+		<< std::format_white << std::endl;
+	m_dAverageReconstructTime += frames_fusion_time;
+	m_dMaxReconstructTime = frames_fusion_time > m_dMaxReconstructTime ? frames_fusion_time : m_dMaxReconstructTime;
 
 	//output the nearby surfaces
 	PublishMeshs(oNearbyMeshes);
 
+	PublishPointCloud(m_vMapPCN);
 }
 
 

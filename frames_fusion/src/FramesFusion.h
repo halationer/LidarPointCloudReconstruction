@@ -99,9 +99,13 @@ public:
       //build surrounding models
       void SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel);
 
+      void FusionNormalBackToPoint(const pcl::PointCloud<pcl::PointNormal>& pNearCloud);
+
       //*************Output function*************
       //publish point clouds
-      void PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud);
+      template<class T>
+      void PublishPointCloud(const pcl::PointCloud<T> & vCloud);
+      
       //reload, publish point clouds with labels
       void PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures);
 
@@ -196,7 +200,11 @@ private:
       //features of map point clouds
       //Features can be specified
       std::vector<float> m_vMapPCFeas;
- 
+
+      double m_dAverageReconstructTime;
+      double m_dMaxReconstructTime;
+
+      int m_iReconstructFrameNum;
 };
 
 

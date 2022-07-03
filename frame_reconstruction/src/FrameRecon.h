@@ -132,8 +132,7 @@ class FrameRecon{
   //***for input odom topic***
   //the m_oOdomSuber subscirber is to hearinput  odometry topic
   ros::Subscriber m_oOdomSuber;
-
-  //the name of input odometry topic (robot trajectory)
+  //the name of input odometry topic (robot trajectory), 在 reconstruction.launch 中赋值 /slam_odom
   std::string m_sInOdomTopic;
 
   unsigned int m_iTrajFrameNum;
@@ -141,28 +140,23 @@ class FrameRecon{
   //***for input point cloud topic***
   //the m_oCloudSuber subscirber is to hear input point cloud topic
   ros::Subscriber m_oCloudSuber;
-
-  //the name of input point cloud topic 
+  //the name of input point cloud topic, 在 reconstruction.launch 中赋值 /slam_points
   std::string m_sInCloudTopic; 
 
 
   //***for output cloud topic***
-  //output point cloud topic
+  //output point cloud topic, 在 reconstruction.launch 中赋值 /processed_cloud 目前该节点不存在
   std::string m_sOutCloudTopic;
-
   //output point cloud frame
   std::string m_sOutCloudTFId;
-
   //point cloud publisher for test
   ros::Publisher m_oCloudPublisher;
 
   //***for output mesh***
-  //output point cloud topic
+  //output point cloud topic, 在 reconstruction.launch 中赋值 /frame_meshs，单帧网格的输出
   std::string m_sOutMeshTopic;
-
   //output point cloud frame
   std::string m_sOutMeshTFId;
-
   //polygon publisher for test
   ros::Publisher m_oMeshPublisher;
 
@@ -199,7 +193,11 @@ class FrameRecon{
   //Features can be specified
   std::vector<float> m_vMapPCFeas;
 
-  
+  double m_dAverageReconstructTime;
+  double m_dMaxReconstructTime;
+
+  int m_iReconstructFrameNum;
+  int m_iTotalFrameNum;
 };
 
 

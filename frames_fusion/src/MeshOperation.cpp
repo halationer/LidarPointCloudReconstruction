@@ -18,17 +18,17 @@ Input: fX,fY,fZ - vector coordinate value
 Output: fX,fY,fZ - normalized value
 Function: Normalize the input and get a unit vector
 ========================================*/
-void MeshOperation::VectorNormalization(float & fX, float & fY, float & fZ){
+// void MeshOperation::VectorNormalization(float & fX, float & fY, float & fZ){
 
-	//get norm
-	float fNorm = sqrt(fX*fX + fY*fY + fZ*fZ);
+// 	//get norm
+// 	float fNorm = sqrt(fX*fX + fY*fY + fZ*fZ);
 
-	//a = a/|a|
-	fX = fX / fNorm;
-	fY = fY / fNorm;
-	fZ = fZ / fNorm;
+// 	//a = a/|a|
+// 	fX = fX / fNorm;
+// 	fY = fY / fNorm;
+// 	fZ = fZ / fNorm;
 
-}
+// }
 
 
 

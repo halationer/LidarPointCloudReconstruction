@@ -66,7 +66,7 @@ public:
 
 
 	//compute the signed distance based on ray cast (polar) - type 2
-	std::vector<float> NormalBasedGlance(const pcl::PointCloud<pcl::PointNormal>::Ptr & pCloudNormals,
+	std::vector<float> NormalBasedGlance(pcl::PointCloud<pcl::PointNormal>::Ptr & pCloudNormals,
 		                                 Voxelization & oVoxeler);
 
 	//compute the nearest distance

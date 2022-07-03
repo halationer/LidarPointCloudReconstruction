@@ -1,21 +1,22 @@
 #include "Fusion.h"
 
+#include "MeshOperation.h"
 
 //double KalmanFilter(KalmanInfo* kalmanInfo, double lastMeasurement)
 //{
-//	//Ô¤²âÏÂÒ»Ê±¿ÌµÄÖµ
-//	double predictValue = kalmanInfo->A* kalmanInfo->filterValue;   //xµÄÏÈÑé¹À¼ÆÓÉÉÏÒ»¸öÊ±¼äµãµÄºóÑé¹À¼ÆÖµºÍÊäÈëÐÅÏ¢¸ø³ö£¬´Ë´¦ÐèÒª¸ù¾Ý»ùÕ¾¸ß¶È×öÒ»¸öÐÞ¸Ä
+//	//Ô¤ï¿½ï¿½ï¿½ï¿½Ò»Ê±ï¿½Ìµï¿½Öµ
+//	double predictValue = kalmanInfo->A* kalmanInfo->filterValue;   //xï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½Ê±ï¿½ï¿½ï¿½Äºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë´ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½Ý»ï¿½Õ¾ï¿½ß¶ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Þ¸ï¿½
 //
-//	//ÇóÐ­·½²î
-//	kalmanInfo->P = kalmanInfo->A*kalmanInfo->A*kalmanInfo->P + kalmanInfo->Q;  //¼ÆËãÏÈÑé¾ù·½²î p(n|n-1)=A^2*p(n-1|n-1)+q
-//	double preValue = kalmanInfo->filterValue;  //¼ÇÂ¼ÉÏ´ÎÊµ¼Ê×ø±êµÄÖµ
+//	//ï¿½ï¿½Ð­ï¿½ï¿½ï¿½ï¿½
+//	kalmanInfo->P = kalmanInfo->A*kalmanInfo->A*kalmanInfo->P + kalmanInfo->Q;  //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ p(n|n-1)=A^2*p(n-1|n-1)+q
+//	double preValue = kalmanInfo->filterValue;  //ï¿½ï¿½Â¼ï¿½Ï´ï¿½Êµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öµ
 //
-//	//¼ÆËãkalmanÔöÒæ
-//	kalmanInfo->kalmanGain = kalmanInfo->P*kalmanInfo->H / (kalmanInfo->P*kalmanInfo->H*kalmanInfo->H + kalmanInfo->R);  //Kg(k)= P(k|k-1) H¡¯ / (H P(k|k-1) H¡¯ + R)
-//	//ÐÞÕý½á¹û£¬¼´¼ÆËãÂË²¨Öµ
-//	kalmanInfo->filterValue = predictValue + (lastMeasurement - predictValue)*kalmanInfo->kalmanGain;  //ÀûÓÃ²ÐÓàµÄÐÅÏ¢¸ÄÉÆ¶Ôx(t)µÄ¹À¼Æ£¬¸ø³öºóÑé¹À¼Æ£¬Õâ¸öÖµÒ²¾ÍÊÇÊä³ö  X(k|k)= X(k|k-1)+Kg(k) (Z(k)-H X(k|k-1))
-//	//¸üÐÂºóÑé¹À¼Æ
-//	kalmanInfo->P = (1 - kalmanInfo->kalmanGain*kalmanInfo->H)*kalmanInfo->P;//¼ÆËãºóÑé¾ù·½²î  P[n|n]=(1-K[n]*H)*P[n|n-1]
+//	//ï¿½ï¿½ï¿½ï¿½kalmanï¿½ï¿½ï¿½ï¿½
+//	kalmanInfo->kalmanGain = kalmanInfo->P*kalmanInfo->H / (kalmanInfo->P*kalmanInfo->H*kalmanInfo->H + kalmanInfo->R);  //Kg(k)= P(k|k-1) Hï¿½ï¿½ / (H P(k|k-1) Hï¿½ï¿½ + R)
+//	//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë²ï¿½Öµ
+//	kalmanInfo->filterValue = predictValue + (lastMeasurement - predictValue)*kalmanInfo->kalmanGain;  //ï¿½ï¿½ï¿½Ã²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢ï¿½ï¿½ï¿½Æ¶ï¿½x(t)ï¿½Ä¹ï¿½ï¿½Æ£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ£ï¿½ï¿½ï¿½ï¿½ÖµÒ²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½  X(k|k)= X(k|k-1)+Kg(k) (Z(k)-H X(k|k-1))
+//	//ï¿½ï¿½ï¿½Âºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//	kalmanInfo->P = (1 - kalmanInfo->kalmanGain*kalmanInfo->H)*kalmanInfo->P;//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½  P[n|n]=(1-K[n]*H)*P[n|n-1]
 //
 //	return  kalmanInfo->filterValue;
 //}
@@ -198,6 +199,68 @@ pcl::PointNormal Fusion::NormalFusion(const std::vector<int> & vPointIdx, const 
 		oOnePN.normal_x = oOnePN.normal_x / fNum;
 		oOnePN.normal_y = oOnePN.normal_y / fNum;
 		oOnePN.normal_z = oOnePN.normal_z / fNum;
+	}
+
+	return oOnePN;
+
+
+}
+
+pcl::PointNormal Fusion::NormalFusionWeighted(const std::vector<int> & vPointIdx, pcl::PointCloud<pcl::PointNormal> & vCloudNormal){
+
+	//Initialize output
+	pcl::PointNormal oOnePN;
+	oOnePN.x = 0.0f;
+	oOnePN.y = 0.0f;
+	oOnePN.z = 0.0f;
+	oOnePN.normal_x = 0.0f;
+	oOnePN.normal_y = 0.0f;
+	oOnePN.normal_z = 0.0f;
+	float& all_weight = oOnePN.data_n[3];
+
+	//linear increase
+	for (int i = 0; i != vPointIdx.size(); ++i){
+
+		int iVoxelPIdx = vPointIdx[i];
+		float point_weight = vCloudNormal.points[iVoxelPIdx].data_n[3];
+	
+		oOnePN.x = oOnePN.x + vCloudNormal.points[iVoxelPIdx].x;
+		oOnePN.y = oOnePN.y + vCloudNormal.points[iVoxelPIdx].y;
+		oOnePN.z = oOnePN.z + vCloudNormal.points[iVoxelPIdx].z;
+		oOnePN.normal_x = oOnePN.normal_x + point_weight * vCloudNormal.points[iVoxelPIdx].normal_x;
+		oOnePN.normal_y = oOnePN.normal_y + point_weight * vCloudNormal.points[iVoxelPIdx].normal_y;
+		oOnePN.normal_z = oOnePN.normal_z + point_weight * vCloudNormal.points[iVoxelPIdx].normal_z;
+		all_weight = all_weight + point_weight;
+	}
+
+	
+	float fNum = float(vPointIdx.size());
+
+	if (vPointIdx.size()){
+		//take the mean
+		oOnePN.x = oOnePN.x / fNum;
+		oOnePN.y = oOnePN.y / fNum;
+		oOnePN.z = oOnePN.z / fNum;
+		oOnePN.normal_x = oOnePN.normal_x / all_weight;
+		oOnePN.normal_y = oOnePN.normal_y / all_weight;
+		oOnePN.normal_z = oOnePN.normal_z / all_weight;
+	}
+
+	// spread back to the cloud normal
+	for (int i = 0; i != vPointIdx.size(); ++i){
+
+		int iVoxelPIdx = vPointIdx[i];
+		float point_weight = vCloudNormal.points[iVoxelPIdx].data_n[3];
+		vCloudNormal.points[iVoxelPIdx].normal_x = all_weight * oOnePN.normal_x + point_weight * vCloudNormal.points[iVoxelPIdx].normal_x;
+		vCloudNormal.points[iVoxelPIdx].normal_y = all_weight * oOnePN.normal_y + point_weight * vCloudNormal.points[iVoxelPIdx].normal_y;
+		vCloudNormal.points[iVoxelPIdx].normal_z = all_weight * oOnePN.normal_z + point_weight * vCloudNormal.points[iVoxelPIdx].normal_z;
+
+		vCloudNormal.points[iVoxelPIdx].normal_x /= (all_weight + point_weight);
+		vCloudNormal.points[iVoxelPIdx].normal_y /= (all_weight + point_weight);
+		vCloudNormal.points[iVoxelPIdx].normal_z /= (all_weight + point_weight);
+
+		MeshOperation m;
+		m.VectorNormalization(vCloudNormal.points[iVoxelPIdx].normal_x, vCloudNormal.points[iVoxelPIdx].normal_y, vCloudNormal.points[iVoxelPIdx].normal_z);
 	}
 
 	return oOnePN;

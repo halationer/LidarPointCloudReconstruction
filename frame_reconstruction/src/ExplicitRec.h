@@ -26,6 +26,10 @@ public:
 	//the min point number for convex hull
 	int m_iSectorMinPNum;
 
+	void setWorkingFrameCount(int count) {m_working_frame_count = count;}
+
+protected:
+	int m_working_frame_count;
 };
 
 

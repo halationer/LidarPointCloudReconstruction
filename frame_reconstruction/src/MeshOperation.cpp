@@ -262,7 +262,11 @@ void MeshOperation::LocalFaceNormal(const pcl::PointCloud<pcl::PointXYZ> & vVert
 			VectorNormalization(vCombinedNormal.points[i].normal_x, vCombinedNormal.points[i].normal_y, vCombinedNormal.points[i].normal_z);
 
 		}
-	
+
+		Eigen::Vector3f oToCenterVec(vCombinedNormal.points[i].x - oViewPoint.x, vCombinedNormal.points[i].y - oViewPoint.y, vCombinedNormal.points[i].z - oViewPoint.z);
+		Eigen::Vector3f oPointNormal(vCombinedNormal.points[i].normal_x, vCombinedNormal.points[i].normal_y, vCombinedNormal.points[i].normal_z);
+		vCombinedNormal.points[i].data_n[3] = - oToCenterVec.dot(oPointNormal) / oToCenterVec.norm();
+
 	}//end for i
 
 }

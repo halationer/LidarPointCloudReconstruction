@@ -247,7 +247,45 @@ void GHPR::Compute(const pcl::PointCloud<pcl::PointXYZ>::Ptr & pCloud, bool bInd
 	
 	//pHullVertices - the vertices of convex hull
 	//vPolygonIdxs - the face of convex hull (vertice indexes of a face)
-	oConvexHull.reconstruct(*m_pHullVertices, m_vHullPolygonIdxs);
+	oConvexHull.reconstruct(*m_pHullVertices, m_vHullPolygonIdxs);	//10 - 50 ms
+
+	//Check if a correspondence needs to be established from convex hull to input set with viewpoint
+	//It is risk because the third - party (e.g.,PCL) implementation with differnet version would get a uniform point order 
+	if (bIndexRelation){
+
+		//construt a relationship between vertice and input point with viewpoint
+		IndexFromHulltoInput(m_pHullVertices);
+
+		//the index relationship has been established
+		m_bToWorldIndex = true;
+
+	}
+
+}
+
+
+void GHPR::Compute(const pcl::PointCloud<pcl::PointXYZ>::Ptr & pCloud, std::mutex& reconstructLock, bool bIndexRelation){
+
+	//convert point cloud
+	ConvertCloud(pCloud);
+	//get the viewpoint idx
+	m_iViewWorldIdx = m_pTransCloud->points.size() - 1;
+
+	//set the convex hull operater
+	pcl::ConvexHull<pcl::PointXYZ> oConvexHull;
+	
+	//input point clouds of the convex hull
+	oConvexHull.setInputCloud(m_pTransCloud);
+	
+	//set the dimension
+	oConvexHull.setDimension(3);
+	
+	//pHullVertices - the vertices of convex hull
+	//vPolygonIdxs - the face of convex hull (vertice indexes of a face)
+
+	reconstructLock.lock();
+	oConvexHull.reconstruct(*m_pHullVertices, m_vHullPolygonIdxs);	//10 - 50 ms
+	reconstructLock.unlock();
 
 	//Check if a correspondence needs to be established from convex hull to input set with viewpoint
 	//It is risk because the third - party (e.g.,PCL) implementation with differnet version would get a uniform point order 

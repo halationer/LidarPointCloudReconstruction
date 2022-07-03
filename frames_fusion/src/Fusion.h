@@ -10,7 +10,6 @@
 
 
 
-
 class Fusion{
 
 public:
@@ -37,6 +36,7 @@ public:
 
 	//fuses normal vector
 	pcl::PointNormal NormalFusion(const std::vector<int> & vPointIdx, const pcl::PointCloud<pcl::PointNormal> & vCloudNormal);
+	pcl::PointNormal NormalFusionWeighted(const std::vector<int> & vPointIdx, pcl::PointCloud<pcl::PointNormal> & vCloudNormal);
 
 	//*******data********
 	std::vector<float> m_vAccDis;

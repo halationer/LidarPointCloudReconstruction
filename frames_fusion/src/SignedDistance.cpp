@@ -235,7 +235,7 @@ std::vector<float> SignedDistance::PointBasedGlance(const pcl::PointCloud<pcl::P
 
 
 
-std::vector<float> SignedDistance::NormalBasedGlance(const pcl::PointCloud<pcl::PointNormal>::Ptr & pCloudNormals,
+std::vector<float> SignedDistance::NormalBasedGlance(pcl::PointCloud<pcl::PointNormal>::Ptr & pCloudNormals,
 	                                                 Voxelization & oVoxeler){
 	
 	//
@@ -248,11 +248,13 @@ std::vector<float> SignedDistance::NormalBasedGlance(const pcl::PointCloud<pcl::
 
 	for (int i = 0; i != oVoxeler.m_vVoxelPointIdx.size(); ++i){
 		
-		pcl::PointNormal oOneVoxelN = oVoxelFusion.NormalFusion(oVoxeler.m_vVoxelPointIdx[i], *pCloudNormals);
+		// pcl::PointNormal oOneVoxelN = oVoxelFusion.NormalFusion(oVoxeler.m_vVoxelPointIdx[i], *pCloudNormals);
+		pcl::PointNormal oOneVoxelN = oVoxelFusion.NormalFusionWeighted(oVoxeler.m_vVoxelPointIdx[i], *pCloudNormals);
 		oVoxeler.m_pVoxelNormals->push_back(oOneVoxelN);
 	
 	}
 
+/** Output codes
 	std::vector<float> vPointLabels(pCloudNormals->points.size(), 0.0);
 	for (int i = 0; i != oVoxeler.m_vVoxelPointIdx.size(); ++i){
 		for (int j = 0; j != oVoxeler.m_vVoxelPointIdx[i].size(); ++j){
@@ -261,6 +263,7 @@ std::vector<float> SignedDistance::NormalBasedGlance(const pcl::PointCloud<pcl::
 		}
 	}
 	WritePointCloudTxt("PointLabels.txt", *pCloudNormals, vPointLabels);
+//*/
 
 	//compute the sampled point normal based on the face normal
 	ConvexHullOperation oConvexHullOPer;
@@ -271,18 +274,10 @@ std::vector<float> SignedDistance::NormalBasedGlance(const pcl::PointCloud<pcl::
 	//compute the sampled point normal and divde it into point and normal
 	oConvexHullOPer.ComputeAllFaceParams(*oVoxeler.m_pVoxelNormals, vVoxelNormalPara);
 
-
-
-	//construct new voxel index
-	std::vector<int> vEmptyVec;
-
 	//from corner to plan distance
 	std::vector<float> vCornerSignedDis = PlanDistance(oVoxeler, vVoxelNormalPara);
 
-	WritePointCloudTxt("NodeSignedDistance.txt", *oVoxeler.m_pCornerCloud, vCornerSignedDis);
-
-	//prepare for next calculation
-	//oVoxeler.ClearMiddleData();
+	// WritePointCloudTxt("NodeSignedDistance.txt", *oVoxeler.m_pCornerCloud, vCornerSignedDis);
 
 	//output
 	return vCornerSignedDis;

@@ -1,5 +1,13 @@
 #include "FrameRecon.h"
 
+#include <iostream>
+#include <sstream>
+
+namespace std {
+	const char* format_white = "\033[0m";
+	const char* format_yellow =  "\033[33m";
+	const char* format_red = "\033[31m";
+}
 
 /*************************************************
 Function: FrameRecon
@@ -13,24 +21,24 @@ Input: node - a ros node class
 *************************************************/
 FrameRecon::FrameRecon(ros::NodeHandle & node,
                        ros::NodeHandle & nodeHandle):
-                       m_iTrajFrameNum(0){
+                       m_iTrajFrameNum(0),m_dAverageReconstructTime(0),m_iReconstructFrameNum(0),m_dMaxReconstructTime(0){
 
 	//read parameters
 	ReadLaunchParams(nodeHandle);
 
 	//***subscriber related*** 
 	//subscribe (hear) the odometry information (trajectory)
-	m_oOdomSuber = nodeHandle.subscribe(m_sInOdomTopic, 1, &FrameRecon::HandleTrajectory, this);
+	m_oOdomSuber = nodeHandle.subscribe(m_sInOdomTopic, 2, &FrameRecon::HandleTrajectory, this);	//记录运动信息到 m_vOdomHistory 的循环数组之中，并且 m_iTrajCount++
 
 	//subscribe (hear) the point cloud topic 
-	m_oCloudSuber = nodeHandle.subscribe(m_sInCloudTopic, 1, &FrameRecon::HandlePointClouds, this);
+	m_oCloudSuber = nodeHandle.subscribe(m_sInCloudTopic, 1, &FrameRecon::HandlePointClouds, this);	//在m_vMapPCN记录法向点集，发布Mesh主题
 
 	//***publisher related*** 
 	//publish point cloud after processing
-	m_oCloudPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sOutCloudTopic, 1, true);
-	
+	m_oCloudPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sOutCloudTopic, 1, true);	//暂无发布
+
   	//publish polygon constructed from one frame point cloud
-	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::Marker>(m_sOutMeshTopic, 1);
+	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::Marker>(m_sOutMeshTopic, 1);		//在接受到点云重建完之后， 被 PublishMeshs() 函数调用
 
 
 }
@@ -49,6 +57,11 @@ Output: a file storing the point clouds with correct normal for accurate reconst
 
 FrameRecon::~FrameRecon() {
 
+	std::cout << std::format_yellow 
+		<< "Reconstructed frame numbers: " << m_iReconstructFrameNum << ";\tTotal frame numbers : " << m_iTotalFrameNum << std::endl
+		<< "Average recontime per frame: " << m_dAverageReconstructTime / m_iReconstructFrameNum << "ms"
+		<< ";\t Max frame time: " << m_dMaxReconstructTime << "ms"
+		<< std::format_white << std::endl;
 	/*
 	//define ouput ply file name
 	m_sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply"; 
@@ -282,10 +295,10 @@ void FrameRecon::PublishMeshs(){
 
 	std_msgs::ColorRGBA color;
 	color.a = 1;
-	color.r = 0.0;
-	color.g = 0.0;
-	color.b = 255.0;
-	
+	color.r = 1.0;
+	color.g = 1.0;
+	color.b = 1.0;
+
 	//repeatable vertices
 	pcl::PointCloud<pcl::PointXYZ> vMeshVertices;
 
@@ -311,7 +324,10 @@ void FrameRecon::PublishMeshs(){
 
 }
 
-
+std::ostream& operator<<(std::ostream& out, const sensor_msgs::PointCloud2::_header_type& header) {
+	out << header.frame_id << ", " << header.seq << ", " << header.stamp;
+	return out;
+}
 /*************************************************
 Function: HandleRightLaser
 Description: a callback function in below:
@@ -328,7 +344,14 @@ Others: none
 void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 {
 
-	if (!(m_iPCFrameCount%m_iFrameSmpNum)){
+	if (!(m_iPCFrameCount % m_iFrameSmpNum)){ //根据帧采样频率记录
+
+		std::cout << "Now frame count is: " << m_iPCFrameCount << ";\t"
+			<< "header is: {" << vLaserData.header << "}";
+		m_iTotalFrameNum = vLaserData.header.seq;
+
+		//开始算法计时
+		clock_t start_time = clock();
 
 		////a point clouds in PCL type
 		pcl::PointCloud<pcl::PointXYZ>::Ptr pRawCloud(new pcl::PointCloud<pcl::PointXYZ>);
@@ -338,43 +361,61 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		//if have corresponding trajectory point (viewpoint)
 		pcl::PointXYZ oCurrentViewP;
 
-		if (m_vOdomHistory.size()){
+		if (m_vOdomHistory.size() /*&& vLaserData.header.stamp <= m_vOdomHistory.last().oTimeStamp*/){
 			//
-			oCurrentViewP = ComputeQueryTraj(vLaserData.header.stamp);
+			oCurrentViewP = ComputeQueryTraj(vLaserData.header.stamp);	//当前点云对应的观测位置（Odom与frame并非一一对应，因此需要计算插值）
+
+			std::cout << "\tView: " << oCurrentViewP;
 		
 		//else waiting for sync
 		}else{
 
+			std::cout << std::format_red << " Error: No odom matched!" << std::format_white << std::endl;
+
 			return;
 		}
+
+		std::cout << ";\tsize: " << pRawCloud->size();
 		
 		pcl::PointCloud<pcl::PointXYZ>::Ptr pSceneCloud(new pcl::PointCloud<pcl::PointXYZ>);
 		SamplePoints(*pRawCloud, *pSceneCloud, m_iSampleInPNum);
 		
 		pcl::PointCloud<pcl::PointNormal>::Ptr pFramePNormal(new pcl::PointCloud<pcl::PointNormal>);
 
+		m_oExplicitBuilder.setWorkingFrameCount(m_iPCFrameCount);
 		m_oExplicitBuilder.SetViewPoint(oCurrentViewP, m_fViewZOffset);
-		m_oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal);
+		m_oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal);	//得到带法向的点云
 
 		//************output value******************
 		for(int i=0;i!=pFramePNormal->points.size();++i)
 			m_vMapPCN.points.push_back(pFramePNormal->points[i]);
 				
 
-		//output the visiable result
-		PublishMeshs();
+		PublishMeshs();	//发布 m_oExplicitBuilder 中建立的 mesh
 
-		//output the points and normals 
 		PublishPointCloud(*pFramePNormal);
+
+		/*output the points and normals
+		{
+			std::stringstream ss;
+			ss << "../Dense_ROS/save/FramePNormal_" << m_iPCFrameCount << ".ply";
+			pcl::io::savePLYFileASCII(ss.str(), *pFramePNormal);
+		}
+		//*/
 
 		//clear this frame result
 		m_oExplicitBuilder.ClearData();
 
-
-		//count
-		m_iPCFrameCount++;
-
+		//结束算法计时并记录执行时间
+		clock_t frame_reconstruct_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
+		std::cout << ";\ttime:" << frame_reconstruct_time << "ms" << std::endl;
+		m_dAverageReconstructTime += frame_reconstruct_time;
+		m_dMaxReconstructTime = frame_reconstruct_time > m_dMaxReconstructTime ? frame_reconstruct_time : m_dMaxReconstructTime;
+		++m_iReconstructFrameNum;
 	}
+
+	//count
+	m_iPCFrameCount++;
 
 	return;
 
@@ -394,9 +435,13 @@ Input: rawpoint, a 3d point with pcl point type
 Output: a point clouds are almost the same with raw point clouds but only their timestamp values are modified
 Return: none
 Others: none
-*************************************************/
+*************************************************/	
 void FrameRecon::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 {
+
+	std::cout << std::format_yellow << "Now Odome count is: " << m_iTrajCount << ";\t"
+		<< "header is: {" << oTrajectory.header << "}" << "\tPose: (" << oTrajectory.pose.pose.position.x << ","
+		<< oTrajectory.pose.pose.position.y << "," << oTrajectory.pose.pose.position.z << ")" << std::format_white << std::endl;
 
 	//count input frames
 	//m_iTrajPointNum++;

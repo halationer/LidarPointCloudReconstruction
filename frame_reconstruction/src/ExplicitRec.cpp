@@ -1,5 +1,12 @@
 #include "ExplicitRec.h"
 
+#include <iostream>
+#include <sstream>     
+#include <pcl/io/ply_io.h>    
+#include <thread>
+#include <atomic>
+#include <chrono>
+#include <mutex>
 
 ExplicitRec::ExplicitRec() :m_bElevationFlag(false),m_pCenterNormal(new pcl::PointCloud<pcl::PointNormal>){
 
@@ -168,121 +175,181 @@ void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZ> & vSc
 
 	//point clouds in each sector
 	m_vAllSectorClouds.clear();
-	m_vAllSectorClouds.reserve(vPointSecIdxs.size());
+	m_vAllSectorClouds.resize(vPointSecIdxs.size());
 
 	//triangular face in each sector
 	m_vAllSectorFaces.clear();
-	m_vAllSectorFaces.reserve(vPointSecIdxs.size());
+	m_vAllSectorFaces.resize(vPointSecIdxs.size());
+
+// #define __MULTI_THREAD_FRAME_RECONSTRUCTION__
+	//多线程分离Normal
+	std::vector<pcl::PointCloud<pcl::PointNormal>> vCombinedNormalList;
+	vCombinedNormalList.resize(vPointSecIdxs.size());
+	std::mutex convex_hull;
+	std::vector<std::thread> thread_pool;
 
 	//triangular face in each sector
 	for (int i = 0; i != vPointSecIdxs.size(); ++i) {
 
-		//If the points in a sector is sufficient to calculate
-		if (vPointSecIdxs[i].size() > m_iSectorMinPNum){
+#ifdef __MULTI_THREAD_FRAME_RECONSTRUCTION__
+		thread_pool.emplace_back(
+			std::thread([&,i]() { 
+#endif
+				//If the points in a sector is sufficient to calculate
+				if (vPointSecIdxs[i].size() > m_iSectorMinPNum){
 
-			//point clouds inside one sector
-			pcl::PointCloud<pcl::PointXYZ>::Ptr pSectorCloud(new pcl::PointCloud<pcl::PointXYZ>);
-			//get a point clouds in one section
-			for (int j = 0; j != vPointSecIdxs[i].size(); ++j) {
-				//get point index
-				int iSecPointInAllIdx = vPointSecIdxs[i][j];
-				//construct point clouds
-				pSectorCloud->points.push_back(vSceneCloud.points[iSecPointInAllIdx]);
-			}
+					//point clouds inside one sector
+					pcl::PointCloud<pcl::PointXYZ>::Ptr pSectorCloud(new pcl::PointCloud<pcl::PointXYZ>);
 
-			if (m_bElevationFlag){
-				pcl::PointXYZ oViewGroundP;
-				oViewGroundP.x = m_oViewPoint.x;
-				oViewGroundP.y = m_oViewPoint.y;
-				oViewGroundP.z = m_oViewPoint.z - m_fViewElevation;
-				pSectorCloud->points.push_back(oViewGroundP);
-			}
+					//不分割就用这两句代替，然后注释一些代码即可
+					// int i = 0;
+					// pcl::PointCloud<pcl::PointXYZ>::Ptr pSectorCloud(new pcl::PointCloud<pcl::PointXYZ>(vSceneCloud));
 
-			//******Mesh building******
-			//***GHPR mesh building***
-			GHPR hpdhpr(m_oViewPoint, m_GHPRParam);
+					//get a point clouds in one section
+					for (int j = 0; j != vPointSecIdxs[i].size(); ++j) {
+						//get point index
+						int iSecPointInAllIdx = vPointSecIdxs[i][j];
+						//construct point clouds
+						pSectorCloud->points.push_back(vSceneCloud.points[iSecPointInAllIdx]);
+					}
 
-			//perform reconstruction
-			hpdhpr.Compute(pSectorCloud);
+					if (m_bElevationFlag){
+						pcl::PointXYZ oViewGroundP;
+						oViewGroundP.x = m_oViewPoint.x;
+						oViewGroundP.y = m_oViewPoint.y;
+						oViewGroundP.z = m_oViewPoint.z - m_fViewElevation;
+						pSectorCloud->points.push_back(oViewGroundP);
+					}
 
-			//get the surfaces that are not connected to the viewpoint
-			std::vector<pcl::Vertices> vOneFaces;
-			vOneFaces = hpdhpr.ConstructSurfaceIdx();
+					//******Mesh building******
+					//***GHPR mesh building***
+					GHPR hpdhpr(m_oViewPoint, m_GHPRParam);
 
-			//***start the mesh related operation***
-			//center point of each faces
-			pcl::PointCloud<pcl::PointXYZ>::Ptr pCenterPoints(new pcl::PointCloud<pcl::PointXYZ>);
+					//perform reconstruction
+#ifdef __MULTI_THREAD_FRAME_RECONSTRUCTION__
+					hpdhpr.Compute(pSectorCloud, convex_hull);
+#else
+					hpdhpr.Compute(pSectorCloud);
+#endif
 
-			//face normals
-			Eigen::MatrixXf oMatNormal;
+					//get the surfaces that are not connected to the viewpoint
+					std::vector<pcl::Vertices> vOneFaces;
+					vOneFaces = hpdhpr.ConstructSurfaceIdx();
 
-			//face parameters d
-			Eigen::VectorXf vfDParam;
+					/*输出单份的重建网格结果
+					{
+						system("mkdir -p $PWD/../Dense_ROS/save");
+						pcl::PolygonMesh OutMeshModel;
+						pcl::toPCLPointCloud2(*pSectorCloud, OutMeshModel.cloud);
+						OutMeshModel.polygons = vOneFaces;
+						std::stringstream ss;
+						ss << "../Dense_ROS/save/GhprMesh_" << m_working_frame_count << "_" << i << ".ply";
+						pcl::io::savePLYFileBinary(ss.str(), OutMeshModel); 
+					}
+					//*/
 
-			//face status - whether the face is wrong
-			std::vector<bool> vTrueFaceStatus(vOneFaces.size(), true);
+					//***start the mesh related operation***
+					//center point of each faces
+					pcl::PointCloud<pcl::PointXYZ>::Ptr pCenterPoints(new pcl::PointCloud<pcl::PointXYZ>);
 
-			//face weight, e.g., confidence for each face
-			//the confidence is higher, if the laser beam is orthophoto the surface 
-			std::vector<float> vFaceWeight(vOneFaces.size(), 0.0f);
+					//face normals
+					Eigen::MatrixXf oMatNormal;
 
-			//new a mesh operation object
-			MeshOperation oMeshOper;
+					//face parameters d
+					Eigen::VectorXf vfDParam;
 
-			//compute the centerpoint of each faces
-			//The centerpoint re-represents its face
-			oMeshOper.ComputeCenterPoint(*pSectorCloud, vOneFaces, *pCenterPoints);
+					//face status - whether the face is wrong
+					std::vector<bool> vTrueFaceStatus(vOneFaces.size(), true);
 
-			//compute the normal vector of each face for its centerpoint
-			//the normal vector will be facing away from the viewpoint
-			oMeshOper.ComputeAllFaceParams(m_oViewPoint, *pSectorCloud, vOneFaces, oMatNormal, vfDParam);
+					//face weight, e.g., confidence for each face
+					//the confidence is higher, if the laser beam is orthophoto the surface 
+					std::vector<float> vFaceWeight(vOneFaces.size(), 0.0f);
 
-			//Remove pseudo triangles according to scanning rules of LiDAR
-			RemovePseudoFaces(*pCenterPoints, vOneFaces, oMatNormal, vTrueFaceStatus, vFaceWeight);
+					//new a mesh operation object
+					MeshOperation oMeshOper;
 
-			//point adj
-			pcl::PointCloud<pcl::PointNormal> vCombinedNormal;
+					//compute the centerpoint of each faces
+					//The centerpoint re-represents its face
+					oMeshOper.ComputeCenterPoint(*pSectorCloud, vOneFaces, *pCenterPoints);
 
-			//propagate the normal vector to each vertex
-			//linearly compute weighted neighboring normal vector
-			oMeshOper.LocalFaceNormal(*pSectorCloud, vOneFaces, oMatNormal, m_oViewPoint, vCombinedNormal);
+					//compute the normal vector of each face for its centerpoint
+					//the normal vector will be facing away from the viewpoint
+					oMeshOper.ComputeAllFaceParams(m_oViewPoint, *pSectorCloud, vOneFaces, oMatNormal, vfDParam);
 
-			//***record data***
-			//output normal
-			oMeshOper.NormalMatrixToPCL(*pCenterPoints, oMatNormal, *m_pCenterNormal, true);
+					/*此处是修正法向量之后的结果
+					{
+						system("mkdir -p $PWD/../Dense_ROS/save");
+						pcl::PolygonMesh OutMeshModel;
+						pcl::toPCLPointCloud2(*pSectorCloud, OutMeshModel.cloud);
+						OutMeshModel.polygons = vOneFaces;
+						std::stringstream ss;
+						ss << "../Dense_ROS/save/GhprMesh_" << m_working_frame_count << "_" << i << ".ply";
+						pcl::io::savePLYFileBinary(ss.str(), OutMeshModel); 
+					}
+					//*/
 
-			//Record the remaining triangles
-			std::vector<pcl::Vertices> vOneNewFaces;
-			for (int j = 0; j != vTrueFaceStatus.size(); ++j){
+					//Remove pseudo triangles according to scanning rules of LiDAR
+					RemovePseudoFaces(*pCenterPoints, vOneFaces, oMatNormal, vTrueFaceStatus, vFaceWeight);
 
-				if (vTrueFaceStatus[j]){
-					pcl::Vertices oOneFace(vOneFaces[j]);
-					vOneNewFaces.push_back(oOneFace);
-				}//end if
+					//propagate the normal vector to each vertex
+					//linearly compute weighted neighboring normal vector
+					oMeshOper.LocalFaceNormal(*pSectorCloud, vOneFaces, oMatNormal, m_oViewPoint, vCombinedNormalList[i]);
 
-			}//end for j != vTrueFaceStatus.size()
+					//***record data***
+					//output normal
+					// oMeshOper.NormalMatrixToPCL(*pCenterPoints, oMatNormal, *m_pCenterNormal, true);
 
-			//collect the vertices and faces in each sector
-			m_vAllSectorClouds.push_back(pSectorCloud);
-			m_vAllSectorFaces.push_back(vOneNewFaces);
+					//Record the remaining triangles
+					std::vector<pcl::Vertices> vOneNewFaces;
+					for (int j = 0; j != vTrueFaceStatus.size(); ++j){
 
-			//output
-			for (int j = 0; j != vCombinedNormal.size(); ++j)
-				vScenePNormal.points.push_back(vCombinedNormal.points[j]);
-		
-		}else{
-			
-			pcl::PointCloud<pcl::PointXYZ>::Ptr pSectorCloud(new pcl::PointCloud<pcl::PointXYZ>);
-			m_vAllSectorClouds.push_back(pSectorCloud);
+						if (vTrueFaceStatus[j]){
+							pcl::Vertices oOneFace(vOneFaces[j]);
+							vOneNewFaces.push_back(oOneFace);
+						}//end if
 
-			std::vector<pcl::Vertices> vOneNewFaces;
-			m_vAllSectorFaces.push_back(vOneNewFaces);
-		
-		}//end if vPointSecIdxs[i].size() > m_iSectorMinPNum
-		
+					}//end for j != vTrueFaceStatus.size()
 
-	}//end  i != vPointSecIdxs.size()
+					//collect the vertices and faces in each sector
+					m_vAllSectorClouds[i] = pSectorCloud;
+					m_vAllSectorFaces[i] = vOneNewFaces;
 
+					/*此处是剔除不正确face的结果
+					{
+						system("mkdir -p $PWD/../Dense_ROS/save");
+						pcl::PolygonMesh OutMeshModel;
+						pcl::toPCLPointCloud2(*pSectorCloud, OutMeshModel.cloud);
+						OutMeshModel.polygons = vOneNewFaces;
+						std::stringstream ss;
+						ss << "../Dense_ROS/save/GhprMesh_" << m_working_frame_count << "_" << i << ".ply";
+						pcl::io::savePLYFileBinary(ss.str(), OutMeshModel); 
+					}
+					//*/
+					
+				
+				}else{
+					
+					pcl::PointCloud<pcl::PointXYZ>::Ptr pSectorCloud(new pcl::PointCloud<pcl::PointXYZ>);
+					m_vAllSectorClouds[i] = pSectorCloud;
+
+					std::vector<pcl::Vertices> vOneNewFaces;
+					m_vAllSectorFaces[i] = vOneNewFaces;
+				
+				}//end if vPointSecIdxs[i].size() > m_iSectorMinPNum
+#ifdef __MULTI_THREAD_FRAME_RECONSTRUCTION__
+			})
+		);
+#endif
+	}//end for i != vPointSecIdxs.size()
+
+#ifdef __MULTI_THREAD_FRAME_RECONSTRUCTION__
+	for(int i = 0; i != vPointSecIdxs.size(); ++i) thread_pool[i].join(); //use join for waiting
+#endif
+
+	//output 1ms
+	for (int i = 0; i != vPointSecIdxs.size(); ++i)
+		for (int j = 0; j != vCombinedNormalList[i].size(); ++j)
+			vScenePNormal.points.push_back(vCombinedNormalList[i].points[j]);
 }
 
 

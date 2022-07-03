@@ -6,6 +6,7 @@
 #include<pcl/io/pcd_io.h>
 #include<pcl/kdtree/kdtree.h>
 
+#include<mutex>
 
 //GHPR algorithm
 //GHPR - General hidden point removal
@@ -47,6 +48,7 @@ public:
 
 	//compute visibility
 	void Compute(const pcl::PointCloud<pcl::PointXYZ>::Ptr & pCloud, bool bIndexRelation = true);
+	void Compute(const pcl::PointCloud<pcl::PointXYZ>::Ptr & pCloud, std::mutex& reconstructLock, bool bIndexRelation = true);
 
 	//output occluded points index in point clouds
 	std::vector<int> GetOccludedIdx();
