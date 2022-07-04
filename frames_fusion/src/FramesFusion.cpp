@@ -73,7 +73,8 @@ FramesFusion::~FramesFusion() {
 	std::cout << "The output file is " << m_sOutPCNormalFileName.str() << std::endl;
 
 	//output point clouds with computed normals to the files when the node logs out
-	// pcl::io::savePLYFileASCII(m_sOutPCNormalFileName.str(), m_vMapPCN);
+	//if you would not output the file, you can modify the m_sFileHead to a non-existent path
+	pcl::io::savePLYFileASCII(m_sOutPCNormalFileName.str(), m_vMapPCN);
 
 	/** 
 		if the point cloud has too many points, ros may not wait it to save.
