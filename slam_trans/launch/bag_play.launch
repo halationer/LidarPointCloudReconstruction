@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+<!--
+Software License Agreement (BSD)
+
+\file      bag_play.launch
+\authors   Pengdi Huang <alualu628628@163.com>
+\copyright Copyright (c) 2022, 06, All rights reserved.
+
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WAR-
+RANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, IN-
+DIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<launch>
+
+    <!--Use simulated time to prevent the public time of the TF structure from being unable to match with other messages-->
+    <param name="use_sim_time" value="true"/>
+
+    <arg name="lidartopic" default="/velodyne_cloud_registered" />
+    <arg name="trajtopic" default="/integrated_to_init" />
+
+    <arg name="lidarouttopic" default="/slam_points" />
+    <arg name="trajouttopic" default="/slam_odom" />
+
+    <arg name="odomtargetframe" default="map" />
+    <arg name="odomrawframe" default="camera_init" />
+
+    <arg name="cloudstargetframe" default="map"/>
+    <arg name="cloudsrawframe" default="camera_init"/>
+
+    <arg name="samplingnumber"  default="1" />
+    
+    <!-- the height offset from viewpoint to ground height -->
+    <arg name="odomzoffset" default="0.0"/> 
+    <!-- If the point cloud needs to be centralized -->
+    <!--arg name="pointzoffset" default="0.0"/--> 
+    
+    <!--- TF -->
+    <node pkg="tf" type="static_transform_publisher" name="camera_init_to_map"  args="0 0 0 1.570795 0 1.570795 /map /camera_init 10" />
+
+    <!-- slam_trans node in slam_transfor pkg-->
+    <node name="slam_transfor" pkg="slam_trans" type="slam_transfor" output="screen">
+
+    <!-- parameters-->	
+        <!-- define input topic name-->
+		<param name="lidar_topic" type="string" value="$(arg lidartopic)"  />
+		<param name="traj_topic" type="string" value="$(arg trajtopic)" />
+        <!-- define output topic name-->
+	    <param name="lidarout_topic" type="string" value="$(arg lidarouttopic)" />
+		<!--param name="trajout_topic" type="string" value="/slam_odom" /-->
+		<param name="trajout_topic" type="string" value="$(arg trajouttopic)" />
+		
+        <!-- frame id related-->
+	    <param name="odom_targetframe" type="string" value="$(arg odomtargetframe)" />
+		<param name="odom_rawframe" type="string" value="$(arg odomrawframe)" />
+
+        <param name="clouds_targetframe" type="string" value="$(arg cloudstargetframe)"/>
+        <param name="clouds_rawframe" type="string" value="$(arg cloudsrawframe)"/>
+
+        <!-- sampling number-->
+	    <param name="sampling_number"  type="int" value="$(arg samplingnumber)" />
+
+	    <param name="odom_zoffset" type="double" value="$(arg odomzoffset)" />
+
+        <!--param name="point_zoffset" type="double" value="$(arg pointzoffset)"/-->
+
+	</node>
+
+    <!-- rosbag related: replay with rate = 1 speed up-->
+    <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 /home/ludy/DataSets/Loam/nsh_indoor_outdoor.bag"/>
+
+</launch>

@@ -1,0 +1,9 @@
+<launch>
+    <node name="saveCloud" pkg="aloam_velodyne" type="saveCloud" output="screen"> 
+        <param name="save_cloud_topic" type="string" value="/velodyne_cloud_registered" />
+        <param name="cloud_file_path" type="string" value="/KITTI/cloud/registered_cloud" />
+
+        <param name="save_odom_topic" type="string" value="/laser_odom_path" />
+        <param name="odom_file_path" type="string" value="/KITTI/cloud/position" />
+    </node>
+</launch>
