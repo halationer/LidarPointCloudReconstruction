@@ -1,2 +1,3 @@
 *.rar
-/build/
+build/
+data/*.bag

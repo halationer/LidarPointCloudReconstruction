@@ -42,12 +42,17 @@ mkdir -p ~/catkin_ws/src
 # 将项目文件夹拷贝到 ~/catkin_ws/src 文件夹中
 cd .. 
 cp -r Dense-point-cloud-scan-reconstruction ~/catkin_ws/src
+ln -s ~/catkin_ws/src/Dense-point-cloud-scan-reconstruction
 
 # 构建项目
 cd ~/catkin_ws
 catkin_make -DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE=/home/vcc/anaconda3/envs/puma/bin/python
 
 ```
+
+### 下载数据包
+
+下载 [NSH indoor outdoor](https://drive.google.com/file/d/1s05tBQOLNEDDurlg48KiUWxCp-YqYyGH/view) 数据包，并保存到`data`文件夹中。
 
 ### 项目运行
 

@@ -1,0 +1,2 @@
+项目默认加载该文件夹下的 nsh_indoor_outdoor.bar 包，如果没有请下载。
+通过修改 frame_reconstruction/launch/mapping.launch 文件 或者 simple_frame/launch/mapping.launch 文件来修改要加载的数据包。
