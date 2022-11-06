@@ -296,7 +296,7 @@ void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vS
 
 					//propagate the normal vector to each vertex
 					//linearly compute weighted neighboring normal vector
-					oMeshOper.LocalFaceNormal(*pSectorCloud, vOneFaces, oMatNormal, m_oViewPoint, vCombinedNormalList[i]);
+					oMeshOper.LocalFaceNormalAndConfidence(*pSectorCloud, vOneFaces, oMatNormal, m_oViewPoint, vCombinedNormalList[i]);
 
 					//***record data***
 					//output normal

@@ -179,7 +179,7 @@ Function: compute the indexes of faces that consist of this point
 
 //compute the local triangular face normal vector
 /*=======================================
-LocalFaceNormal -  Reload
+LocalFaceNormalAndConfidence -  Reload
 Input:  vVertices - point clouds
         vMeshVertexIdxs - faces (point relationships)
 		oMatNormal - face normals
@@ -188,7 +188,7 @@ Output: vCombinedNormal - point with its local combined normal
 Function: compute the local normal for each point
 ========================================*/
 //Calculate the local triangular face normal vector
-void MeshOperation::LocalFaceNormal(const pcl::PointCloud<pcl::PointXYZ> & vVertices,
+void MeshOperation::LocalFaceNormalAndConfidence(const pcl::PointCloud<pcl::PointXYZ> & vVertices,
 	                              const std::vector<pcl::Vertices> & vMeshVertexIdxs,
 	                                              const Eigen::MatrixXf & oMatNormal,
 	                                                  const pcl::PointXYZ oViewPoint,

@@ -1,7 +1,8 @@
 #ifndef MESHOPERATION_H
 #define MESHOPERATION_H
+#include <vector>
 #include "ConvexHullOperation.h"
-
+#include "Confidence.h"
 
 class MeshOperation :public ConvexHullOperation{
 
@@ -28,7 +29,10 @@ public:
 	void LocalFaceNormal(const std::vector<std::vector<int>> & vPointAdjFaceIdx, const Eigen::MatrixXf & oMatNormal, pcl::PointCloud<pcl::Normal> & vCombinedNormal);
 
 	//compute the local triangular face normal vector
-	void LocalFaceNormal(const pcl::PointCloud<pcl::PointXYZI> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs, const Eigen::MatrixXf & oMatNormal, const pcl::PointXYZI oViewPoint, pcl::PointCloud<pcl::PointNormal> & vCombinedNormal);
+	void LocalFaceNormalAndConfidence(const pcl::PointCloud<pcl::PointXYZI> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs, const Eigen::MatrixXf & oMatNormal, const pcl::PointXYZI oViewPoint, pcl::PointCloud<pcl::PointNormal> & vCombinedNormal);
+
+	//compute the local triangular face normal vector
+	void LocalFaceNormalAndConfidence(const pcl::PointCloud<pcl::PointXYZI> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs, const Eigen::MatrixXf & oMatNormal, const pcl::PointXYZI oViewPoint, const std::vector<Confidence> vFaceWeight, pcl::PointCloud<pcl::PointNormal> & vCombinedNormal);
 
 	//compute the local triangular face normal vector
 	void LocalFaceNormal(const pcl::PointCloud<pcl::PointXYZI> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs, const Eigen::MatrixXf & oMatNormal, pcl::PointCloud<pcl::PointNormal> & vCombinedNormal);

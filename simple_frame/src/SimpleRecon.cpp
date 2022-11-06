@@ -97,11 +97,11 @@ void SimpleRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 			return;
 		}
 
-        //根据intensity信息组织点云结构
+        //根据intensity信息组织点云结构,将点云整合成二维数组（有序不等长）的结构
         std::vector<pcl::PointCloud<pcl::PointXYZI>> vCloudList(m_iLidarType);
         SimpleRecon::ReOrganizePoints(*pRawCloud, vCloudList);
 
-        //将点云组织成类似于图片的结构
+        //将点云组织成类似于图片的结构，二维数组（有序等长，没点的地方空白填充）
         std::vector<std::vector<pcl::PointXYZI>> vCloudVector;
         SimpleRecon::FromCloudListToPointVector(vCloudList, vCloudVector, m_iLidarType);
 
@@ -111,11 +111,12 @@ void SimpleRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
         SimpleRecon::FromPointVectorToMesh(vCloudVector, vMeshCloud, vMeshPolygons);
 
         //剔除网格中与射线夹角接近直角的面 6ms
+        //TODO：这一步不仅根据角度对面片进行剔除，还得到了面片的置信度，这使得点云补全时使用了该面片的置信度，整体问题在于置信度的规范不统一
         pcl::PointCloud<pcl::PointNormal> vMeshCloudWithNormal;
         std::vector<pcl::Vertices> vNewMeshPolygons;
         pcl::PointCloud<pcl::PointXYZI> vFaceCenter;
         Eigen::MatrixXf oMatNormal;
-        std::vector<float> vFaceWeight;
+        std::vector<Confidence> vFaceWeight;
         SimpleRecon::RemoveMeshFaces(oCurrentViewP, vMeshCloud, vMeshPolygons, vMeshCloudWithNormal, vNewMeshPolygons, vFaceCenter, oMatNormal, vFaceWeight);
 
         // 保存网格结果
@@ -291,10 +292,10 @@ void SimpleRecon::ReOrganizePoints(const pcl::PointCloud<pcl::PointXYZI>& in_clo
 
     for(int i = 0; i < in_cloud.size(); ++i) {
         
-        //which row line of the scan 0 - 15
+        //which row line of the scan 0 - 15，intensity的整数部分代表第几行
         int scanID = std::abs(in_cloud.points[i].intensity);
 
-        //col line token of the scan 0.0 - 0.1
+        //col line token of the scan 0.0 - 0.1，intensity小数部分代表行中的第几个点
         float relTime = in_cloud.points[i].intensity - scanID;
     
         //store points in the same row to the same vector
@@ -514,7 +515,7 @@ Function: FromCloudListToPointVector
 *************************************************/	
 void SimpleRecon::FromCloudListToPointVector(const std::vector<pcl::PointCloud<pcl::PointXYZI>>& in_cloud, std::vector<std::vector<pcl::PointXYZI>>& out_vector, int lidar_type) {
     
-    // get mode delta between near points
+    // get mode delta between near points，delta 可以反映相邻扫描点的角度间隔
     float mode_delta = SimpleRecon::GetCloudPointDelta(in_cloud, DELTA_TYPE::MODE);
     float half_mode_delta = 0.5 * mode_delta;
 
@@ -522,7 +523,7 @@ void SimpleRecon::FromCloudListToPointVector(const std::vector<pcl::PointCloud<p
     int image_width = 0.1 / mode_delta;
     int max_test = 1;
     while(image_width > max_test) max_test <<= 1;
-    image_width = max_test;
+    image_width = max_test;             //image_width最终等于大于原来image_width值的最小2幂值
     int image_height = lidar_type;
     // std::cout << "image_size: [" << image_width << "," << image_height << "]" << std::endl;
     out_vector.resize(image_height);
@@ -533,20 +534,13 @@ void SimpleRecon::FromCloudListToPointVector(const std::vector<pcl::PointCloud<p
     for(int i = 0; i < in_cloud.size(); ++i) {
 
         // intensity - i is to get the decimal part of the number
-        if(in_cloud[i].points[0].intensity - i < half_mode_delta)
-            out_vector[i][0] =  in_cloud[i].points[0];
-        else out_vector[i][0].intensity = i;
+        // if(in_cloud[i].points[0].intensity - i < half_mode_delta)
+        //     out_vector[i][0] =  in_cloud[i].points[0];
+        // else out_vector[i][0].intensity = i;
 
-        int sum_stamp = 0;
-        for(int j = 1; j < in_cloud[i].size(); ++j) {
+        for(int j = 0; j < in_cloud[i].size(); ++j) {
 
             auto& now_point = in_cloud[i].points[j];
-            
-            // float delta = now_point.intensity - in_cloud[i].points[j-1].intensity;
-            // int jump_stamp = delta / mode_delta + 0.5;
-            // assert(jump_stamp > 0);
-            // sum_stamp += jump_stamp - 1;
-            // out_vector[i][j + sum_stamp] = now_point;
             int now_col = (now_point.intensity - i) / mode_delta + 0.5;
             out_vector[i][now_col] = now_point;
         }
@@ -563,6 +557,8 @@ Function: FromPointVectorToMesh
 void SimpleRecon::FromPointVectorToMesh(const std::vector<std::vector<pcl::PointXYZI>>& in_cloud, pcl::PointCloud<pcl::PointXYZI>& out_cloud, std::vector<pcl::Vertices>& out_polygons) {
     
     out_cloud.clear();
+
+    //生成输出mesh的顶点，并记录其索引
     std::vector<std::vector<int>> vPointIndex(in_cloud.size());
     for(int i = 0; i < in_cloud.size(); ++i) {
         vPointIndex[i].resize(in_cloud[i].size());
@@ -570,13 +566,14 @@ void SimpleRecon::FromPointVectorToMesh(const std::vector<std::vector<pcl::Point
 
             if(in_cloud[i][j].x || in_cloud[i][j].y || in_cloud[i][j].z)
             {
+                vPointIndex[i][j] = out_cloud.size();
                 out_cloud.push_back(in_cloud[i][j]);
-                vPointIndex[i][j] = out_cloud.size() - 1;
             }
             else vPointIndex[i][j] = -1;
         }
     }
 
+    //内部函数，用于检查图像上的点是否存在
     auto CheckUVExists = [&vPointIndex](int u, int v)->bool{
         if(u >= 0 && u < vPointIndex.size() && v >= 0 && v < vPointIndex[u].size())
             return vPointIndex[u][v] != -1;
@@ -585,6 +582,7 @@ void SimpleRecon::FromPointVectorToMesh(const std::vector<std::vector<pcl::Point
 
     out_polygons.clear();
 
+    //按照邻接关系生成网格
     for(int i = 0; i < vPointIndex.size(); ++i) {
         for(int j = 0; j < vPointIndex[i].size(); ++j) {
             
@@ -689,7 +687,7 @@ void SimpleRecon::RemoveMeshFaces(const pcl::PointXYZI& oViewPoint, const pcl::P
 
     //propagate the normal vector to each vertex
     //linearly compute weighted neighboring normal vector
-    oMeshOper.LocalFaceNormal(in_cloud, in_polygons, oMatNormal, oViewPoint, out_cloud);
+    oMeshOper.LocalFaceNormalAndConfidence(in_cloud, in_polygons, oMatNormal, oViewPoint, out_cloud);
 
     //Record the remaining triangles
     out_polygons.clear();
@@ -728,12 +726,14 @@ void SimpleRecon::RemoveMeshFaces(const pcl::PointXYZI& oViewPoint, const pcl::P
     oMeshOper.ComputeAllFaceParams(oViewPoint, in_cloud, in_polygons, oMatNormal, vfDParam);
 
     //face status - whether the face is wrong
+    //这里计算了面片的置信度
     std::vector<bool> vTrueFaceStatus;
     SimpleRecon::RecordPseudoFaces(oViewPoint, vCenterPoints, in_polygons, oMatNormal, vTrueFaceStatus, vFaceWeight, fPseudoFaceThr);
 
     //propagate the normal vector to each vertex
     //linearly compute weighted neighboring normal vector
-    oMeshOper.LocalFaceNormal(in_cloud, in_polygons, oMatNormal, oViewPoint, out_cloud);
+    //这里不仅按照面片平均了每个点的法向量，而且还计算了每个点关于法线的置信度值（记录在 data_n[3] 的位置上）
+    oMeshOper.LocalFaceNormalAndConfidence(in_cloud, in_polygons, oMatNormal, oViewPoint, out_cloud);
 
     //Record the remaining triangles
     out_polygons.clear();
@@ -764,3 +764,88 @@ void SimpleRecon::RemoveMeshFaces(const pcl::PointXYZI& oViewPoint, const pcl::P
  *              \ |
  *               \|______
  */
+
+//  ### 添加多参数Confidence作为置信度参考 ###
+
+/*************************************************
+Function: RemoveMeshFaces
+    @param oViewPoint:      the lidar center position of the current frame
+    @param in_cloud:        point cloud of input mesh
+    @param in_polygons:     faces of the input mesh
+    @param out_cloud:       point cloud of output mesh
+    @param out_polygons:    faces of the output mesh
+    @param vCenterPoints    output points
+    @param oMatNormal       output normals
+    @param vFaceWeight      output face confidences
+    @param fPseudoFaceThr:  threshold of judging pseudo face
+    @brief save the faces with high confidence of input mesh to output mesh
+*************************************************/	
+void SimpleRecon::RemoveMeshFaces(const pcl::PointXYZI& oViewPoint, const pcl::PointCloud<pcl::PointXYZI>& in_cloud, std::vector<pcl::Vertices>& in_polygons,
+    pcl::PointCloud<pcl::PointNormal>& out_cloud, std::vector<pcl::Vertices>& out_polygons, 
+    pcl::PointCloud<pcl::PointXYZI>& vCenterPoints, Eigen::MatrixXf& oMatNormal, std::vector<Confidence>& vFaceWeight, float fPseudoFaceThr) {
+
+    //***start the mesh related operation***
+    MeshOperation oMeshOper;
+
+    //center point of each faces
+    oMeshOper.ComputeCenterPoint(in_cloud, in_polygons, vCenterPoints);
+
+    //face normals
+    Eigen::VectorXf vfDParam;
+    oMeshOper.ComputeAllFaceParams(oViewPoint, in_cloud, in_polygons, oMatNormal, vfDParam);
+
+    //face status - whether the face is wrong
+    //这里计算了面片的置信度
+    std::vector<bool> vTrueFaceStatus;
+    SimpleRecon::RecordPseudoFaces(oViewPoint, vCenterPoints, in_polygons, oMatNormal, vTrueFaceStatus, vFaceWeight, fPseudoFaceThr);
+
+    //propagate the normal vector to each vertex
+    //linearly compute weighted neighboring normal vector
+    //这里不仅按照面片平均了每个点的法向量，而且还计算了每个点关于法线的置信度值（记录在 data_n[3] 的位置上）
+    oMeshOper.LocalFaceNormalAndConfidence(in_cloud, in_polygons, oMatNormal, oViewPoint, vFaceWeight, out_cloud);
+
+    //Record the remaining triangles
+    out_polygons.clear();
+    for (int j = 0; j != vTrueFaceStatus.size(); ++j){
+
+        if (true || vTrueFaceStatus[j]){
+            pcl::Vertices oOneFace(in_polygons[j]);
+            out_polygons.push_back(oOneFace);
+        }//end if
+
+    }//end for j != vTrueFaceStatus.size()
+}
+
+/*************************************************
+Function: RecordPseudoFaces
+    @param oViewPoint:      the lidar center position of the current frame
+    @param vCenterPoint:    the center position of faces of the mesh
+    @param vFaces:          faces of the mesh
+    @param oMatNormal:      the normal vector of faces of the mesh. 
+    @param vTrueFaceStatus: false if the corresponding face is pseudo face.
+    @param vFaceWeight:     the confidence value of corresponding face.
+    @param fPseudoFaceThr:  threshold of judging pseudo face.
+    @brief calculate the face confidence as weight and record the pseudo faces which have low confidence.
+*************************************************/	
+void SimpleRecon::RecordPseudoFaces(const pcl::PointXYZI & oViewPoint, const pcl::PointCloud<pcl::PointXYZI> & vCenterPoints, const std::vector<pcl::Vertices> & vFaces, const Eigen::MatrixXf & oMatNormal, 
+    std::vector<bool> & vTrueFaceStatus, std::vector<Confidence> & vFaceWeight, float fPseudoFaceThr) {
+
+    vTrueFaceStatus.resize(vFaces.size(), true);
+    vFaceWeight.resize(vFaces.size());
+    
+    //开始置信度记录器
+    Confidence::StartCounter();
+
+	//for each face
+	for (int i = 0; i != vFaces.size(); ++i){
+
+		vFaceWeight[i].ComputeConfidence(oViewPoint, vCenterPoints.points[i], oMatNormal.row(i));
+        
+		//if it is close to be vertical
+		if (vFaceWeight[i].normal_confidence < fPseudoFaceThr)
+			vTrueFaceStatus[i] = false;
+
+	}//end for i
+
+    std::cout << ";\tface_conf: " << Confidence::min_depth_confidence << ", " << Confidence::max_depth_confidence;
+}

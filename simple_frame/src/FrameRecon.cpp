@@ -483,13 +483,32 @@ void FrameRecon::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 	oOdomPoint.oLocation.y = oTrajectory.pose.pose.position.y;
 	oOdomPoint.oLocation.z = oTrajectory.pose.pose.position.z;
 
+	// oTrajectory.twist.twist.angular/linear 表示角速度和线速度
+	/**
+	 * 一. odom和imu传感器位姿信息输入
+        odom传感器数据格式: odom( x, y, z, roll,pitch,yaw): 其中,x,y作为智能车在平面地图的x和y坐标;z坐标忽略恒等于0; 
+		roll(车身纵向翻滚角)和pitch(车身俯仰角)也不做考虑恒等于0. yaw(偏航角)作为智能车在平面地图上左右转向方向角. 
+		即: odom( x, y, 0, 0,0,yaw),共6个测量值数据.   
+		此外odom传感器还提供自身的噪音协方差矩阵,为一个 6x6矩阵.
+
+        imu惯性传感器数据格式: imu(roll,pitch,yaw): 
+		其中roll(车身纵向翻滚角)和pitch(车身俯仰角)也不做考虑恒等于0. yaw(偏航角)作为智能车在平面地图上左右转向方向角. 
+		即: imu( 0,0,yaw),共3个测量值数据.   
+		此外imu传感器还提供自身的噪音协方差矩阵,为一个 3x3矩阵.
+
+		关于利用噪音协方差矩阵进行位姿的矫正，或许可以从“卡尔曼滤波EKF”入手进行研究
+		这里不考虑该因素，aloam 的 /slam_odom 中也只有 pose 和 orientation, 因此可以忽略其存在。
+	*/
+	//至于把点反投影到当前坐标系中，或许不需要雷达的旋转位姿，毕竟是360度全角度扫描，可以直接在世界坐标系的平移系下作投影。
+
+
 	//save record time
 	oOdomPoint.oTimeStamp = oTrajectory.header.stamp;
 
+	//add to trajectory array
 	m_vOdomHistory.push(oOdomPoint);
 
 	m_iTrajCount++;
-
 }
 
 /*************************************************

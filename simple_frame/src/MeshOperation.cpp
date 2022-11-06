@@ -179,7 +179,7 @@ Function: compute the indexes of faces that consist of this point
 
 //compute the local triangular face normal vector
 /*=======================================
-LocalFaceNormal -  Reload
+LocalFaceNormalAndConfidence -  Reload
 Input:  vVertices - point clouds
         vMeshVertexIdxs - faces (point relationships)
 		oMatNormal - face normals
@@ -188,7 +188,7 @@ Output: vCombinedNormal - point with its local combined normal
 Function: compute the local normal for each point
 ========================================*/
 //Calculate the local triangular face normal vector
-void MeshOperation::LocalFaceNormal(const pcl::PointCloud<pcl::PointXYZI> & vVertices,
+void MeshOperation::LocalFaceNormalAndConfidence(const pcl::PointCloud<pcl::PointXYZI> & vVertices,
 	                              const std::vector<pcl::Vertices> & vMeshVertexIdxs,
 	                                              const Eigen::MatrixXf & oMatNormal,
 	                                                  const pcl::PointXYZI oViewPoint,
@@ -263,13 +263,110 @@ void MeshOperation::LocalFaceNormal(const pcl::PointCloud<pcl::PointXYZI> & vVer
 
 		}
 
+		// XXX: Confidence compute
 		Eigen::Vector3f oToCenterVec(vCombinedNormal.points[i].x - oViewPoint.x, vCombinedNormal.points[i].y - oViewPoint.y, vCombinedNormal.points[i].z - oViewPoint.z);
 		Eigen::Vector3f oPointNormal(vCombinedNormal.points[i].normal_x, vCombinedNormal.points[i].normal_y, vCombinedNormal.points[i].normal_z);
 		vCombinedNormal.points[i].data_n[3] = - oToCenterVec.dot(oPointNormal) / oToCenterVec.norm();
-		if(vCombinedNormal.points[i].data_n[3] <= 0) vCombinedNormal.points[i].data_n[3] = 1e-10; 
+		if(vCombinedNormal.points[i].data_n[3] <= 0) vCombinedNormal.points[i].data_n[3] = 1e-10;
 	}//end for i
 
 }
+
+//compute the normal and confidence of the vertex of faces
+/*=======================================
+LocalFaceNormalAndConfidence -  Reload
+Input:  vVertices - point clouds
+        vMeshVertexIdxs - faces (point relationships)
+		oMatNormal - face normals
+		oViewPoint - viewpoint location
+		vFaceWeight - face confidence values
+Output: vCombinedNormal - point with its local combined normal
+Function: compute the local normal for each point
+========================================*/
+//Calculate the local triangular face normal vector
+void MeshOperation::LocalFaceNormalAndConfidence(
+	const pcl::PointCloud<pcl::PointXYZI> & vVertices, 
+	const std::vector<pcl::Vertices> & vMeshVertexIdxs, 
+	const Eigen::MatrixXf & oMatNormal, 
+	const pcl::PointXYZI oViewPoint, 
+	const std::vector<Confidence> vFaceWeight, 
+	pcl::PointCloud<pcl::PointNormal> & vCombinedNormal) {
+	
+	//the vector indicating the normal of point is computed or not
+	std::vector<unsigned int> vNormalCount(vVertices.points.size());
+
+	//define output
+	vCombinedNormal.clear();
+	vCombinedNormal.reserve(vVertices.points.size());
+	//initialization
+	for (int i = 0; i != vVertices.points.size(); ++i){
+		//a point and its normal starting with (0,0,0)
+		pcl::PointNormal oPointN;
+		oPointN.x = vVertices.points[i].x;
+		oPointN.y = vVertices.points[i].y;
+		oPointN.z = vVertices.points[i].z;
+		oPointN.normal_x = 0.0;
+		oPointN.normal_y = 0.0;
+		oPointN.normal_z = 0.0;
+		vCombinedNormal.points.push_back(oPointN);
+	
+	}
+
+	//for each face
+	for (int i = 0; i != vMeshVertexIdxs.size(); ++i){
+		
+		//for each vertice
+		for (int j = 0; j != vMeshVertexIdxs[i].vertices.size(); ++j){
+			
+			//get the vertice id
+			int iVertexId = vMeshVertexIdxs[i].vertices[j];
+			
+			//get the face id for the iVertexId point
+			vCombinedNormal.points[iVertexId].normal_x += oMatNormal.row(i)(0);
+			vCombinedNormal.points[iVertexId].normal_y += oMatNormal.row(i)(1);
+			vCombinedNormal.points[iVertexId].normal_z += oMatNormal.row(i)(2);
+
+			//count hit
+			vNormalCount[iVertexId] += 1;
+
+		}//end j
+
+	}//end i
+
+	//average
+	//for the point whose normal has not been calculated:
+	//Mode 1(*), compute ray from point to viewpoint as normals (note: consistently reversed)
+	//Mode 2, culling
+	for (int i = 0; i != vNormalCount.size(); ++i){
+		
+		//if the normal of this query point is computed
+		if (vNormalCount[i]){
+			
+			vCombinedNormal.points[i].normal_x /= float(vNormalCount[i]);
+			vCombinedNormal.points[i].normal_y /= float(vNormalCount[i]);
+			vCombinedNormal.points[i].normal_z /= float(vNormalCount[i]);
+			//get unit vector
+			VectorNormalization(vCombinedNormal.points[i].normal_x, vCombinedNormal.points[i].normal_y, vCombinedNormal.points[i].normal_z);
+		
+		//instead by rays if normal vector loss
+		}else{
+			//normal vector facing away from the viewpoint
+			vCombinedNormal.points[i].normal_x = - vVertices.points[i].x + oViewPoint.x;
+			vCombinedNormal.points[i].normal_y = - vVertices.points[i].y + oViewPoint.y;
+			vCombinedNormal.points[i].normal_z = - vVertices.points[i].z + oViewPoint.z;
+			
+			//get unit vector
+			VectorNormalization(vCombinedNormal.points[i].normal_x, vCombinedNormal.points[i].normal_y, vCombinedNormal.points[i].normal_z);
+
+		}
+
+		// XXX: Confidence compute
+		Eigen::Vector3f oToCenterVec(vCombinedNormal.points[i].x - oViewPoint.x, vCombinedNormal.points[i].y - oViewPoint.y, vCombinedNormal.points[i].z - oViewPoint.z);
+		vCombinedNormal.points[i].data_n[3] = Confidence::GetDepthConfidence_Inverse(oToCenterVec.norm());
+
+	}//end for i
+}
+
 
 /*=======================================
 LocalFaceNormal -  Reload

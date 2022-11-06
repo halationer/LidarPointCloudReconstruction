@@ -500,6 +500,12 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 
 }
 
+// TODO: this is the main fusion function
+/*	input 
+	  @param oBasedP 视点 
+	output
+	  @param oCBModel 输出网格
+*/
 void FramesFusion::SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel) {
 
 	//output mesh

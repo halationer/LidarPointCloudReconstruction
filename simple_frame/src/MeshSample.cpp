@@ -275,15 +275,15 @@ void MeshSample::GetAdditionalPointCloud(const pcl::PointCloud<T>& in_cloud, con
             oPoint.normal_y = in_face_normal.row(i).y();
             oPoint.normal_z = in_face_normal.row(i).z();
             oPoint.data_n[3] = -in_face_weight[i];
-            if(-in_face_weight[i] > 0.1)
+            if(oPoint.data_n[3] > 0.1)
                 out_cloud.push_back(oPoint);
 
             pcl::PointXYZI oDisplayPoint;
             oDisplayPoint.x = oPoint.x;
             oDisplayPoint.y = oPoint.y;
             oDisplayPoint.z = oPoint.z;
-            oDisplayPoint.intensity = -oPoint.data_n[3];
-            if(-in_face_weight[i] > 0.1)
+            oDisplayPoint.intensity = oPoint.data_n[3];
+            if(oPoint.data_n[3] > 0.1)
                 out_display_cloud.push_back(oDisplayPoint);
         }
 
@@ -292,4 +292,51 @@ void MeshSample::GetAdditionalPointCloud(const pcl::PointCloud<T>& in_cloud, con
 template void MeshSample::GetAdditionalPointCloud(const pcl::PointCloud<pcl::PointNormal>& in_cloud, const std::vector<pcl::Vertices>& in_polygons, const std::vector<float>& in_face_weight,  
     const Eigen::MatrixXf& in_face_normal, pcl::PointCloud<pcl::PointNormal>& out_cloud, pcl::PointCloud<pcl::PointXYZI>& out_display_cloud);
 template void MeshSample::GetAdditionalPointCloud(const pcl::PointCloud<pcl::PointXYZI>& in_cloud, const std::vector<pcl::Vertices>& in_polygons, const std::vector<float>& in_face_weight,  
+	const Eigen::MatrixXf& in_face_normal, pcl::PointCloud<pcl::PointNormal>& out_cloud, pcl::PointCloud<pcl::PointXYZI>& out_display_cloud);
+
+
+
+template<class T>
+void MeshSample::GetAdditionalPointCloud(const pcl::PointCloud<T>& in_cloud, const std::vector<pcl::Vertices>& in_polygons, const std::vector<Confidence>& in_face_weight,  
+    const Eigen::MatrixXf& in_face_normal, pcl::PointCloud<pcl::PointNormal>& out_cloud, pcl::PointCloud<pcl::PointXYZI>& out_display_cloud) {
+
+    //固定采样数量
+    constexpr int iSamplePointNum = 2;
+    for(int i = 0; i < in_polygons.size(); ++i) {
+
+    	if(in_face_weight[i].normal_confidence > 0.1) {
+
+			Eigen::Vector4f point;
+			const T& a = in_cloud[in_polygons[i].vertices[0]];
+			const T& b = in_cloud[in_polygons[i].vertices[1]];
+			const T& c = in_cloud[in_polygons[i].vertices[2]];
+
+        	// TODO: 根据面片边长或者面积动态决定采样数量
+			for(int j = 0; j < iSamplePointNum; ++j) {
+
+				MeshSample::randomPointTriangle(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, point);
+
+				pcl::PointNormal oPoint;
+				oPoint.x = point.x();
+				oPoint.y = point.y();
+				oPoint.z = point.z();
+				oPoint.normal_x = in_face_normal.row(i).x();
+				oPoint.normal_y = in_face_normal.row(i).y();
+				oPoint.normal_z = in_face_normal.row(i).z();
+				oPoint.data_n[3] = in_face_weight[i].depth_confidence;
+				out_cloud.push_back(oPoint);
+					
+				pcl::PointXYZI oDisplayPoint;
+				oDisplayPoint.x = oPoint.x;
+				oDisplayPoint.y = oPoint.y;
+				oDisplayPoint.z = oPoint.z;
+				oDisplayPoint.intensity = oPoint.data_n[3];
+				out_display_cloud.push_back(oDisplayPoint);
+			}
+		}
+	}
+}
+template void MeshSample::GetAdditionalPointCloud(const pcl::PointCloud<pcl::PointNormal>& in_cloud, const std::vector<pcl::Vertices>& in_polygons, const std::vector<Confidence>& in_face_weight,  
+    const Eigen::MatrixXf& in_face_normal, pcl::PointCloud<pcl::PointNormal>& out_cloud, pcl::PointCloud<pcl::PointXYZI>& out_display_cloud);
+template void MeshSample::GetAdditionalPointCloud(const pcl::PointCloud<pcl::PointXYZI>& in_cloud, const std::vector<pcl::Vertices>& in_polygons, const std::vector<Confidence>& in_face_weight,  
 	const Eigen::MatrixXf& in_face_normal, pcl::PointCloud<pcl::PointNormal>& out_cloud, pcl::PointCloud<pcl::PointXYZI>& out_display_cloud);

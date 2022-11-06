@@ -7,6 +7,7 @@ Panels:
         - /Global Options1
         - /SLAM1
         - /SingleFrame1
+        - /SingleFrame1/AdditionalPoints1
         - /FramesFusion1
         - /Poisson1
       Splitter Ratio: 0.5
@@ -214,7 +215,7 @@ Visualization Manager:
           Color Transformer: Intensity
           Decay Time: 0
           Enabled: true
-          Invert Rainbow: true
+          Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
           Name: AdditionalPoints

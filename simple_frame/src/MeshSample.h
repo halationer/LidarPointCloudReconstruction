@@ -17,6 +17,7 @@
 #include <pcl/console/parse.h>
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
+#include "Confidence.h"
 using namespace std;
 using namespace pcl;
 using namespace pcl::io;
@@ -74,6 +75,9 @@ public:
     static void GetAdditionalPointCloud(const pcl::PointCloud<T>& in_cloud, const std::vector<pcl::Vertices>& in_polygons, const std::vector<float>& in_face_weight, 
         const Eigen::MatrixXf& in_face_normal, pcl::PointCloud<pcl::PointNormal>& out_cloud, pcl::PointCloud<pcl::PointXYZI>& out_display_cloud);
 
+	template<class T>
+    static void GetAdditionalPointCloud(const pcl::PointCloud<T>& in_cloud, const std::vector<pcl::Vertices>& in_polygons, const std::vector<Confidence>& in_face_weight, 
+        const Eigen::MatrixXf& in_face_normal, pcl::PointCloud<pcl::PointNormal>& out_cloud, pcl::PointCloud<pcl::PointXYZI>& out_display_cloud);
 
 	//data
 	//the sampled point clouds from mesh

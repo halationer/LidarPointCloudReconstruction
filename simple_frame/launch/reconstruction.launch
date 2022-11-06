@@ -18,7 +18,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
 <launch>
 
-    <arg name="fileoutputpath" default="/home/vcc/Dense_ROS/" />
+    <arg name="fileoutputpath" default="/home/yudong/Desktop/" />
 
     <!-- use slam transfer -->
     <arg name="cloudintopic" default="/slam_points" />
@@ -46,7 +46,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="lidartype" default="16"/>
 
-    <arg name="useghpr" default="true"/>
+    <arg name="useghpr" default="false"/>
 
     <arg name="showconfidence" default="false"/>
 

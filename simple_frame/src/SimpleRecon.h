@@ -1,5 +1,6 @@
 #include"FrameRecon.h"
 #include"MeshSample.h"
+#include"Confidence.h"
 
 #include<pcl/io/png_io.h>
 #include<pcl/surface/gp3.h>
@@ -61,6 +62,7 @@ public:
     static void FromCloudListToPointVector(const std::vector<pcl::PointCloud<pcl::PointXYZI>>& in_cloud, std::vector<std::vector<pcl::PointXYZI>>& out_vector, int lidar_type);
     static void FromPointVectorToMesh(const std::vector<std::vector<pcl::PointXYZI>>& in_cloud, pcl::PointCloud<pcl::PointXYZI>& out_cloud, std::vector<pcl::Vertices>& out_polygons);
 
+    //TODO：这三项或被新函数取代
     static void RecordPseudoFaces(const pcl::PointXYZI & oViewPoint, const pcl::PointCloud<pcl::PointXYZI> & vCenterPoints, const std::vector<pcl::Vertices> & vFaces, const Eigen::MatrixXf & oMatNormal, 
         std::vector<bool> & vTrueFaceStatus, std::vector<float> & vFaceWeightint, float fPseudoFaceThr = 0.05f);
     static void RemoveMeshFaces(const pcl::PointXYZI& oViewPoint, const pcl::PointCloud<pcl::PointXYZI>& in_cloud, std::vector<pcl::Vertices>& in_polygons,
@@ -68,6 +70,12 @@ public:
     static void RemoveMeshFaces(const pcl::PointXYZI& oViewPoint, const pcl::PointCloud<pcl::PointXYZI>& in_cloud, std::vector<pcl::Vertices>& in_polygons,
         pcl::PointCloud<pcl::PointNormal>& out_cloud, std::vector<pcl::Vertices>& out_polygons, 
         pcl::PointCloud<pcl::PointXYZI>& vCenterPoints, Eigen::MatrixXf& oMatNormal, std::vector<float>& vFaceWeight, float fPseudoFaceThr = 0.05f);
+
+    static void RecordPseudoFaces(const pcl::PointXYZI & oViewPoint, const pcl::PointCloud<pcl::PointXYZI> & vCenterPoints, const std::vector<pcl::Vertices> & vFaces, const Eigen::MatrixXf & oMatNormal, 
+        std::vector<bool> & vTrueFaceStatus, std::vector<Confidence> & vFaceWeight, float fPseudoFaceThr = 0.05f);
+    static void RemoveMeshFaces(const pcl::PointXYZI& oViewPoint, const pcl::PointCloud<pcl::PointXYZI>& in_cloud, std::vector<pcl::Vertices>& in_polygons,
+        pcl::PointCloud<pcl::PointNormal>& out_cloud, std::vector<pcl::Vertices>& out_polygons, 
+        pcl::PointCloud<pcl::PointXYZI>& vCenterPoints, Eigen::MatrixXf& oMatNormal, std::vector<Confidence>& vFaceWeight, float fPseudoFaceThr = 0.05f);
 
 private:
 
