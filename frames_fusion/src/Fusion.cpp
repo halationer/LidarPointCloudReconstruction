@@ -213,6 +213,7 @@ pcl::PointNormal Fusion::NormalFusionWeighted(const std::vector<int> & vPointIdx
 	oOnePN.x = 0.0f;
 	oOnePN.y = 0.0f;
 	oOnePN.z = 0.0f;
+	float& normal_distribution_distance = oOnePN.data_c[3];
 	oOnePN.normal_x = 0.0f;
 	oOnePN.normal_y = 0.0f;
 	oOnePN.normal_z = 0.0f;
@@ -244,6 +245,7 @@ pcl::PointNormal Fusion::NormalFusionWeighted(const std::vector<int> & vPointIdx
 		oOnePN.normal_x = oOnePN.normal_x / all_weight;
 		oOnePN.normal_y = oOnePN.normal_y / all_weight;
 		oOnePN.normal_z = oOnePN.normal_z / all_weight;
+		normal_distribution_distance = sqrt(oOnePN.normal_x * oOnePN.normal_x + oOnePN.normal_y * oOnePN.normal_y + oOnePN.normal_z * oOnePN.normal_z);
 	}
 
 	// spread back to the cloud normal

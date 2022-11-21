@@ -197,7 +197,7 @@ class FrameRecon{
 
   //map point clouds with normals
   //accumulated processed point cloud
-  pcl::PointCloud<pcl::PointNormal> m_vMapPCN;
+  pcl::PointCloud<pcl::PointXYZI> m_vMapPCN;
 
   //features of map point clouds
   //Features can be specified

@@ -133,6 +133,15 @@ void SimpleRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
         // 与原始点云一起发布,已废弃
         // vMeshCloudWithNormal += vAdditionalPoints;
 
+        // TODO: 添加中心视点，方便多帧进程识别
+        pcl::PointNormal oViewPoint;
+        oViewPoint.x = oCurrentViewP.x;
+        oViewPoint.y = oCurrentViewP.y;
+        oViewPoint.z = oCurrentViewP.z;
+        oViewPoint.curvature = -1;      //识别码
+        vMeshCloudWithNormal.push_back(oViewPoint);
+        vAdditionalPoints.push_back(oViewPoint);
+
         //发布消息 4ms
         PublishMesh(vMeshCloudWithNormal, vNewMeshPolygons);
         PublishPointCloud(vMeshCloudWithNormal, m_oCloudPublisher);

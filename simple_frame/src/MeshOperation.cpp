@@ -308,8 +308,8 @@ void MeshOperation::LocalFaceNormalAndConfidence(
 		oPointN.normal_x = 0.0;
 		oPointN.normal_y = 0.0;
 		oPointN.normal_z = 0.0;
+		oPointN.curvature = vVertices.points[i].intensity;
 		vCombinedNormal.points.push_back(oPointN);
-	
 	}
 
 	//for each face

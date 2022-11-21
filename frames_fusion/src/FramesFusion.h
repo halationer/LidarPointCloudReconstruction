@@ -5,6 +5,7 @@
 #include <ctime>
 #include <iostream>
 #include <cmath>
+#include <unordered_map>
 
 #include <thread>
 
@@ -116,6 +117,10 @@ public:
       //reload, publish point clouds with labels
       void PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures);
 
+      //publish debug clouds for self defined topic
+      template<class T>
+      void PublishPointCloud(const pcl::PointCloud<T> & vCloud, const std::vector<float> & vFeatures, const std::string sTopicName);
+
       //publish meshes
       void PublishMeshs(const pcl::PolygonMesh & oMeshModel);
 
@@ -213,6 +218,16 @@ private:
       double m_dMaxReconstructTime;
 
       int m_iReconstructFrameNum;
+
+      bool m_bSurfelFusion;
+      // viewpoint and current frame for surfel fusion
+      void SurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
+      // more strict when filtering the points
+      void AddedSurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
+
+      // simple to publish in a new topic
+      ros::NodeHandle& m_oNodeHandle;
+      std::unordered_map<std::string, ros::Publisher> m_vDebugPublishers;
 };
 
 

@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 
 /*************************************************
 Function: FrameRecon
@@ -59,7 +60,8 @@ FrameRecon::~FrameRecon() {
 		<< "Average recontime per frame: " << m_dAverageReconstructTime / m_iReconstructFrameNum << "ms"
 		<< ";\t Max frame time: " << m_dMaxReconstructTime << "ms"
 		<< std::format_white << std::endl;
-	/*
+
+	/* TODO: output raw point cloud
 	//define ouput ply file name
 	m_sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply"; 
 
@@ -75,7 +77,7 @@ FrameRecon::~FrameRecon() {
 	pcl::io::savePLYFileASCII(m_sOutPCNormalFileName.str(), m_vMapPCN);
 
 	std::cout << "Output is complete! The process will be automatically terminated. Thank you for waiting. " << std::endl;
-	*/
+	//*/
 
 }
 
@@ -372,6 +374,20 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		////message from ROS type to PCL type
 		pcl::fromROSMsg(vLaserData, *pRawCloud);
 
+		/*TODO: out put raw point cloud
+		{
+			std::stringstream filename;
+			filename << m_sFileHead << "Map_PCNormal_" << std::setw(4) << std::setfill('0') << m_iPCFrameCount << ".ply"; 
+
+			//output to the screen
+			std::cout << "\n" << filename.str() << std::endl;
+			//output point clouds with computed normals to the files when the node logs out
+			pcl::io::savePLYFileASCII(filename.str(), *pRawCloud);
+
+			m_vMapPCN += *pRawCloud;
+		}
+		//*/
+		
 		//if have corresponding trajectory point (viewpoint)
 		pcl::PointXYZI oCurrentViewP;
 

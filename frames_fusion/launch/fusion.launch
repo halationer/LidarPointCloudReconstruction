@@ -18,7 +18,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
 <launch>
 
-    <arg name="fileoutputpath" default="/home/vcc/Dense_ROS/" />
+    <arg name="fileoutputpath" default="/home/yudong/Desktop/depth_imgs/" />
 
     <arg name="cloudintopic" default="/frame_cloudnormals" />
 
@@ -45,6 +45,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="voxeltotalsize" default="30.0"/> 
 
     <arg name="meshuperiod" default="2.0"/> 
+
+    <arg name="usesurfelfusion" default="true"/>
     
     <!-- frames_fusion node in frames_fusion pkg-->
     <node name="frames_fusion" pkg="frames_fusion" type="frames_fusion" output="screen">
@@ -83,6 +85,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
         <param name="polygon_tf_id" type="string" value="$(arg polygontfid)" />
 
+        <param name="use_surfel_fusion" type="bool" value="$(arg usesurfelfusion)" />
 
     </node>
 
