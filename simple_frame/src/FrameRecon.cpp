@@ -37,7 +37,7 @@ void FrameRecon::LazyLoading() {
 	m_oCloudPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sOutCloudTopic, 1, true);	//暂无发布
 
   	//publish polygon constructed from one frame point cloud
-	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::Marker>(m_sOutMeshTopic, 1);		//在接受到点云重建完之后， 被 PublishMeshs() 函数调用
+	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::Marker>(m_sOutMeshTopic, 1, true);		//在接受到点云重建完之后， 被 PublishMeshs() 函数调用
 
     m_oAdditionalPointPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sAdditionalPointTopic, 1, true); //发布补充的点云
 }

@@ -46,7 +46,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="meshuperiod" default="2.0"/> 
 
-    <arg name="usesurfelfusion" default="true"/>
+    <arg name="usesurfelfusion" default="false"/>
     
     <!-- frames_fusion node in frames_fusion pkg-->
     <node name="frames_fusion" pkg="frames_fusion" type="frames_fusion" output="screen">

@@ -44,7 +44,7 @@ FramesFusion::FramesFusion(ros::NodeHandle & node,
 	m_oCloudPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sOutCloudTopic, 1, true);
 
   	//publish polygon constructed from one frame point cloud
-	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::Marker>(m_sOutMeshTopic, 1);
+	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::Marker>(m_sOutMeshTopic, 1, true);
 }
 
 
