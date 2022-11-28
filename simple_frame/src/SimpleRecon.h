@@ -82,6 +82,8 @@ private:
     int m_iLidarType;
 
     bool m_bShowConfidence;
+
+    bool m_bCombineTwoClouds;
 };
 
 #endif

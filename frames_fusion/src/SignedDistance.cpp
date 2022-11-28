@@ -247,11 +247,14 @@ std::vector<float> SignedDistance::NormalBasedGlance(pcl::PointCloud<pcl::PointN
 	//****get the nodes that are near the surface****
 	oVoxeler.VoxelizePoints(*pCloudNormals); // 在 oVoxeler 中 m_vVoxelPointIdx 记录了在每个 voxel 中的点的索引
 
+	oVoxeler.m_pVoxelNormals->clear();
+	oVoxeler.m_pVoxelNormals->resize(oVoxeler.m_vVoxelPointIdx.size());
+
 	for (int i = 0; i != oVoxeler.m_vVoxelPointIdx.size(); ++i){
 		
 		// pcl::PointNormal oOneVoxelN = oVoxelFusion.NormalFusion(oVoxeler.m_vVoxelPointIdx[i], *pCloudNormals);
 		pcl::PointNormal oOneVoxelN = oVoxelFusion.NormalFusionWeighted(oVoxeler.m_vVoxelPointIdx[i], *pCloudNormals);
-		oVoxeler.m_pVoxelNormals->push_back(oOneVoxelN); // 在 oVoxeler 中的 m_pVoxelNormals 记录了每个 voxel 中融合后的向量
+		oVoxeler.m_pVoxelNormals->points[i] = oOneVoxelN; // 在 oVoxeler 中的 m_pVoxelNormals 记录了每个 voxel 中融合后的向量
 	
 	}
 
@@ -489,6 +492,7 @@ std::vector<float> SignedDistance::NormalBasedGlance(pcl::PointCloud<pcl::PointN
 						oVoxelNormal.normal_z = oFusedNormal.normal_z;
 						oVoxelNormal.data_n[3] = all_weight;
 
+						// add additional voxel or remove outlier voxel
 						if(point_count >= conv_add_point_num_ref && oVoxeler.m_vVoxelPointIdx[current_index].size() == 0) {
 							// std::cout << "add index in no index voxel!!" << std::endl;
 							oVoxeler.m_vVoxelPointIdx[current_index].push_back(-1);

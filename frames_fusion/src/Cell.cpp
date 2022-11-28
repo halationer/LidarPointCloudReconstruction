@@ -446,6 +446,7 @@ void Voxelization::VoxelizePoints(const pcl::PointCloud<pcl::PointNormal> & vSam
 	//voxel number is match with the corner number 
 	m_vVoxelPointIdx.clear();
 	m_vVoxelPointIdx.reserve(m_pCornerCloud->points.size());
+
 	//construct new voxel index
 	std::vector<int> vEmptyVec;
 	for (int i = 0; i != m_pCornerCloud->points.size(); ++i)

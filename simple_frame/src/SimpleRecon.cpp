@@ -67,6 +67,8 @@ bool SimpleRecon::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
     nodeHandle.param("show_confidence", m_bShowConfidence, false);
 
+    nodeHandle.param("combine_clouds", m_bCombineTwoClouds, true);
+
     return true;
 }
 
@@ -128,27 +130,45 @@ void SimpleRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
         // SimpleRecon::GetAdditionalPointCloud(vFaceCenter, vFaceWeight, oMatNormal, vAdditionalPoints, vDisplayAdditionalPoints);
         MeshSample::GetAdditionalPointCloud(vMeshCloudWithNormal, vNewMeshPolygons, vFaceWeight, oMatNormal, vAdditionalPoints, vDisplayAdditionalPoints);
 
+        // 发布点云/网格的可视化消息
         PublishPointCloud(vDisplayAdditionalPoints, m_oAdditionalPointPublisher);
-
-        // 与原始点云一起发布,已废弃
-        // vMeshCloudWithNormal += vAdditionalPoints;
-
-        // TODO: 添加中心视点，方便多帧进程识别
-        pcl::PointNormal oViewPoint;
-        oViewPoint.x = oCurrentViewP.x;
-        oViewPoint.y = oCurrentViewP.y;
-        oViewPoint.z = oCurrentViewP.z;
-        oViewPoint.curvature = -1;      //识别码
-        vMeshCloudWithNormal.push_back(oViewPoint);
-        vAdditionalPoints.push_back(oViewPoint);
-
-        //发布消息 4ms
         PublishMesh(vMeshCloudWithNormal, vNewMeshPolygons);
-        PublishPointCloud(vMeshCloudWithNormal, m_oCloudPublisher);
 
-        // 发布新增点云
-        vAdditionalPoints.is_dense = false;
-        PublishPointCloud(vAdditionalPoints, m_oCloudPublisher);
+        // TODO： 合并两种点云的发布（为了防止漏帧）
+        if(m_bCombineTwoClouds) {
+
+            pcl::PointCloud<pcl::PointNormal> vCombinedCloud;
+            vCombinedCloud += vMeshCloudWithNormal;
+            vCombinedCloud += vAdditionalPoints;
+
+            // TODO: 添加中心视点，方便多帧进程识别
+            pcl::PointNormal oViewPoint;
+            oViewPoint.x = oCurrentViewP.x;
+            oViewPoint.y = oCurrentViewP.y;
+            oViewPoint.z = oCurrentViewP.z;
+            oViewPoint.curvature = -1;      //识别码
+            oViewPoint.normal_x = vMeshCloudWithNormal.size(); //识别码2
+            vCombinedCloud.push_back(oViewPoint);
+
+            //一起发布消息
+            PublishPointCloud(vCombinedCloud);
+        }
+        else {
+
+            // TODO: 添加中心视点，方便多帧进程识别
+            pcl::PointNormal oViewPoint;
+            oViewPoint.x = oCurrentViewP.x;
+            oViewPoint.y = oCurrentViewP.y;
+            oViewPoint.z = oCurrentViewP.z;
+            oViewPoint.curvature = -1;      //识别码
+            vMeshCloudWithNormal.push_back(oViewPoint);
+            vAdditionalPoints.push_back(oViewPoint);
+
+            //分别发布消息
+            PublishPointCloud(vMeshCloudWithNormal, m_oCloudPublisher);
+            vAdditionalPoints.is_dense = false;
+            PublishPointCloud(vAdditionalPoints, m_oCloudPublisher);
+        }
 
 		//结束算法计时并记录执行时间
 		clock_t frame_reconstruct_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;

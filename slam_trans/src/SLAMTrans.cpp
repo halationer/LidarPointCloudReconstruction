@@ -464,6 +464,18 @@ void SLAMTrans::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 
 }
 
+/**可能的反投影代码
+ *  tf::StampedTransform transform;
+    ros::Time now = ros::Time(0);
+    m_pTFListener->waitForTransform("/camera_init", "/aft_mapped", now, ros::Duration(5.0));
+    m_pTFListener->lookupTransform("/aft_mapped", "/camera_init", now, transform);
+    ROS_INFO("%f %f %f", transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+    
+    sensor_msgs::PointCloud2 vTransposedData(vLaserData);
+    pcl_ros::transformPointCloud("/aft_mapped", vTransposedData, vTransposedData, *m_pTFListener);  
+ * 
+*/
+
 
 
 

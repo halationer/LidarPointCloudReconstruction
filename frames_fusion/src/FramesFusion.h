@@ -89,6 +89,7 @@ public:
 
       //handle the trajectory information
       void HandleTrajectory(const nav_msgs::Odometry & oTrajectory);
+      //multiple thread version
       void HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory);
 
       //get the nearby point for reconstruction
@@ -106,6 +107,7 @@ public:
       //build surrounding models
       void SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel);
       void SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel);
+      void SurroundModelingOnlyCheckOcclusion(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel);
 
       void FusionNormalBackToPoint(const pcl::PointCloud<pcl::PointNormal>& pNearCloud, pcl::PointCloud<pcl::PointNormal> & pRawCloud, int offset, int point_num);
 
@@ -210,20 +212,28 @@ private:
 
       pcl::PointCloud<pcl::PointNormal> m_vMapPCNTrueAdded;
 
+      bool m_bUseAdditionalPoints;
+
       //features of map point clouds
       //Features can be specified
       std::vector<float> m_vMapPCFeas;
 
+      // Reconstruct time statics
       double m_dAverageReconstructTime;
       double m_dMaxReconstructTime;
-
       int m_iReconstructFrameNum;
 
+      // data association switch
       bool m_bSurfelFusion;
       // viewpoint and current frame for surfel fusion
       void SurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
       // more strict when filtering the points
       void AddedSurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
+
+      // data associate time statics
+      double m_dAverageFusionTime;
+      double m_dMaxFusionTime;
+      int m_iFusionFrameNum;
 
       // simple to publish in a new topic
       ros::NodeHandle& m_oNodeHandle;
