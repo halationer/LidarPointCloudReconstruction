@@ -22,6 +22,8 @@ FrameRecon::FrameRecon(ros::NodeHandle & node,
 
 void FrameRecon::LazyLoading() {
 
+    std::cout << "Load GHPR Reconstruction..." << std::endl;
+
 	//read parameters
 	ReadLaunchParams(nodeHandle);
 

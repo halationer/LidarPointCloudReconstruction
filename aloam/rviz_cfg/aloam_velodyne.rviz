@@ -28,7 +28,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: AddFramePoints
+    SyncSource: TempDebug
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -237,7 +237,7 @@ Visualization Manager:
           Marker Topic: /surrounding_meshes
           Name: CubeMesh
           Namespaces:
-            {}
+            "": true
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -256,14 +256,14 @@ Visualization Manager:
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
-          Name: YawDebug
+          Name: TempDebug
           Position Transformer: XYZ
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
           Size (m): 0.009999999776482582
           Style: Flat Squares
-          Topic: /current_frame_yaw
+          Topic: /temp_near_cloud
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true

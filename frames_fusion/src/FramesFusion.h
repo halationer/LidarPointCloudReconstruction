@@ -229,6 +229,8 @@ private:
       void SurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
       // more strict when filtering the points
       void AddedSurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
+      // viewpoint and current frame for surfel fusion - multi-thread
+      void SurfelFusionThread(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
 
       // data associate time statics
       double m_dAverageFusionTime;
@@ -238,6 +240,8 @@ private:
       // simple to publish in a new topic
       ros::NodeHandle& m_oNodeHandle;
       std::unordered_map<std::string, ros::Publisher> m_vDebugPublishers;
+
+      ros::Rate m_OdomLoopRate;
 };
 
 

@@ -46,9 +46,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="mesh_u_period" default="2.0"/> 
 
-    <arg name="use_surfel_fusion" default="true"/>
+    <arg name="use_surfel_fusion" default="false"/>
 
-    <arg name="additional_points" default="true"/>
+    <arg name="additional_points" default="false"/>
     
     <!-- frames_fusion node in frames_fusion pkg-->
     <node name="frames_fusion" pkg="frames_fusion" type="frames_fusion" output="screen">

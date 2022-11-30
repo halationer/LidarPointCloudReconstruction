@@ -515,6 +515,7 @@ template <class T> void CIsoSurface<T>::GenerateSurface(const std::vector<T> & p
 					// Now create a triangulation of the isosurface in this
 					// cell.
 					if (m_edgeTable[tableIndex] != 0) {
+
 						if (m_edgeTable[tableIndex] & 8) {
 							POINT3DID pt = CalculateIntersection(x, y, z, 3);
 							unsigned int id = GetEdgeID(x, y, z, 3);
@@ -587,6 +588,7 @@ template <class T> void CIsoSurface<T>::GenerateSurface(const std::vector<T> & p
 							}
 
 						for (unsigned int i = 0; m_triTable[tableIndex][i] != -1; i += 3) {
+							
 							TRIANGLE triangle;
 							unsigned int pointID0, pointID1, pointID2;
 							pointID0 = GetEdgeID(x, y, z, m_triTable[tableIndex][i]);
@@ -596,10 +598,9 @@ template <class T> void CIsoSurface<T>::GenerateSurface(const std::vector<T> & p
 							triangle.pointID[1] = pointID1;
 							triangle.pointID[2] = pointID2;
 							m_trivecTriangles.push_back(triangle);
-		
+						}
 					}
-				}
-	}//end z
+	}//end z y x
 
 	RenameVerticesAndTriangles();
 	CalculateNormals();

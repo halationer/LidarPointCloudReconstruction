@@ -27,6 +27,8 @@ Called By: main function of project
 *************************************************/
 void SimpleRecon::LazyLoading() {
 
+    std::cout << "Load Simple Reconstruction..." << std::endl;
+
 	//read parameters
 	ReadLaunchParams(nodeHandle);
 
