@@ -48,8 +48,13 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="use_surfel_fusion" default="false"/>
 
+    <arg name="quick_surfel_fusion" default="false" />
+
     <arg name="additional_points" default="false"/>
+
+    <arg name="async_reconstruct" default="true"/>
     
+
     <!-- frames_fusion node in frames_fusion pkg-->
     <node name="frames_fusion" pkg="frames_fusion" type="frames_fusion" output="screen">
 
@@ -91,6 +96,10 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <param name="use_surfel_fusion" type="bool" value="$(arg use_surfel_fusion)" />
 
         <param name="additional_points" type="bool" value="$(arg additional_points)" />
+
+        <param name="async_reconstruct" type="bool" value="$(arg async_reconstruct)" />
+
+        <param name="quick_surfel_fusion" type="bool" value="$(arg quick_surfel_fusion)" />
 
     </node>
 

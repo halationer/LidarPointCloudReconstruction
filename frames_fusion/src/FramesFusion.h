@@ -230,7 +230,10 @@ private:
       // more strict when filtering the points
       void AddedSurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
       // viewpoint and current frame for surfel fusion - multi-thread
-      void SurfelFusionThread(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
+      void SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
+
+      bool m_bAsyncReconstruction;
+      bool m_bQuickSurfelFusion;
 
       // data associate time statics
       double m_dAverageFusionTime;
