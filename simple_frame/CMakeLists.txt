@@ -23,6 +23,9 @@ find_package(catkin REQUIRED COMPONENTS
              filters
 )
 
+find_package(CGAL QUIET COMPONENTS)
+include( ${CGAL_USE_FILE} )
+
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES record_odomlaser
@@ -44,3 +47,6 @@ aux_source_directory(src DIR_SRCS)
 add_executable(simple_frame ${DIR_SRCS})
 
 target_link_libraries(simple_frame ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+
+add_to_cached_list( CGAL_EXECUTABLE_TARGETS simple_frame )
+target_link_libraries(simple_frame ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES})

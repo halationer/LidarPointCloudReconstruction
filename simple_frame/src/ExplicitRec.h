@@ -26,6 +26,7 @@ public:
 	//the min point number for convex hull
 	int m_iSectorMinPNum;
 
+
 	void setWorkingFrameCount(int count) {m_working_frame_count = count;}
 
 protected:
@@ -39,6 +40,8 @@ public:
 
 	ExplicitRec();
 	~ExplicitRec();
+
+	void SetMultiThread(const bool bMultiThread) { m_bMultiThread = bMultiThread; }
 
 	//set the viewpoint location
 	void SetViewPoint(const pcl::PointXYZI & oViewPoint);
@@ -105,9 +108,8 @@ private:
 	//the elevation value of the viewpoint has been obtained
 	bool m_bElevationFlag;
 
-
-
-
+	//wether to use the multi-thread algorithm
+	bool m_bMultiThread;
 
 };
 

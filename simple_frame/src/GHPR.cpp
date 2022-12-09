@@ -1,5 +1,14 @@
 #include"GHPR.h"
 
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Surface_mesh.h>
+#include <CGAL/convex_hull_3.h>
+#include <vector>
+#include <algorithm>
+
+typedef CGAL::Exact_predicates_inexact_constructions_kernel  K;
+typedef K::Point_3                                Point_3;
+typedef CGAL::Surface_mesh<Point_3>               Surface_mesh;
 
 /*=======================================
 GHPR
@@ -32,7 +41,7 @@ GHPR::GHPR(pcl::PointXYZI f_viewpoint, double f_param) :
 SetParam
 Input: f_param - a given param
 Output: none
-Function: set the parameter to param
+Function: set the ghpr parameter to param
 ========================================*/
 void GHPR::SetParam(double f_param){
 	param=f_param;
@@ -226,7 +235,7 @@ void GHPR::IndexFromHulltoInput(pcl::PointCloud<pcl::PointXYZI>::Ptr & pHullVert
 /*=======================================
 Compute
 Input: pCloud - the point cloud to be proecssed / input point clouds
-       bFindOccPoint - a flag indicating whether to output the occluded point index of the input point clouds
+       bIndexRelation - wether to use the original point cloud as the mesh vertices (should be true)
 Output: m_pHullVertices - the vertices of convex hull. The convex hull is computed from transformed points (m_pTransCloud)
 	    m_vHullPolygonIdxs - the face of convex hull (vertice indexes of a face)
 		m_vHullInInputIdx (optional) - index of occluded point of input point clouds
@@ -267,29 +276,62 @@ void GHPR::Compute(const pcl::PointCloud<pcl::PointXYZI>::Ptr & pCloud, bool bIn
 
 }
 
-
-void GHPR::Compute(const pcl::PointCloud<pcl::PointXYZI>::Ptr & pCloud, std::mutex& reconstructLock, bool bIndexRelation){
+/*=======================================
+ComputeMultiThread
+Input: pCloud - the point cloud to be proecssed / input point clouds
+       bIndexRelation - wether to use the original point cloud as the mesh vertices (should be true)
+Output: m_pHullVertices - the vertices of convex hull. The convex hull is computed from transformed points (m_pTransCloud)
+	    m_vHullPolygonIdxs - the face of convex hull (vertice indexes of a face)
+		m_vHullInInputIdx (optional) - index of occluded point of input point clouds
+Function: <## MultiThread Version## >
+		The main function of the class GHPR. It is to calculate the visibility of a viewpoint and a given point set.
+		Besides, it also obtains the rough model from the given perspective (viewpoint).
+========================================*/
+void GHPR::ComputeMultiThread(const pcl::PointCloud<pcl::PointXYZI>::Ptr & pCloud, bool bIndexRelation){
 
 	//convert point cloud
 	ConvertCloud(pCloud);
 	//get the viewpoint idx
 	m_iViewWorldIdx = m_pTransCloud->points.size() - 1;
 
-	//set the convex hull operater
+	/* pcl reconstruct (pcl convex hull is not thread safed)
 	pcl::ConvexHull<pcl::PointXYZI> oConvexHull;
-	
-	//input point clouds of the convex hull
 	oConvexHull.setInputCloud(m_pTransCloud);
-	
-	//set the dimension
 	oConvexHull.setDimension(3);
-	
-	//pHullVertices - the vertices of convex hull
-	//vPolygonIdxs - the face of convex hull (vertice indexes of a face)
-
 	reconstructLock.lock();
 	oConvexHull.reconstruct(*m_pHullVertices, m_vHullPolygonIdxs);	//10 - 50 ms
 	reconstructLock.unlock();
+	//*/
+
+	// /* cgal reconstruct
+    std::vector<Point_3> cgal_cloud;
+    for(auto& point : *m_pTransCloud) 
+        cgal_cloud.emplace_back(point.x, point.y, point.z);
+
+    Surface_mesh cgal_mesh;
+    CGAL::convex_hull_3(cgal_cloud.begin(), cgal_cloud.end(), cgal_mesh);
+
+    for(auto& point : cgal_mesh.points()) {
+        pcl::PointXYZI pcl_point;
+        pcl_point.x = point.x();
+        pcl_point.y = point.y();
+        pcl_point.z = point.z();
+        m_pHullVertices->push_back(pcl_point);
+    }
+
+    for(auto& face : cgal_mesh.faces()) {
+        CGAL::Vertex_around_face_iterator<Surface_mesh> vbegin, vend;
+        pcl::Vertices pcl_vertice;
+        for(boost::tie(vbegin, vend) = cgal_mesh.vertices_around_face(cgal_mesh.halfedge(face)); 
+            vbegin != vend;
+            ++vbegin) 
+        {
+            auto vertex = *vbegin;
+            pcl_vertice.vertices.push_back(*reinterpret_cast<int*>(&vertex));
+        }
+        m_vHullPolygonIdxs.push_back(pcl_vertice);
+    }
+	//*/
 
 	//Check if a correspondence needs to be established from convex hull to input set with viewpoint
 	//It is risk because the third - party (e.g.,PCL) implementation with differnet version would get a uniform point order 

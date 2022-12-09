@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+
+<launch>
+    <!-- <arg name="rosbag" default="$(find frame_reconstruction)/../data/nsh_indoor_outdoor.bag" /> -->
+    <arg name="multi_thread" default="true" />
+    <arg name="thread_num" default="8" />
+    <arg name="version" default="cgal" />
+
+    <node pkg="tf" type="static_transform_publisher" name="camera_init_to_map"  args="0 0 0 0 0 0 /map /camera_init 10" />
+
+    <node name="convex_test" pkg="convex_test" type="convex_test" output="screen">
+
+        <param name="multi_thread" type="bool" value="$(arg multi_thread)"  />
+        <param name="thread_num" type="int" value="$(arg thread_num)"  />
+        <param name="version" type="string" value="$(arg version)"  />
+
+    </node>
+
+    <node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" args="-d $(find convex_test)/rviz_cfg/convex_test.rviz" />
+
+</launch>

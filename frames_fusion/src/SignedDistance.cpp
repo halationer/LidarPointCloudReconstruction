@@ -377,43 +377,43 @@ std::vector<float> SignedDistance::NormalBasedGlance(pcl::PointCloud<pcl::PointN
 	constexpr int conv_add_point_num_ref = 5;
 	constexpr float conv_fusion_distance_ref1 = 0.95f;
 
-	/* 噪点剔除（前置处理步骤）
-	start_time = clock();
-	constexpr int conv_expand_check_dim = conv_dim;
-	for (int z = 0; z < oVoxeler.m_iFinalVoxelNum.iznum; ++z) {
-		for (int y = 0; y < oVoxeler.m_iFinalVoxelNum.iynum; ++y) {
-			for (int x = 0; x < oVoxeler.m_iFinalVoxelNum.ixnum; ++x) {
+	// 噪点剔除（前置处理步骤）
+	// start_time = clock();
+	// constexpr int conv_expand_check_dim = conv_dim;
+	// for (int z = 0; z < oVoxeler.m_iFinalVoxelNum.iznum; ++z) {
+	// 	for (int y = 0; y < oVoxeler.m_iFinalVoxelNum.iynum; ++y) {
+	// 		for (int x = 0; x < oVoxeler.m_iFinalVoxelNum.ixnum; ++x) {
 				
-				pcl::PointNormal oFusedNormal;
-				float& normal_distribution_distance = oFusedNormal.data_c[3];
-				float& all_weight = oFusedNormal.data_n[3];
+	// 			pcl::PointNormal oFusedNormal;
+	// 			float& normal_distribution_distance = oFusedNormal.data_c[3];
+	// 			float& all_weight = oFusedNormal.data_n[3];
 
-				int point_count = 0;
+	// 			int point_count = 0;
 
-				// for each octree brothers of current pos
-				for(int dz = -conv_expand_check_dim; dz <= conv_expand_check_dim; ++dz) {
-					for(int dy = -conv_expand_check_dim; dy <= conv_expand_check_dim; ++dy) {
-						for(int dx = -conv_expand_check_dim; dx <= conv_expand_check_dim; ++dx) {
+	// 			// for each octree brothers of current pos
+	// 			for(int dz = -conv_expand_check_dim; dz <= conv_expand_check_dim; ++dz) {
+	// 				for(int dy = -conv_expand_check_dim; dy <= conv_expand_check_dim; ++dy) {
+	// 					for(int dx = -conv_expand_check_dim; dx <= conv_expand_check_dim; ++dx) {
 
-							const IndexinAxis current_pos = {x + dx, y + dy, z + dz};
-							const int current_index = oVoxeler.Tran3DIdxTo1D(current_pos);
+	// 						const IndexinAxis current_pos = {x + dx, y + dy, z + dz};
+	// 						const int current_index = oVoxeler.Tran3DIdxTo1D(current_pos);
 
-							if(!oVoxeler.OutOfBorder(current_pos) && oVoxeler.m_vVoxelPointIdx[current_index].size() && oVoxeler.m_vVoxelPointIdx[current_index][0] >= 0) {
+	// 						if(!oVoxeler.OutOfBorder(current_pos) && oVoxeler.m_vVoxelPointIdx[current_index].size() && oVoxeler.m_vVoxelPointIdx[current_index][0] >= 0) {
 
-								++point_count;
-							}
-						}
-					}
-				}
-				const IndexinAxis current_pos = {x, y, z};
-				const int current_index = oVoxeler.Tran3DIdxTo1D(current_pos);
-				if(point_count == 1) oVoxeler.m_vVoxelPointIdx[current_index].clear();
-			}
-		}
-	}
-	conv_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
-	std::cout << "pre_process_time: " << conv_time << "ms" << std::endl;
-	//*/
+	// 							++point_count;
+	// 						}
+	// 					}
+	// 				}
+	// 			}
+	// 			const IndexinAxis current_pos = {x, y, z};
+	// 			const int current_index = oVoxeler.Tran3DIdxTo1D(current_pos);
+	// 			if(point_count == 1) oVoxeler.m_vVoxelPointIdx[current_index].clear();
+	// 		}
+	// 	}
+	// }
+	// conv_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
+	// std::cout << "pre_process_time: " << conv_time << "ms" << std::endl;
+
 
 	start_time = clock();
 	// for per min level voxel
@@ -507,7 +507,7 @@ std::vector<float> SignedDistance::NormalBasedGlance(pcl::PointCloud<pcl::PointN
 	}
 
 	conv_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
-	std::cout << "conv_time: " << conv_time << "ms" << std::endl;
+	// std::cout << "conv_time: " << conv_time << "ms" << std::endl;
 	//*/
 	
 

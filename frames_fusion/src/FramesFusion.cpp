@@ -594,7 +594,6 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
 	oMarchingCuber.OutputMesh(oVoxeler.m_oOriCorner, oCBModel, pMCResultCloud);
 
-	std::cout << pMCResultCloud->size() << ", " << oCBModel.polygons.size() << std::endl;
 	// //new a mesh operation object for re-order the triangle vertex
 	// MeshOperation oReOrder;
 

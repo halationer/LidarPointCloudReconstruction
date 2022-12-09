@@ -138,6 +138,10 @@ bool FrameRecon::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
   nodeHandle.param("sector_num", m_iSectorNum, 1);
   m_oExplicitBuilder.HorizontalSectorSize(m_iSectorNum);
 
+  bool bMultiThread;
+  nodeHandle.param("multi_thread", bMultiThread, true);
+  m_oExplicitBuilder.SetMultiThread(bMultiThread);
+
   //count processed point cloud frame
   m_iPCFrameCount = 0;
 
@@ -366,10 +370,10 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 
 		std::cout << "Now frame count is: " << m_iPCFrameCount << ";\t"
 			<< "header is: {" << vLaserData.header << "}";
-		m_iTotalFrameNum = vLaserData.header.seq;
+		m_iTotalFrameNum = vLaserData.header.seq + 1;
 
-		//开始算法计时
-		clock_t start_time = clock();
+		struct timeval start;
+		gettimeofday(&start, NULL);
 
 		////a point clouds in PCL type
 		pcl::PointCloud<pcl::PointXYZI>::Ptr pRawCloud(new pcl::PointCloud<pcl::PointXYZI>);
@@ -397,7 +401,7 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 			//
 			oCurrentViewP = ComputeQueryTraj(vLaserData.header.stamp);	//当前点云对应的观测位置（Odom与frame并非一一对应，因此需要计算插值）
 
-			std::cout << "\tView: " << oCurrentViewP;
+			// std::cout << "\tView: " << oCurrentViewP;
 		
 		//else waiting for sync
 		}else{
@@ -409,19 +413,31 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 
 		std::cout << ";\tsize: " << pRawCloud->size();
 		
+
+		// point sample
 		pcl::PointCloud<pcl::PointXYZI>::Ptr pSceneCloud(new pcl::PointCloud<pcl::PointXYZI>);
 		SamplePoints(*pRawCloud, *pSceneCloud, m_iSampleInPNum);
 		
-		pcl::PointCloud<pcl::PointNormal>::Ptr pFramePNormal(new pcl::PointCloud<pcl::PointNormal>);
 
+		// frame reconstruct
+		struct timeval reconstruct_start;
+		gettimeofday(&reconstruct_start, NULL);
+
+		pcl::PointCloud<pcl::PointNormal>::Ptr pFramePNormal(new pcl::PointCloud<pcl::PointNormal>);
 		m_oExplicitBuilder.setWorkingFrameCount(m_iPCFrameCount);
 		m_oExplicitBuilder.SetViewPoint(oCurrentViewP, m_fViewZOffset);
 		m_oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal);	//得到带法向的点云
+
+		struct timeval reconstruct_end;
+		gettimeofday(&reconstruct_end,NULL);
+		double parallel_time = (reconstruct_end.tv_sec - reconstruct_start.tv_sec) * 1000.0 +(reconstruct_end.tv_usec - reconstruct_start.tv_usec) * 0.001;
+		std::cout << "\trecon_time:" << parallel_time << "ms";
 
 		//************output value******************
 		// for(int i=0;i!=pFramePNormal->points.size();++i)
 		// 	m_vMapPCN.points.push_back(pFramePNormal->points[i]);
 		
+
 		//************additional points**************
         pcl::PointCloud<pcl::PointNormal> vAdditionalPoints;
         pcl::PointCloud<pcl::PointXYZI> vDisplayAdditionalPoints;
@@ -433,6 +449,7 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 			);
 		}
 
+		// publish time
 		PublishPointCloud(vDisplayAdditionalPoints, m_oAdditionalPointPublisher);
 
 		// *pFramePNormal += vAdditionalPoints;
@@ -454,9 +471,12 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		//clear this frame result
 		m_oExplicitBuilder.ClearData();
 
+
 		//结束算法计时并记录执行时间
-		clock_t frame_reconstruct_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
-		std::cout << ";\ttime:" << frame_reconstruct_time << "ms" << std::endl;
+		struct timeval end;
+		gettimeofday(&end,NULL);
+		double frame_reconstruct_time = (end.tv_sec - start.tv_sec) * 1000.0 +(end.tv_usec - start.tv_usec) * 0.001;
+		std::cout << ";\tframe_time:" << frame_reconstruct_time << "ms" << std::endl;
 		m_dAverageReconstructTime += frame_reconstruct_time;
 		m_dMaxReconstructTime = frame_reconstruct_time > m_dMaxReconstructTime ? frame_reconstruct_time : m_dMaxReconstructTime;
 		++m_iReconstructFrameNum;

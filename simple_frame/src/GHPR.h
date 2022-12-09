@@ -48,7 +48,7 @@ public:
 
 	//compute visibility
 	void Compute(const pcl::PointCloud<pcl::PointXYZI>::Ptr & pCloud, bool bIndexRelation = true);
-	void Compute(const pcl::PointCloud<pcl::PointXYZI>::Ptr & pCloud, std::mutex& reconstructLock, bool bIndexRelation = true);
+	void ComputeMultiThread(const pcl::PointCloud<pcl::PointXYZI>::Ptr & pCloud, bool bIndexRelation = true);
 
 	//output occluded points index in point clouds
 	std::vector<int> GetOccludedIdx();

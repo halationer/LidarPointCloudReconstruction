@@ -44,13 +44,15 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="pointzoffset" default="0.0"/> 
 
-    <arg name="lidartype" default="16"/>
-
     <arg name="useghpr" default="true"/>
 
-    <arg name="showconfidence" default="false"/>
+    <arg name="multi_thread" default="true"/>
 
+    <!-- simple reconstruction (Adjacency method)-->
+    <arg name="lidartype" default="16"/>
+    <arg name="showconfidence" default="false"/>
     <arg name="combine_clouds" default="false"/>
+
 
     <!-- frame_reconstruction node in frame_reconstruction pkg-->
     <node name="simple_frame" pkg="simple_frame" type="simple_frame" output="screen">
@@ -93,6 +95,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <param name="show_confidence" type="bool" value="$(arg showconfidence)" />
 
         <param name="combine_clouds" type="bool" value="$(arg combine_clouds)" />
+
+        <param name="multi_thread" type="bool" value="$(arg multi_thread)" />
 
 	</node>
 
