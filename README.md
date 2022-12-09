@@ -30,7 +30,7 @@
 
 ```shell
 # 先进入项目目录
-cd Dense-point-cloud-scan-reconstruction
+cd LidarPointCloudReconstruction
 
 # 配置 anaconda 环境, 如果不需要泊松重建部分可以忽略此项
 conda env create -f environment.yml
@@ -41,11 +41,12 @@ mkdir -p ~/catkin_ws/src
 
 # 将项目文件夹拷贝到 ~/catkin_ws/src 文件夹中
 cd .. 
-cp -r Dense-point-cloud-scan-reconstruction ~/catkin_ws/src
-ln -s ~/catkin_ws/src/Dense-point-cloud-scan-reconstruction
+cp -r LidarPointCloudReconstruction ~/catkin_ws/src
+ln -s ~/catkin_ws/src/LidarPointCloudReconstruction
 
 # 构建项目
 cd ~/catkin_ws
+catkin_make -DCMAKE_BUILD_TYPE=Release # 如果不需要泊松重建,否则运行下一句
 catkin_make -DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE=/home/vcc/anaconda3/envs/puma/bin/python
 
 ```
@@ -63,7 +64,7 @@ catkin_make -DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE=/home/vcc/anaconda3/e
 source ~/catkin_ws/devel/setup.bash
 
 # 运行 Launch 文件
-roslaunch frame_reconstruction mapping.launch 
+roslaunch simple_frame mapping.launch 
 ```
 
 点击运行之后,如果出现如下界面,说明配置成功.![img](img/sendpix0.jpg)
@@ -74,7 +75,7 @@ roslaunch frame_reconstruction mapping.launch
 
 ```shell
 # yourpath 代表要运行的 rosbag 的绝对文件路径
-roslaunch frame_reconstruction mapping.launch rosbag:=/yourpath
+roslaunch simple_frame mapping.launch rosbag:=/yourpath
 ```
 
 #### 从 KITTI 数据集中构建 rosbag 数据包
@@ -115,7 +116,7 @@ roslaunch aloam_velodyne kitti_helper_simple.launch dataset_floder:=/KITTI/ sequ
 项目文件的主要构成部分如下：
 
 ```
-Dense-point-cloud-scan-reconstruction
+LidarPointCloudReconstruction
 ├── data 
 │   └── nsh_indoor_outdoor.bag
 ├── aloam 
