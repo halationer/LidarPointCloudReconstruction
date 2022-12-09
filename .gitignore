@@ -1,4 +1,4 @@
 *.rar
 build/
 data/*.bag
-.vscode/*
+.vscode
