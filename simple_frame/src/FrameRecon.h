@@ -212,6 +212,8 @@ class FrameRecon{
   // For lazy node loading mode
   ros::NodeHandle& node;
   ros::NodeHandle& nodeHandle;
+  
+  bool m_bOutputFiles;
 };
 
 std::ostream& operator<<(std::ostream& out, const sensor_msgs::PointCloud2::_header_type& header);

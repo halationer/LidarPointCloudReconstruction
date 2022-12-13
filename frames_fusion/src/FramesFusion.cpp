@@ -28,7 +28,7 @@ Input: node - a ros node class
 *************************************************/
 FramesFusion::FramesFusion(ros::NodeHandle & node,
                        ros::NodeHandle & nodeHandle): 
-					   m_oNodeHandle(nodeHandle), m_iOdomCount(0), 
+					   m_oGlobalNode(node), m_oNodeHandle(nodeHandle), m_iOdomCount(0), 
 					   m_dAverageReconstructTime(0), m_dMaxReconstructTime(0),  m_iReconstructFrameNum(0),
 					   m_dAverageFusionTime(0), m_dMaxFusionTime(0), m_iFusionFrameNum(0), m_OdomLoopRate(1) {
 
@@ -82,28 +82,39 @@ FramesFusion::~FramesFusion() {
 	<< "Final point nums: " << m_vMapPCN.size() + m_vMapPCNAdded.size() + m_vMapPCNTrueAdded.size()
 	<< std::format_white << std::endl;
 
-	//define ouput ply file name
-	m_sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply"; 
 
     //output to the screen
     std::cout << std::endl;
     std::cout << std::endl;
     std::cout << "********************************************************************************" << std::endl;
-	std::cout << "Please do not force closing the programe, the process is writing output PLY file." << std::endl;
-	std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
-	std::cout << "The output file is " << m_sOutPCNormalFileName.str() << std::endl;
 
 	//output point clouds with computed normals to the files when the node logs out
-	// m_vMapPCN += m_vMapPCNAdded;
-	// pcl::io::savePLYFileASCII(m_sOutPCNormalFileName.str(), m_vMapPCN);
+	if(m_bOutputFiles) {
+		
+		//define ouput ply file name
+		std::stringstream sOutPCNormalFileName;
+		sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply";
 
-	/** 
-		if the point cloud has too many points, ros may not wait it to save.
-		to solve this problem, change the file: /opt/ros/kinetic/lib/python2.7/dist-packages/roslaunch/nodeprocess.py
-			_TIMEOUT_SIGINT = 15.0  ->  _TIME_OUT_SIGINT = 60.0 
-	**/
+		std::cout << "Please do not force closing the programe, the process is writing output PLY file." << std::endl;
+		std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
+		std::cout << std::format_purple << "The output file is " << sOutPCNormalFileName.str() << std::format_white << std::endl;
+			if(m_bUseAdditionalPoints) {
+		
+			m_vMapPCN += m_vMapPCNAdded;
+			m_vMapPCN += m_vMapPCNTrueAdded;
+		}
+		pcl::io::savePLYFileASCII(sOutPCNormalFileName.str(), m_vMapPCN);
 
-	std::cout << "Output is complete! The process will be automatically terminated. Thank you for waiting. " << std::endl;
+		/** 
+			if the point cloud has too many points, ros may not wait it to save.
+			to solve this problem, change the file: /opt/ros/kinetic/lib/python2.7/dist-packages/roslaunch/nodeprocess.py
+				_TIMEOUT_SIGINT = 15.0  ->  _TIME_OUT_SIGINT = 60.0 
+		**/
+
+		std::cout << "Output is complete! The process will be automatically terminated. Thank you for waiting. " << std::endl;
+	}
+
+
 
 }
 
@@ -125,7 +136,20 @@ Others: none
 bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
  	//output file name
- 	nodeHandle.param("file_outputpath", m_sFileHead, std::string("./"));
+	m_oGlobalNode.param("mf_output_path", m_sFileHead, std::string());
+	if(m_sFileHead.empty())
+ 		nodeHandle.param("file_output_path", m_sFileHead, std::string("./"));
+	m_bOutputFiles = !m_sFileHead.empty();
+
+	if(m_bOutputFiles) {
+
+		if(m_sFileHead.back() != '/') m_sFileHead += "/";
+		std::stringstream sOutputCommand;
+		sOutputCommand << "mkdir -p " << m_sFileHead;
+		system(sOutputCommand.str().c_str());
+		m_sFileHead += "mf_";
+	}
+
 
  	//input point cloud topic
 	nodeHandle.param("cloud_in_topic", m_sInCloudTopic, std::string("/cloud_points"));
@@ -536,7 +560,7 @@ Output:  pNearCloud - the neighboring points near the query point
 Return: none
 Others: none
 *************************************************/
-void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel){
+void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId){
 
 	//output mesh
 	//oCBModel.cloud.clear();
@@ -552,6 +576,15 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	NearbyClouds(m_vMapPCNAdded, oBasedP, *pNearCloud, m_fNearLengths);
 	std::vector<float> temp_feature(pNearCloud->size());
 	PublishPointCloud(*pNearCloud, temp_feature, "/temp_near_cloud");
+
+	///* XXX: output nearby cloud
+	if(m_bOutputFiles) {
+
+		std::stringstream filename;
+		filename << m_sFileHead << std::setw(4) << std::setfill('0') << iFrameId << "_pc.ply";
+		pcl::io::savePLYFileASCII(filename.str(), *pNearCloud);
+	}
+	//*/
 
 	//******voxelization********
 	//set voxelization parameters based on point cloud extent
@@ -593,6 +626,15 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	//move the mesh position to the actual starting point
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
 	oMarchingCuber.OutputMesh(oVoxeler.m_oOriCorner, oCBModel, pMCResultCloud);
+	
+	///* XXX: output result mesh
+	if(m_bOutputFiles) {
+
+		std::stringstream sOutputPath;
+		sOutputPath << m_sFileHead << std::setw(4) << std::setfill('0') << iFrameId << "_mesh.ply";
+		pcl::io::savePLYFileBinary(sOutputPath.str(), oCBModel);
+	}
+	//*/
 
 	// //new a mesh operation object for re-order the triangle vertex
 	// MeshOperation oReOrder;
@@ -614,7 +656,7 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	output
 	  @param oCBModel 输出网格
 */
-void FramesFusion::SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel) {
+void FramesFusion::SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId) {
 
 	//output mesh
 	//oCBModel.cloud.clear();
@@ -631,6 +673,15 @@ void FramesFusion::SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBa
 	NearbyClouds(m_vMapPCNTrueAdded, oBasedP, *pNearCloud, m_fNearLengths);
 	ExtractNearbyClouds(m_vMapPCNAdded, oBasedP, *pNearCloudAdded, m_fNearLengths);
 	// NearbyClouds(m_vMapPCNAdded, oBasedP, *pNearCloudAdded, m_fNearLengths);
+
+	///* XXX: output nearby cloud
+	if(m_bOutputFiles) {
+
+		std::stringstream filename;
+		filename << m_sFileHead << std::setw(4) << std::setfill('0') << iFrameId << "_pc.ply";
+		pcl::io::savePLYFileASCII(filename.str(), *pNearCloud);
+	}
+	//*/
 
 	//******voxelization********
 	//set voxelization parameters based on point cloud extent
@@ -690,22 +741,31 @@ void FramesFusion::SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBa
 	//move the mesh position to the actual starting point
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
 	oMarchingCuber.OutputMesh(oVoxeler.m_oOriCorner, oCBModel, pMCResultCloud);
+
+	///* XXX: output result mesh
+	if(m_bOutputFiles) {
+
+		std::stringstream sOutputPath;
+		sOutputPath << m_sFileHead << std::setw(4) << std::setfill('0') << iFrameId << "_mesh.ply";
+		pcl::io::savePLYFileBinary(sOutputPath.str(), oCBModel);
+	}
+	//*/
 	
-	//new a mesh operation object for re-order the triangle vertex，in order to make the adjacency triangles face to the same direction
-	MeshOperation oReOrder;
+	// //new a mesh operation object for re-order the triangle vertex，in order to make the adjacency triangles face to the same direction
+	// MeshOperation oReOrder;
 
-	//compute the normal vector of each face for its centerpoint
-	//the normal vector will be facing away from the viewpoint
-	Eigen::MatrixXf oMCMatNormal;
-	Eigen::VectorXf vMCfDParam;
+	// //compute the normal vector of each face for its centerpoint
+	// //the normal vector will be facing away from the viewpoint
+	// Eigen::MatrixXf oMCMatNormal;
+	// Eigen::VectorXf vMCfDParam;
 
-	//note a bug releases
-	//sometimes the triangular generated by the CB algorithm has two same vertices but does not affect the result
-	oReOrder.ComputeAllFaceParams(oBasedP, *pMCResultCloud, oCBModel.polygons, oMCMatNormal, vMCfDParam);
+	// //note a bug releases
+	// //sometimes the triangular generated by the CB algorithm has two same vertices but does not affect the result
+	// oReOrder.ComputeAllFaceParams(oBasedP, *pMCResultCloud, oCBModel.polygons, oMCMatNormal, vMCfDParam);
 }
 
-// TODO: New Fusion Function
-void FramesFusion::SurroundModelingOnlyCheckOcclusion(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel) {
+// New Fusion Function
+void FramesFusion::SurroundModelingOnlyCheckOcclusion(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId) {
 
 	//oCBModel.cloud.clear();
 	oCBModel.polygons.clear();
@@ -989,11 +1049,13 @@ void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 
 	// Mesh Generate
 	clock_t start_time = clock();
-	++m_iReconstructFrameNum;
+
 	if(!m_bSurfelFusion && m_bUseAdditionalPoints) 
-		SurroundModelingWithPointProcessing(oOdomPoint.oLocation, oNearbyMeshes);
-	else SurroundModeling(oOdomPoint.oLocation, oNearbyMeshes);
+		SurroundModelingWithPointProcessing(oOdomPoint.oLocation, oNearbyMeshes, m_iReconstructFrameNum);
+	else SurroundModeling(oOdomPoint.oLocation, oNearbyMeshes, m_iReconstructFrameNum);
 	clock_t frames_fusion_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
+
+	++m_iReconstructFrameNum;
 	std::cout << std::format_blue 
 		<< "The No. " << m_iReconstructFrameNum 
 		<< ";\tframes_fusion_time: " << frames_fusion_time << "ms" 
@@ -1044,7 +1106,7 @@ void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory
 	//if need to be updated
 	//get the newest information
 	m_oLastModelingTime = oTrajectory.header.stamp;
-	int now_frame_num = ++m_iReconstructFrameNum;
+	int now_frame_num = m_iReconstructFrameNum++;
 
 	std::thread Modeling([&, now_frame_num]() {
 
@@ -1057,20 +1119,23 @@ void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory
 		//get the reconstructed surfaces
 		pcl::PolygonMesh oNearbyMeshes;
 
-		clock_t start_time = clock();
+		struct timeval start;
+		gettimeofday(&start, NULL);
 
 		if(!m_bSurfelFusion && m_bUseAdditionalPoints) 
-			SurroundModelingWithPointProcessing(oOdomPoint.oLocation, oNearbyMeshes);
-		else SurroundModeling(oOdomPoint.oLocation, oNearbyMeshes);
+			SurroundModelingWithPointProcessing(oOdomPoint.oLocation, oNearbyMeshes, now_frame_num);
+		else SurroundModeling(oOdomPoint.oLocation, oNearbyMeshes, now_frame_num);
 
-		clock_t frames_fusion_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
+		struct timeval end;
+		gettimeofday(&end,NULL);
+		double frame_reconstruct_time = (end.tv_sec - start.tv_sec) * 1000.0 +(end.tv_usec - start.tv_usec) * 0.001;
 		std::cout << std::format_blue 
 			<< "The No. " << now_frame_num
-			<< ";\tframes_fusion_time: " << frames_fusion_time << "ms" 
+			<< ";\tframes_reconstruct_time: " << frame_reconstruct_time << "ms" 
 			<< ";\tgen_face_num: " << oNearbyMeshes.polygons.size()
 			<< std::format_white << std::endl;
-		m_dAverageReconstructTime += frames_fusion_time;
-		m_dMaxReconstructTime = frames_fusion_time > m_dMaxReconstructTime ? frames_fusion_time : m_dMaxReconstructTime;
+		m_dAverageReconstructTime += frame_reconstruct_time;
+		m_dMaxReconstructTime = frame_reconstruct_time > m_dMaxReconstructTime ? frame_reconstruct_time : m_dMaxReconstructTime;
 
 		//output the nearby surfaces
 		PublishMeshs(oNearbyMeshes);

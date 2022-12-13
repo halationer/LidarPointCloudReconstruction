@@ -105,9 +105,9 @@ public:
       void ExtractNearbyClouds(pcl::PointCloud<pcl::PointNormal> & pRawCloud, const pcl::PointXYZ & oBasedP, pcl::PointCloud<pcl::PointNormal> & pNearCloud, float fLength);
 
       //build surrounding models
-      void SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel);
-      void SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel);
-      void SurroundModelingOnlyCheckOcclusion(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel);
+      void SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId);
+      void SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId);
+      void SurroundModelingOnlyCheckOcclusion(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId);
 
       void FusionNormalBackToPoint(const pcl::PointCloud<pcl::PointNormal>& pNearCloud, pcl::PointCloud<pcl::PointNormal> & pRawCloud, int offset, int point_num);
 
@@ -148,9 +148,6 @@ private:
   
       //ouput file
       std::ofstream m_oOutPCFile;
-
-      //output point cloud with normal
-      std::stringstream m_sOutPCNormalFileName; 
 
       //***for input point cloud topic***
       //the m_oCloudSuber subscirber is to hear input point cloud topic
@@ -241,9 +238,11 @@ private:
       int m_iFusionFrameNum;
 
       // simple to publish in a new topic
+      ros::NodeHandle& m_oGlobalNode;
       ros::NodeHandle& m_oNodeHandle;
       std::unordered_map<std::string, ros::Publisher> m_vDebugPublishers;
 
+      bool m_bOutputFiles;
       ros::Rate m_OdomLoopRate;
 };
 

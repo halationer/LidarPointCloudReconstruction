@@ -14,7 +14,9 @@
 
 5. 安装 Anaconda, 参见 <a href="https://www.anaconda.com/products/distribution#macos">Anaconda 官方文档</a>.
 
-6. 修改 ROS 脚本文件的超时时间, 使得在程序运行结束时可以保存点云结果.
+6. 安装 CGAL, 参见 <a href="https://www.cgal.org/download/linux.html">CGAL官网</a>
+
+7. 修改 ROS 脚本文件的超时时间, 使得在程序运行结束时可以保存点云结果.
 
    ```shell
    # 打开文件 nodeprocess.py
@@ -46,7 +48,8 @@ ln -s ~/catkin_ws/src/LidarPointCloudReconstruction
 
 # 构建项目
 cd ~/catkin_ws
-catkin_make -DCMAKE_BUILD_TYPE=Release # 如果不需要泊松重建,否则运行下一句
+catkin_make -DCMAKE_BUILD_TYPE=Release 
+# 如果需要泊松重建,则运行这一句
 catkin_make -DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE=/home/vcc/anaconda3/envs/puma/bin/python
 
 ```
@@ -63,8 +66,12 @@ catkin_make -DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE=/home/vcc/anaconda3/e
 # 项目注册到 ROS 中
 source ~/catkin_ws/devel/setup.bash
 
-# 运行 Launch 文件
-roslaunch simple_frame mapping.launch 
+# 运行 Launch 文件（无文件输出）
+roslaunch simple_frame mapping.launch
+
+# 运行时输出重建结果到指定路径，最好写不含变量且没有权限要求的绝对路径
+# sf_output_path是单帧重建结果输出路径，mf_output_path是多帧重建结果输出路径
+roslaunch simple_frame mapping.launch sf_output_path:=/yourpath1 mf_output_path:=/yourpath2
 ```
 
 点击运行之后,如果出现如下界面,说明配置成功.![img](img/sendpix0.jpg)

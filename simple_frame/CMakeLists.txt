@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(simple_frame)
 
-## Compile as C++11
+## Compile as C++17
 SET(CMAKE_C_COMPILER g++)
 add_compile_options(-std=c++17)
 # supported in ROS Kinetic and newer

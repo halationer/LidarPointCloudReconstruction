@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
+#include <pcl/io/ply_io.h>
 
 /*************************************************
 Function: FrameRecon
@@ -100,58 +101,71 @@ Others: none
 
 bool FrameRecon::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
-  //output file name
-  nodeHandle.param("file_outputpath", m_sFileHead, std::string("./"));
+	//output file name
+	node.param("sf_output_path", m_sFileHead, std::string());
+	if(m_sFileHead.empty())
+		nodeHandle.param("file_output_path", m_sFileHead, std::string(""));
+	m_bOutputFiles = !m_sFileHead.empty();
 
-  //input odom topic
-  nodeHandle.param("odom_in_topic", m_sInOdomTopic, std::string("/odometry/filtered"));
+	if(m_bOutputFiles) {
 
-  //input point cloud topic
-  nodeHandle.param("cloud_in_topic", m_sInCloudTopic, std::string("/cloud_points"));
+		if(m_sFileHead.back() != '/') m_sFileHead += "/";
+		std::stringstream sOutputCommand;
+		sOutputCommand << "mkdir -p " << m_sFileHead;
+		system(sOutputCommand.str().c_str());
+		m_sFileHead += "sf_";
+	}
 
 
-  //input odom topic
-  nodeHandle.param("cloud_out_topic", m_sOutCloudTopic, std::string("/processed_clouds"));
+	//input odom topic
+	nodeHandle.param("odom_in_topic", m_sInOdomTopic, std::string("/odometry/filtered"));
 
-  //input point cloud topic
-  nodeHandle.param("outcloud_tf_id", m_sOutCloudTFId, std::string("camera_init"));
+	//input point cloud topic
+	nodeHandle.param("cloud_in_topic", m_sInCloudTopic, std::string("/cloud_points"));
 
-  //input odom topic
-  nodeHandle.param("polygon_out_topic", m_sOutMeshTopic, std::string("/processed_clouds"));
 
-  //input point cloud topic
-  nodeHandle.param("polygon_tf_id", m_sOutMeshTFId, std::string("camera_init"));
+	//input odom topic
+	nodeHandle.param("cloud_out_topic", m_sOutCloudTopic, std::string("/processed_clouds"));
 
-  //point cloud sampling number
-  nodeHandle.param("sample_pcframe_num", m_iFrameSmpNum, 1);
+	//input point cloud topic
+	nodeHandle.param("outcloud_tf_id", m_sOutCloudTFId, std::string("camera_init"));
 
-  //point cloud sampling number
-  nodeHandle.param("sample_inputpoints_num", m_iSampleInPNum, 1);
+	//input odom topic
+	nodeHandle.param("polygon_out_topic", m_sOutMeshTopic, std::string("/processed_clouds"));
 
-  //height of viewpoint
-  double dViewZOffset;
-  nodeHandle.param("viewp_zoffset", dViewZOffset, 0.0);
-  m_fViewZOffset = float(dViewZOffset);
-  
-  //explicit reconstruction related
-  //number of sectors
-  nodeHandle.param("sector_num", m_iSectorNum, 1);
-  m_oExplicitBuilder.HorizontalSectorSize(m_iSectorNum);
+	//input point cloud topic
+	nodeHandle.param("polygon_tf_id", m_sOutMeshTFId, std::string("camera_init"));
 
-  bool bMultiThread;
-  nodeHandle.param("multi_thread", bMultiThread, true);
-  m_oExplicitBuilder.SetMultiThread(bMultiThread);
+	//point cloud sampling number
+	nodeHandle.param("sample_pcframe_num", m_iFrameSmpNum, 1);
 
-  //count processed point cloud frame
-  m_iPCFrameCount = 0;
+	//point cloud sampling number
+	nodeHandle.param("sample_inputpoints_num", m_iSampleInPNum, 1);
 
-  //count processed odom frame
-  m_iTrajCount = 0;
+	//height of viewpoint
+	double dViewZOffset;
+	nodeHandle.param("viewp_zoffset", dViewZOffset, 0.0);
+	m_fViewZOffset = float(dViewZOffset);
+	
+	//explicit reconstruction related
+	//number of sectors
+	nodeHandle.param("sector_num", m_iSectorNum, 1);
+	m_oExplicitBuilder.HorizontalSectorSize(m_iSectorNum);
 
-  //true indicates the file has not been generated
-  m_bOutPCFileFlag = true;
+	bool bMultiThread;
+	nodeHandle.param("multi_thread", bMultiThread, true);
+	m_oExplicitBuilder.SetMultiThread(bMultiThread);
 
-  return true;
+	//count processed point cloud frame
+	m_iPCFrameCount = 0;
+
+	//count processed odom frame
+	m_iTrajCount = 0;
+
+	//true indicates the file has not been generated
+	m_bOutPCFileFlag = true;
+
+	return true;
 
 }
 
@@ -380,17 +394,12 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		////message from ROS type to PCL type
 		pcl::fromROSMsg(vLaserData, *pRawCloud);
 
-		/*TODO: out put raw point cloud
-		{
+		// /*TODO: out put raw point cloud
+		if(m_bOutputFiles) {
+			
 			std::stringstream filename;
-			filename << m_sFileHead << "Map_PCNormal_" << std::setw(4) << std::setfill('0') << m_iPCFrameCount << ".ply"; 
-
-			//output to the screen
-			std::cout << "\n" << filename.str() << std::endl;
-			//output point clouds with computed normals to the files when the node logs out
+			filename << m_sFileHead << std::setw(4) << std::setfill('0') << m_iReconstructFrameNum << "_pc.ply";
 			pcl::io::savePLYFileASCII(filename.str(), *pRawCloud);
-
-			m_vMapPCN += *pRawCloud;
 		}
 		//*/
 		
@@ -457,6 +466,39 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
         PublishPointCloud(vAdditionalPoints, m_oCloudPublisher);
 
 		PublishMeshs();	//发布 m_oExplicitBuilder 中建立的 mesh
+		
+		///* output mesh file:
+		if(m_bOutputFiles) {
+
+			pcl::PolygonMesh oFullMesh;
+			pcl::PointCloud<pcl::PointXYZI> vFullCloud;
+			for(int sector_index = 0; sector_index < m_oExplicitBuilder.m_vAllSectorClouds.size(); ++sector_index) {
+
+				// pcl::PolygonMesh oCurrentMesh;
+				// pcl::toPCLPointCloud2(*m_oExplicitBuilder.m_vAllSectorClouds[sector_index], oCurrentMesh.cloud);
+				// oCurrentMesh.polygons.assign(m_oExplicitBuilder.m_vAllSectorFaces[sector_index].begin(), m_oExplicitBuilder.m_vAllSectorFaces[sector_index].end());
+				// std::stringstream sOutputPath;
+				// sOutputPath << m_sFileHead << m_iReconstructFrameNum << "_" << sector_index << ".ply";
+				// pcl::io::savePLYFileBinary(sOutputPath.str(), oCurrentMesh); 
+
+				for(int face_index = 0; face_index < m_oExplicitBuilder.m_vAllSectorFaces[sector_index].size(); ++face_index) {
+
+					pcl::Vertices oCurrentFace;
+					oCurrentFace.vertices.push_back(m_oExplicitBuilder.m_vAllSectorFaces[sector_index][face_index].vertices[0] + vFullCloud.size());
+					oCurrentFace.vertices.push_back(m_oExplicitBuilder.m_vAllSectorFaces[sector_index][face_index].vertices[1] + vFullCloud.size());
+					oCurrentFace.vertices.push_back(m_oExplicitBuilder.m_vAllSectorFaces[sector_index][face_index].vertices[2] + vFullCloud.size());
+					oFullMesh.polygons.push_back(oCurrentFace);
+				} 
+				vFullCloud += *m_oExplicitBuilder.m_vAllSectorClouds[sector_index];
+			}
+			pcl::toPCLPointCloud2(vFullCloud, oFullMesh.cloud);
+
+			std::stringstream sOutputPath;
+			sOutputPath << m_sFileHead << std::setw(4) << std::setfill('0') << m_iReconstructFrameNum << "_mesh.ply";
+			pcl::io::savePLYFileBinary(sOutputPath.str(), oFullMesh); 
+		}
+		
+		//*/
 
 		PublishPointCloud(*pFramePNormal);
 

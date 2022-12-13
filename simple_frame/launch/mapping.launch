@@ -19,6 +19,12 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 <launch>
     <arg name="rosbag" default="$(find frame_reconstruction)/../data/nsh_indoor_outdoor.bag" />
 
+    <!-- output evaluation files (point cloud and mesh )-->
+    <arg name="sf_output_path" default=""/>
+    <arg name="mf_output_path" default=""/>
+    <param name="sf_output_path" type="string" value="$(arg sf_output_path)" />
+    <param name="mf_output_path" type="string" value="$(arg mf_output_path)" />
+
     <!--Use simulated time to prevent the public time of the TF structure from being unable to match with other messages-->
     <param name="use_sim_time" value="true"/>
 
@@ -31,10 +37,10 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <node pkg="tf" type="static_transform_publisher" name="camera_init_to_map"  args="0 0 0 0 0 0 /map /camera_init 10" />
 
     <!-- SLAM transfer -->
-    <include file="$(find slam_trans)/launch/SLAM_to_map.launch" />
+    <include file="$(find slam_trans)/launch/SLAM_to_map.launch"/>
 
     <!-- launch frame reconstruction-->
-    <include file="$(find simple_frame)/launch/reconstruction.launch" />
+    <include file="$(find simple_frame)/launch/reconstruction.launch"/>
 
     <!-- launch frame fusion-->
     <include file="$(find frames_fusion)/launch/fusion.launch" />
