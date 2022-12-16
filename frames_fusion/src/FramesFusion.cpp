@@ -8,14 +8,6 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 
-namespace std {
-	const char* format_white = "\033[0m";
-	const char* format_red = "\033[31m";
-	const char* format_yellow =  "\033[33m";
-	const char* format_blue = "\033[34m";
-	const char* format_purple = "\033[35m";
-}
-
 /*************************************************
 Function: FramesFusion
 Description: constrcution function for FramesFusion class
@@ -98,23 +90,25 @@ FramesFusion::~FramesFusion() {
 		std::cout << "Please do not force closing the programe, the process is writing output PLY file." << std::endl;
 		std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
 		std::cout << std::format_purple << "The output file is " << sOutPCNormalFileName.str() << std::format_white << std::endl;
-			if(m_bUseAdditionalPoints) {
+		
+		if(m_bUseAdditionalPoints) {
 		
 			m_vMapPCN += m_vMapPCNAdded;
 			m_vMapPCN += m_vMapPCNTrueAdded;
 		}
-		pcl::io::savePLYFileASCII(sOutPCNormalFileName.str(), m_vMapPCN);
+		auto vAllPoints = m_vMapPCN.AllCloud();
+		pcl::io::savePLYFileASCII(sOutPCNormalFileName.str(), *vAllPoints);
 
 		/** 
 			if the point cloud has too many points, ros may not wait it to save.
-			to solve this problem, change the file: /opt/ros/kinetic/lib/python2.7/dist-packages/roslaunch/nodeprocess.py
-				_TIMEOUT_SIGINT = 15.0  ->  _TIME_OUT_SIGINT = 60.0 
+			to solve this problem, change the file: /opt/ros/melodic/lib/python2.7/dist-packages/roslaunch/nodeprocess.py
+				DEFAULT_TIMEOUT_SIGINT = 15.0  ->  DEFAULT_TIMEOUT_SIGINT = 60.0 
 		**/
 
 		std::cout << "Output is complete! The process will be automatically terminated. Thank you for waiting. " << std::endl;
 	}
 
-
+	system("rm -r /tmp/lidar_recon_temp/");
 
 }
 
@@ -486,16 +480,29 @@ void FramesFusion::NearbyClouds(const pcl::PointCloud<pcl::PointNormal> & pRawCl
 
 	// pNearCloud.clear();
 			
-	for (int i = 0; i != pRawCloud.points.size(); ++i){
+	for (int i = 0; i != pRawCloud.size(); ++i){
 		
-		if (EuclideanDistance(oBasedP, pRawCloud.points[i]) <= fLength) {
-			pNearCloud.push_back(pRawCloud.points[i]);
+		if (EuclideanDistance(oBasedP, pRawCloud.at(i)) <= fLength) {
+			pNearCloud.push_back(pRawCloud.at(i));
 			pNearCloud.points.rbegin()->data_c[3] = i; //record the rawcloud index in data_c[3]
 		}
 
 	}
 
-};
+}
+
+void FramesFusion::NearbyClouds(CloudVector & pRawCloud, const pcl::PointXYZ & oBasedP, pcl::PointCloud<pcl::PointNormal> & pNearCloud, float fLength) {
+	
+	for (int i = 0; i != pRawCloud.size(); ++i){
+		
+		if (EuclideanDistance(oBasedP, pRawCloud.at(i)) <= fLength) {
+			pNearCloud.push_back(pRawCloud.at(i));
+			pNearCloud.points.rbegin()->data_c[3] = i; //record the rawcloud index in data_c[3]
+		}
+
+	}
+}
+
 
 /*************************************************
 Function: ExtractNearbyClouds
@@ -534,18 +541,48 @@ void FramesFusion::ExtractNearbyClouds(pcl::PointCloud<pcl::PointNormal> & pRawC
 
 };
 
+void FramesFusion::ExtractNearbyClouds(CloudVector & pRawCloud, const pcl::PointXYZ & oBasedP, pcl::PointCloud<pcl::PointNormal> & pNearCloud, float fLength){
+
+	for (int i = 0; i < pRawCloud.size();){
+		
+		if (EuclideanDistance(oBasedP, pRawCloud.at(i)) <= fLength) {
+			pNearCloud.push_back(pRawCloud.at(i));
+			pNearCloud.points.rbegin()->data_c[3] = i; //record the rawcloud index in data_c[3]
+
+			//删除已经识别的顶点
+			pRawCloud.erase(i);
+		}
+		else {
+			++i;
+		}
+	}
+};
+
 void FramesFusion::FusionNormalBackToPoint(const pcl::PointCloud<pcl::PointNormal>& pNearCloud, pcl::PointCloud<pcl::PointNormal> & pRawCloud, int offset, int point_num) {
 
 	MeshOperation m;
 	for(int i = offset; i != offset + point_num; ++i) {
-		pcl::PointNormal& related_point = pRawCloud.points[pNearCloud.points[i].data_c[3]];
-		related_point.normal_x = related_point.normal_x + 0.3 * pNearCloud.points[i].normal_x;
-		related_point.normal_y = related_point.normal_y + 0.3 * pNearCloud.points[i].normal_y;
-		related_point.normal_z = related_point.normal_z + 0.3 * pNearCloud.points[i].normal_z;
+		pcl::PointNormal& related_point = pRawCloud.at(pNearCloud.at(i).data_c[3]);
+		related_point.normal_x = related_point.normal_x + 0.3 * pNearCloud.at(i).normal_x;
+		related_point.normal_y = related_point.normal_y + 0.3 * pNearCloud.at(i).normal_y;
+		related_point.normal_z = related_point.normal_z + 0.3 * pNearCloud.at(i).normal_z;
 		m.VectorNormalization(related_point.normal_x, related_point.normal_y, related_point.normal_z);
 	}
 }
 
+void FramesFusion::FusionNormalBackToPoint(const pcl::PointCloud<pcl::PointNormal>& pNearCloud, CloudVector & pRawCloud, int offset, int point_num) {
+
+	MeshOperation m;
+	for(int i = offset; i != offset + point_num; ++i) {
+		pcl::PointNormal& related_point = pRawCloud.at(pNearCloud.at(i).data_c[3]);
+		related_point.normal_x = related_point.normal_x + 0.3 * pNearCloud.at(i).normal_x;
+		related_point.normal_y = related_point.normal_y + 0.3 * pNearCloud.at(i).normal_y;
+		related_point.normal_z = related_point.normal_z + 0.3 * pNearCloud.at(i).normal_z;
+		m.VectorNormalization(related_point.normal_x, related_point.normal_y, related_point.normal_z);
+	}
+}
+
+// XXX
 /*************************************************
 Function: SurroundModeling
 Description: Build surface models based on surrounding points with computed normals
@@ -571,13 +608,16 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 
 	//based on received point cloud and normal vector
 	//get the target point cloud to be modeled
+	m_mPCNMutex.lock();
 	NearbyClouds(m_vMapPCN, oBasedP, *pNearCloud, m_fNearLengths);
-	int point_num = pNearCloud->size();
+	// int point_num = pNearCloud->size();
 	NearbyClouds(m_vMapPCNAdded, oBasedP, *pNearCloud, m_fNearLengths);
+	m_mPCNMutex.unlock();
+
 	std::vector<float> temp_feature(pNearCloud->size());
 	PublishPointCloud(*pNearCloud, temp_feature, "/temp_near_cloud");
 
-	///* XXX: output nearby cloud
+	///* output nearby cloud
 	if(m_bOutputFiles) {
 
 		std::stringstream filename;
@@ -627,7 +667,7 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
 	oMarchingCuber.OutputMesh(oVoxeler.m_oOriCorner, oCBModel, pMCResultCloud);
 	
-	///* XXX: output result mesh
+	///* output result mesh
 	if(m_bOutputFiles) {
 
 		std::stringstream sOutputPath;
@@ -674,7 +714,7 @@ void FramesFusion::SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBa
 	ExtractNearbyClouds(m_vMapPCNAdded, oBasedP, *pNearCloudAdded, m_fNearLengths);
 	// NearbyClouds(m_vMapPCNAdded, oBasedP, *pNearCloudAdded, m_fNearLengths);
 
-	///* XXX: output nearby cloud
+	///* output nearby cloud
 	if(m_bOutputFiles) {
 
 		std::stringstream filename;
@@ -713,7 +753,7 @@ void FramesFusion::SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBa
 	std::cout << std::format_blue << "fusion true added point size: " << vTruePointCloudIndices.size()
 			  << "\t and the all added point size is: " << pNearCloudAdded->size() << std::format_white << std::endl;
 	for(int i = 0; i < vTruePointCloudIndices.size(); ++i) {
-		m_vMapPCNTrueAdded.push_back(pNearCloudAdded->points[vTruePointCloudIndices[i]]);
+		m_vMapPCNTrueAdded.push_back(pNearCloudAdded->points[vTruePointCloudIndices[i]], 0);
 	}
 
 	/**TODO: 存在的问题
@@ -742,7 +782,7 @@ void FramesFusion::SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBa
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
 	oMarchingCuber.OutputMesh(oVoxeler.m_oOriCorner, oCBModel, pMCResultCloud);
 
-	///* XXX: output result mesh
+	///* output result mesh
 	if(m_bOutputFiles) {
 
 		std::stringstream sOutputPath;
@@ -863,7 +903,7 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 	pcl::PointCloud<pcl::PointNormal>::Ptr pFramePN(new pcl::PointCloud<pcl::PointNormal>);
 	//message from ROS type to PCL type
 	pcl::fromROSMsg(vLaserData, *pFramePN);
-	
+
 	// Surfel Cloud Fusion. Done.
 	// 提取中心点
 	pcl::PointNormal oViewPoint;
@@ -923,6 +963,7 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 		}
 
 		//merge one frame data
+		std::lock_guard<std::mutex> temp_lock(m_mPCNMutex);
 		m_vMapPCN += *pFramePN;
 	}
 
@@ -930,7 +971,9 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 	// TODO: 或许可以使用多线程发布数据？
 	if(m_bSurfelFusion && false) {
 		
-		auto temp = m_vMapPCN + m_vMapPCNAdded;
+		pcl::PointCloud<pcl::PointNormal> temp;
+		temp += m_vMapPCN;
+		temp += m_vMapPCNAdded;
 		vector<float> confidence(temp.size());
 		constexpr float confidence_scalar = 0.3f;
 		for(int i = 0; i < m_vMapPCN.size(); ++i) {
@@ -1066,7 +1109,9 @@ void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 	//output the nearby surfaces
 	PublishMeshs(oNearbyMeshes);
 
-	PublishPointCloud(m_vMapPCN);
+	auto vAllCloud = m_vMapPCN.AllCloud();
+	std::cout << "### cloud_size: " << vAllCloud->size() << " ###" << std::endl; 
+	PublishPointCloud(*vAllCloud);
 }
 
 void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory) {
@@ -1958,7 +2003,7 @@ void FramesFusion::AddedSurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud
 	//*/
 }
 
-//TODO: 算法简化加速
+// 算法简化加速
 /** 基于反投影的点云融合
    @param 	pcl::PointNormal 					oLidarPos - m_oCurrentViewPoint 雷达视点的位置
    @param 	pcl::PointCloud<pcl::PointNormal> 	vDepthMeasurementCloud - vDepthMeasurementCloud 新一帧的点云
@@ -2038,7 +2083,7 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 	std::cout << std::format_purple 
 		<< "project_image_time: " << frames_fusion_time1 << "ms" 
 		<< std::format_white << std::endl;
-	// XXX: input - lidar pos, measurement cloud | output - depth_image and depth_index
+	// input - lidar pos, measurement cloud | output - depth_image and depth_index
 	
 
 	// 把added点也考虑进来，并加入置信度系统
@@ -2056,7 +2101,7 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 	std::cout << std::format_purple 
 		<< "copy_cloud_time: " << frames_fusion_time2 << "ms" 
 		<< std::format_white << std::endl;
-	// XXX: input - point clouds | output - vPointCloudBuffer
+	// input - point clouds | output - vPointCloudBuffer
 
 	// /* 对于之前帧的所有点，对应位置建立匹配关系 60 - 150 ms
 	clock_t start_time3 = clock();
@@ -2160,9 +2205,9 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 	std::cout << std::format_purple 
 		<< "data_associate_time: " << frames_fusion_time3 << "ms" 
 		<< std::format_white << std::endl;
-	// XXX: input - vPointCloudBuffer, lidar pos, measurement cloud, depth_image/index | output - vCurrentFuseIndex, associated_feature
+	//  input - vPointCloudBuffer, lidar pos, measurement cloud, depth_image/index | output - vCurrentFuseIndex, associated_feature
 
-	//XXX: the first to fix - hold about 1/3 of the time (because of the large point set) !!!
+	// the first to fix - hold about 1/3 of the time (because of the large point set) !!!
 	// clock_t start_time5 = clock();
 
 	// PublishPointCloud(vPointCloudBuffer, associated_feature, "/debug_associated_point");
@@ -2196,4 +2241,166 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 		<< std::format_white << std::endl;
 
 	//*/
+}
+
+
+// ##############################################################################################
+// #################################### CloudVector #############################################
+// ##############################################################################################
+
+pcl::PointCloud<pcl::PointNormal>& operator+=(pcl::PointCloud<pcl::PointNormal>& vCloudA, const CloudVector& vCloudB) {
+
+    
+    for(auto [_, pc] : vCloudB.data) {
+
+        vCloudA += *pc;
+    }
+
+    return vCloudA;
+}
+
+CloudVector& operator+=(CloudVector &vCloudA, const CloudVector &vCloudB) {
+
+	vCloudA.dirty_flag = true;
+
+	for(auto [seq, pc] : vCloudB.data) {
+
+		if(vCloudA.data.count(seq)) {
+		
+			*vCloudA.data[seq] += *pc;
+		}
+		else {
+
+			vCloudA.data[seq] = pc;
+		}
+	}
+
+	// release frames to keep storage
+	if(vCloudA.auto_release_frames) {
+
+		vCloudA.ReleaseFrames();
+	}
+
+	return vCloudA;
+}
+
+CloudVector& operator+=(CloudVector &vCloudA, const pcl::PointCloud<pcl::PointNormal> vCloudB) {
+
+	// std::cout << "Add frame: " << vCloudB.header.seq << ";\t"
+	// 			<< "Past size: " << (vCloudA.data.count(vCloudB.header.seq) ? vCloudA.data[vCloudB.header.seq]->size() : 0) << ";\t"
+	// 			<< "After size: " << vCloudB.size() + (vCloudA.data.count(vCloudB.header.seq) ? vCloudA.data[vCloudB.header.seq]->size() : 0) << std::endl;
+
+	vCloudA.dirty_flag = true;
+
+	if(vCloudA.data.count(vCloudB.header.seq)) {
+	
+		*vCloudA.data[vCloudB.header.seq] += vCloudB;
+	}
+	else {
+
+		vCloudA.data[vCloudB.header.seq] = vCloudB.makeShared();
+	}
+
+	// release frames to keep storage
+	if(vCloudA.auto_release_frames) {
+
+		vCloudA.ReleaseFrames();
+	}
+
+	// std::cout << "Add seq " << vCloudB.header.seq << " Finish, final size: " << vCloudA.size() << std::endl;
+
+	return vCloudA;
+}  
+
+void CloudVector::ComputeSize() {
+
+	if(dirty_flag) {
+
+		dirty_flag = false;
+		size_pre_sum.clear();
+		seq_record.clear();
+		size_pre_sum.reserve(data.size());
+		seq_record.reserve(data.size()); 
+
+		for(auto [_,pc] : data) {
+			
+			unsigned int last_size = size_pre_sum.empty() ? 0 : size_pre_sum.back();
+			size_pre_sum.push_back(pc->size() + last_size);
+			seq_record.push_back(pc->header.seq);
+		}
+	}
+}
+
+pcl::PointNormal& CloudVector::at(const int index) {
+
+	ComputeSize();
+	
+	auto iter = upper_bound(size_pre_sum.begin(), size_pre_sum.end(), index);
+
+	// std::cout << "iter: " << (iter != size_pre_sum.end() ? data[seq_record[iter - size_pre_sum.begin()]]->size() - *iter + index : -1) << std::endl;
+	
+	if(iter == size_pre_sum.end()) {
+		
+		std::cout << std::format_red << "CloudVector out of range!!!" << std::format_white << std::endl;
+		return data[seq_record.back()]->back();
+	}
+	else return data[seq_record[iter - size_pre_sum.begin()]]->at(data[seq_record[iter - size_pre_sum.begin()]]->size() - *iter + index);
+}
+
+void CloudVector::erase(int index) {
+
+	ComputeSize();
+	
+	dirty_flag = true;
+	auto iter = upper_bound(size_pre_sum.begin(), size_pre_sum.end(), index);
+	
+	if(iter == size_pre_sum.end()) {
+		
+		std::cout << std::format_red << "CloudVector out of range!!!" << std::format_white << std::endl;
+		return;
+	}
+	swap(
+		data[seq_record[iter - size_pre_sum.begin()]]->at(data[seq_record[iter - size_pre_sum.begin()]]->size() - *iter + index), 
+		data[seq_record[iter - size_pre_sum.begin()]]->back()
+	);
+	data[seq_record[iter - size_pre_sum.begin()]]->points.pop_back();
+	--data[seq_record[iter - size_pre_sum.begin()]]->width;
+}
+
+void CloudVector::ReleaseFrames() {
+
+	int release_num = data.size() - max_window_size;
+	std::vector<int> release_seq;
+
+	dirty_flag = true;
+
+	for(auto [seq,pc] : data) {
+
+		if(release_num-- <= 0) break;
+
+		release_seq.push_back(seq);
+	}
+
+	for(auto seq : release_seq) {
+		
+		if(auto_save_frames) {
+
+			SaveFrame(seq);
+		}
+		data.erase(seq);
+	}
+}
+
+void CloudVector::SaveFrame(int seq) {
+
+	// std::cout << "release seq: " << seq << std::endl;
+	pcl::PointCloud<pcl::PointNormal>::Ptr save_cloud = data[seq];
+	std::thread save_thread([save_cloud, seq]() {
+		
+		system("mkdir -p /tmp/lidar_recon_temp");
+		std::stringstream save_path;
+		save_path << "/tmp/lidar_recon_temp/frame" << std::setw(6) << std::setfill('0') << seq << ".ply";
+		pcl::io::savePLYFileASCII(save_path.str(), *save_cloud);
+	});
+	save_thread.detach();
 }

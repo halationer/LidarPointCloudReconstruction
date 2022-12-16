@@ -23,9 +23,9 @@
    sudo gedit /opt/ros/melodic/lib/python2.7/dist-packages/roslaunch/nodeprocess.py
    
    # 修改 nodeprocess.py 文件中的如下语句:
-   _TIMEOUT_SIGINT = 15.0 
+   DEFAULT_TIMEOUT_SIGINT = 15.0 
    # 将时间从 15.0s 改为 60.0 秒或更多
-   _TIMEOUT_SIGINT = 60.0
+   DEFAULT_TIMEOUT_SIGINT = 60.0
    ```
 
 ### 构建项目
