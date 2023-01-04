@@ -1,0 +1,13 @@
+<launch>
+    <arg name="dataset_folder"  default="/ncd_example/quad/" />
+    <arg name="to_bag"          default="true" />
+    <arg name="output_bag_file" default="$(arg dataset_folder)bag/ncd_example.bag" />
+    <arg name="publish_delay"   default="1" />
+
+    <node name="pcdHelper" pkg="aloam_velodyne" type="pcdHelper" output="screen"> 
+        <param name="dataset_folder"    type="string"   value="$(arg dataset_folder)" />
+        <param name="to_bag"            type="bool"     value="$(arg to_bag)" />
+        <param name="output_bag_file"   type="string"   value="$(arg output_bag_file)" /> <!-- replace with your output folder -->
+        <param name="publish_delay"     type="int"      value="$(arg publish_delay)" />
+    </node>
+</launch>
