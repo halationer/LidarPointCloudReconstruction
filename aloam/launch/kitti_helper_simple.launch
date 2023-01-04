@@ -2,7 +2,7 @@
     <arg name="dataset_folder"  default="/KITTI/" />
     <arg name="sequence_number" default="00" />
     <arg name="to_bag"          default="true" />
-    <arg name="output_bag_file" default="/KITTI/bag/kitti$(arg sequence_number).bag" />
+    <arg name="output_bag_file" default="$(arg dataset_folder)bag/kitti$(arg sequence_number).bag" />
     <arg name="publish_delay"   default="1" />
 
     <node name="kittiHelperSimple" pkg="aloam_velodyne" type="kittiHelperSimple" output="screen"> 

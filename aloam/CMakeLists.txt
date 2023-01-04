@@ -56,3 +56,5 @@ add_executable(saveCloud src/saveCloud.cpp)
 target_link_libraries(saveCloud ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 
+add_executable(pcdHelper src/pcdHelper.cpp)
+target_link_libraries(pcdHelper ${catkin_LIBRARIES} ${PCL_LIBRARIES})

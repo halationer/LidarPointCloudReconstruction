@@ -78,10 +78,9 @@ int main(int argc, char** argv)
         sensor_msgs::PointCloud2 laser_cloud_msg;
         pcl::toROSMsg(laser_cloud, laser_cloud_msg);
         // laser_cloud_msg.header.stamp = ros::Time().fromSec(timestamp);
-        laser_cloud_msg.header.stamp = ros::Time().now();
+        laser_cloud_msg.header.stamp = ros::Time::now();
         laser_cloud_msg.header.frame_id = "/camera_init";
         pub_laser_cloud.publish(laser_cloud_msg);
-
 
         if (to_bag)
         {
