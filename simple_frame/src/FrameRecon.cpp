@@ -461,6 +461,15 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		// publish time
 		PublishPointCloud(vDisplayAdditionalPoints, m_oAdditionalPointPublisher);
 
+		// 添加中心视点，方便多帧进程识别
+		pcl::PointNormal oViewPoint;
+		oViewPoint.x = oCurrentViewP.x;
+		oViewPoint.y = oCurrentViewP.y;
+		oViewPoint.z = oCurrentViewP.z;
+		oViewPoint.curvature = -1;      //识别码
+		pFramePNormal->push_back(oViewPoint);
+		vAdditionalPoints.push_back(oViewPoint);
+
 		// *pFramePNormal += vAdditionalPoints;
         vAdditionalPoints.is_dense = false;
         PublishPointCloud(vAdditionalPoints, m_oCloudPublisher);
