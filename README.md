@@ -1,5 +1,49 @@
 # 实时激光雷达点云重建
 
+## 更新说明 2023.1.9
+
+由于时间问题，没有写专门的配置文件，因此将配置文件修改的方法附上
+- 配置文件 `./aloam/launch/aloam_velodyne.launch`
+```xml
+   <!-- 如果是 16 线雷达，就用这套参数，如 in-outdoor 数据集-->
+   <param name="scan_line" type="int" value="16" />
+   <param name="minimum_range" type="double" value="0.3"/>
+   <param name="mapping_line_resolution" type="double" value="0.2"/>
+   <param name="mapping_plane_resolution" type="double" value="0.4"/>
+
+   <!-- 如果是 64 线雷达，就用这套参数，如 new school 或 kitti 数据集-->
+   <param name="scan_line" type="int" value="64" />
+   <param name="minimum_range" type="double" value="5"/>
+   <param name="mapping_line_resolution" type="double" value="0.4"/>
+   <param name="mapping_plane_resolution" type="double" value="0.8"/>
+```
+
+- 配置文件 `./simple_frame/launch/reconstruction.launch`
+```xml
+   <!-- 单帧重建处的雷达配置,
+        用于表示雷达的第一线和最后线，不同数据集需要针对性配置 -->
+   <!-- in-outdoor -->
+   <arg name="lidar_line_min" default="0"/>
+   <arg name="lidar_line_max" default="15"/>
+   <!-- new shool -->
+   <arg name="lidar_line_min" default="1"/>
+   <arg name="lidar_line_max" default="46"/>
+   <!-- kitti -->
+   <arg name="lidar_line_min" default="0"/>
+   <arg name="lidar_line_max" default="50"/>
+
+   <!-- 是否对点云抽稀，1-不抽稀；>1-表示抽稀的程度，
+        kitti 数据集建议用 4 ，其余小数据集可以用 1 -->
+   <arg name="sampleinpnum"  default="4" />
+```
+
+- 配置文件 `./frames_fusion/launch/fusion.launch`
+```xml
+   <!-- 该参数代表是否启用 surfel 融合以及射线穿透检测 (启用可检测动态物体) -->
+   <arg name="use_surfel_fusion" default="true"/>
+```
+
+
 ## 项目说明
 
 ### 环境配置
