@@ -60,7 +60,7 @@ public:
 		                   std::vector<bool> & vTrueFaceStatus, std::vector<float> & vFaceWeight);
 
 	//reconstruction of one frame scanning point cloud and ouput mesh normal
-	void FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud, pcl::PointCloud<pcl::PointNormal> & vScenePNormal);
+	void FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud, pcl::PointCloud<pcl::PointNormal> & vScenePNormal, const int line_min = 0, const int line_max = 15);
 
 	//combine and output all vertices
 	void OutputAllMeshes(pcl::PolygonMesh & MeshModel);

@@ -142,6 +142,9 @@ bool FrameRecon::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	//point cloud sampling number
 	nodeHandle.param("sample_inputpoints_num", m_iSampleInPNum, 1);
 
+	nodeHandle.param("lidar_line_min", m_iLidarLineMin, 0);
+	nodeHandle.param("lidar_line_max", m_iLidarLineMax, 15);
+
 	//height of viewpoint
 	double dViewZOffset;
 	nodeHandle.param("viewp_zoffset", dViewZOffset, 0.0);
@@ -330,10 +333,14 @@ void FrameRecon::PublishMeshs(){
 	oMeshMsgs.pose.orientation.w = 1.0;
 
 	std_msgs::ColorRGBA color;
-	color.a = 1;
-	color.r = 1.0;
-	color.g = 1.0;
-	color.b = 1.0;
+	color.a = 1.0;
+	color.r = 200 / 255.f * 1.5f;
+	color.g = 128 / 255.f * 1.5f;
+	color.b = 54  / 255.f * 1.5f;
+	
+	color.r = 248 / 255.f;
+	color.g = 220 / 255.f;
+	color.b = 180 / 255.f;
 
 	//repeatable vertices
 	pcl::PointCloud<pcl::PointXYZI> vMeshVertices;
@@ -435,7 +442,7 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		pcl::PointCloud<pcl::PointNormal>::Ptr pFramePNormal(new pcl::PointCloud<pcl::PointNormal>);
 		m_oExplicitBuilder.setWorkingFrameCount(m_iPCFrameCount);
 		m_oExplicitBuilder.SetViewPoint(oCurrentViewP, m_fViewZOffset);
-		m_oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal);	//得到带法向的点云
+		m_oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal, m_iLidarLineMin, m_iLidarLineMax);	//得到带法向的点云
 
 		struct timeval reconstruct_end;
 		gettimeofday(&reconstruct_end,NULL);

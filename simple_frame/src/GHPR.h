@@ -59,7 +59,7 @@ public:
 
 	//output the indices of vertices on the reconstructed surface correspond to input points without viewpoint
 	std::vector<pcl::Vertices> ConstructSurfaceIdx();
-	std::vector<pcl::Vertices> ConstructSurfaceIdxFiltered();
+	std::vector<pcl::Vertices> ConstructSurfaceIdxFiltered(const int line_min = 0, const int line_max = 15, const bool debug = false);
 
 	//**data
 	//transformed point cloud

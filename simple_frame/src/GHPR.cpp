@@ -462,7 +462,7 @@ Output: vModelHull - the index of the model surface vertices without face relati
 Function: output the index of each vertice on the model surface corresponding to the input point set in the world coordinate.
 Note that the output does not include the viewpoint -- !!the bottom and top faces are removed!!
 ========================================*/
-std::vector<pcl::Vertices> GHPR::ConstructSurfaceIdxFiltered(){
+std::vector<pcl::Vertices> GHPR::ConstructSurfaceIdxFiltered(const int line_min, const int line_max, const bool debug){
 
 	//convex hull includes the viewpoint
 	std::vector<pcl::Vertices> vModelHull;
@@ -471,6 +471,8 @@ std::vector<pcl::Vertices> GHPR::ConstructSurfaceIdxFiltered(){
 		std::cout << "Correspondence has not been established, return empty output!" << std::endl;
 		return vModelHull;
 	}
+
+	int minID = 100, maxID = 0;
 
 	for (int i = 0; i != m_vHullPolygonIdxs.size(); ++i){
 		//Cut out the viewpoint
@@ -489,11 +491,14 @@ std::vector<pcl::Vertices> GHPR::ConstructSurfaceIdxFiltered(){
 				bNonViewPoint = false;
 
 			int nowScanID = m_pTransCloud->points[m_vHullInInputIdx[iOneLocalIdx]].intensity;
-			// std::cout << "now ScanID: " << nowScanID << "\t";
-			if(nowScanID == 0) bAllZeroLine |= 1 << j;
-			if(nowScanID == 15) bAllMaxLine |= 1 << j; //此处需要设置参数以适配雷达类型
+			// std::cout << "now ScanID: " << nowScanID << "\n";
+			if(nowScanID == line_min) bAllZeroLine |= 1 << j;
+			if(nowScanID == line_max) bAllMaxLine |= 1 << j; // 此处需要设置参数以适配雷达类型
 
+			minID = min(nowScanID, minID);
+			maxID = max(nowScanID, maxID);
 		}//end j
+
 		bAllZeroLine = bAllZeroLine == 7 ? true : false;
 		bAllMaxLine = bAllMaxLine == 7 ? true : false;
 		// std::cout << "all_zero? " << ( bAllZeroLine ? "true" : "false") << std::endl;
@@ -504,6 +509,8 @@ std::vector<pcl::Vertices> GHPR::ConstructSurfaceIdxFiltered(){
 			vModelHull.push_back(oOnePolyWorldIdx);
 
 	}//end i
+
+	if(debug) std::cout << "Id range: (" << minID << ", " << maxID << ")" << std::endl;
 
 	return vModelHull;
 

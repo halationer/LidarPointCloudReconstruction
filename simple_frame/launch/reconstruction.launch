@@ -28,6 +28,17 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <!-- <arg name="cloudintopic" default="/velodyne_cloud_registered" /> -->
     <!-- <arg name="odomintopic" default="/aft_mapped_to_init" /> -->
 
+    <!-- lidar type -->
+    <!-- in-outdoor -->
+    <!-- <arg name="lidar_line_min" default="0"/>
+    <arg name="lidar_line_max" default="15"/> -->
+    <!-- new shool -->
+    <!-- <arg name="lidar_line_min" default="1"/>
+    <arg name="lidar_line_max" default="46"/> -->
+    <!-- kitti -->
+    <arg name="lidar_line_min" default="0"/>
+    <arg name="lidar_line_max" default="50"/>
+
     <arg name="cloudoutopic" default="/frame_cloudnormals" />
 
     <arg name="polygonoutopic" default="/frame_meshs" />
@@ -38,7 +49,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="samplepcframenum"  default="1" />
 
-    <arg name="sampleinpnum"  default="1" />
+    <!-- step value in “for” point cloud,  larger means fewer points-->
+    <arg name="sampleinpnum"  default="4" />
 
     <arg name="sectornum"  default="12" />
 
@@ -48,11 +60,11 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="multi_thread" default="true"/>
 
+
     <!-- simple reconstruction (Adjacency method)-->
     <arg name="lidartype" default="16"/>
     <arg name="showconfidence" default="false"/>
     <arg name="combine_clouds" default="false"/>
-
 
     <!-- frame_reconstruction node in frame_reconstruction pkg-->
     <node name="simple_frame" pkg="simple_frame" type="simple_frame" output="screen">
@@ -89,6 +101,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <param name="polygon_tf_id" type="string" value="$(arg polygontfid)" />
 
         <param name="lidar_type" type="int" value="$(arg lidartype)" />
+        <param name="lidar_line_min" type="int" value="$(arg lidar_line_min)" />
+        <param name="lidar_line_max" type="int" value="$(arg lidar_line_max)" />
 
         <param name="use_ghpr" type="bool" value="$(arg useghpr)" />
 

@@ -234,6 +234,7 @@ pcl::PointNormal Fusion::NormalFusionWeighted(const std::vector<int> & vPointIdx
 		all_weight = all_weight + point_weight;
 	}
 
+	if(all_weight == 0.f) return oOnePN;
 	
 	float fNum = float(vPointIdx.size());
 

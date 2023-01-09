@@ -49,7 +49,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <include file="$(find poisson_reconstruction)/launch/poisson.launch" />
 
     <!-- rosbag related: replay with rate = 1 speed up-->
-    <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 $(arg rosbag)"/>
+    <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 $(arg rosbag) --topics /velodyne_points"/>
 
     <!-- <include file="$(find aloam_velodyne)/launch/kitti_helper_simple.launch" /> -->
 

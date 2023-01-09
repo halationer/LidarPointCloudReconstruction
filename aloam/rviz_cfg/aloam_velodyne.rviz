@@ -5,10 +5,11 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /SingleFrame1
+        - /SLAM1
         - /SingleFrame1/AdditionalPoints1
         - /FramesFusion1
-        - /FramesFusion1/TempDebug1
+        - /FramesFusion1/DataAssociate1
+        - /FramesFusion1/DataAssociate1/AssociatedDebug1
       Splitter Ratio: 0.5
     Tree Height: 848
   - Class: rviz/Selection
@@ -29,7 +30,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: outputPoints
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -133,7 +134,7 @@ Visualization Manager:
           Axis: Z
           Channel Name: intensity
           Class: rviz/PointCloud2
-          Color: 255; 255; 255
+          Color: 186; 189; 182
           Color Transformer: FlatColor
           Decay Time: 0
           Enabled: false
@@ -164,7 +165,7 @@ Visualization Manager:
           Color: 255; 255; 255
           Color Transformer: Intensity
           Decay Time: 0
-          Enabled: true
+          Enabled: false
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 238; 238; 236
@@ -178,9 +179,9 @@ Visualization Manager:
           Topic: /velodyne_cloud_registered
           Unreliable: false
           Use Fixed Frame: true
-          Use rainbow: false
-          Value: true
-      Enabled: false
+          Use rainbow: true
+          Value: false
+      Enabled: true
       Name: SLAM
     - Class: rviz/Group
       Displays:
@@ -189,7 +190,7 @@ Visualization Manager:
           Marker Topic: /frame_meshs
           Name: GHPRMesh
           Namespaces:
-            "": true
+            {}
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -220,7 +221,7 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: true
           Value: false
-      Enabled: true
+      Enabled: false
       Name: SingleFrame
     - Class: rviz/Group
       Displays:
@@ -229,7 +230,7 @@ Visualization Manager:
           Marker Topic: /surrounding_meshes
           Name: CubeMesh
           Namespaces:
-            {}
+            "": true
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -274,7 +275,7 @@ Visualization Manager:
               Color: 255; 255; 255
               Color Transformer: RGB8
               Decay Time: 0
-              Enabled: true
+              Enabled: false
               Invert Rainbow: false
               Max Color: 255; 255; 255
               Min Color: 0; 0; 0
@@ -289,7 +290,7 @@ Visualization Manager:
               Unreliable: false
               Use Fixed Frame: true
               Use rainbow: true
-              Value: true
+              Value: false
             - Alpha: 1
               Autocompute Intensity Bounds: true
               Autocompute Value Bounds:
@@ -311,7 +312,7 @@ Visualization Manager:
               Queue Size: 10
               Selectable: true
               Size (Pixels): 3
-              Size (m): 0.009999999776482582
+              Size (m): 0.05000000074505806
               Style: Flat Squares
               Topic: /debug_associated_point
               Unreliable: false
@@ -374,7 +375,7 @@ Visualization Manager:
               Use Fixed Frame: true
               Use rainbow: true
               Value: false
-          Enabled: false
+          Enabled: true
           Name: DataAssociate
         - Alpha: 1
           Autocompute Intensity Bounds: true
@@ -420,7 +421,7 @@ Visualization Manager:
       Name: Poisson
   Enabled: true
   Global Options:
-    Background Color: 0; 0; 0
+    Background Color: 255; 255; 255
     Default Light: true
     Fixed Frame: camera_init
     Frame Rate: 30
@@ -446,25 +447,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 51.93132781982422
+      Distance: 54.00868225097656
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.5817584991455078
-        Y: 7.4698991775512695
-        Z: 6.858367669337895e-7
+        X: -0.39505505561828613
+        Y: 0.4356575012207031
+        Z: -2.6139070541830733e-5
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.9944773316383362
+      Pitch: 0.9753987789154053
       Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 1.9031659364700317
+      Yaw: 0.24312017858028412
     Saved: ~
 Window Geometry:
   Displays:

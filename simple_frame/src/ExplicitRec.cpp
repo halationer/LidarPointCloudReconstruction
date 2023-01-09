@@ -160,7 +160,7 @@ Outout: vScenePNormal - input point with mesh normal
 Output: none
 Function: clear some data
 ========================================*/
-void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud, pcl::PointCloud<pcl::PointNormal> & vScenePNormal){
+void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud, pcl::PointCloud<pcl::PointNormal> & vScenePNormal, const int line_min, const int line_max){
 
 	vScenePNormal.clear();
 	vScenePNormal.reserve(vSceneCloud.points.size());
@@ -232,7 +232,7 @@ void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vS
 
 				//get the surfaces that are not connected to the viewpoint
 				std::vector<pcl::Vertices> vOneFaces;
-				vOneFaces = hpdhpr.ConstructSurfaceIdxFiltered();
+				vOneFaces = hpdhpr.ConstructSurfaceIdxFiltered(line_min, line_max);
 				// vOneFaces = hpdhpr.ConstructSurfaceIdx();
 
 				/*输出单份的重建网格结果
@@ -298,7 +298,7 @@ void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vS
 				std::vector<pcl::Vertices> vOneNewFaces;
 				for (int j = 0; j != vTrueFaceStatus.size(); ++j){
 
-					if (vTrueFaceStatus[j]){			// TODO: 是否要剔除面片呢?
+					if ( vTrueFaceStatus[j] || true ){			// TODO: 是否要剔除面片呢?
 						pcl::Vertices oOneFace(vOneFaces[j]);
 						vOneNewFaces.push_back(oOneFace);
 					}//end if

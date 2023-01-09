@@ -179,6 +179,10 @@ class FrameRecon{
   //sampling number of sector
   int m_iSectorNum;
 
+  // Lidar ids config, stored in the intensity of point-cloud
+  int m_iLidarLineMin;
+  int m_iLidarLineMax;
+
   //**frenquency related**
 
   float m_fViewZOffset;//z offset of odom to lidar sensor

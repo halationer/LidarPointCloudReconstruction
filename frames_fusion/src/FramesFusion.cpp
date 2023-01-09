@@ -4,6 +4,7 @@
 #include <random>
 #include <algorithm>
 #include <cmath>
+#include <exception>
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -96,8 +97,28 @@ FramesFusion::~FramesFusion() {
 			m_vMapPCN += m_vMapPCNAdded;
 			m_vMapPCN += m_vMapPCNTrueAdded;
 		}
-		auto vAllPoints = m_vMapPCN.AllCloud();
-		pcl::io::savePLYFileASCII(sOutPCNormalFileName.str(), *vAllPoints);
+		
+		auto vAllPoints = AllCloud(m_vMapPCN);
+
+		pcl::PointCloud<pcl::PointXYZINormal> pc;
+		for(auto point : *vAllPoints) {
+			pcl::PointXYZINormal new_point;
+			new_point.x = point.x;
+			new_point.y = point.y;
+			new_point.z = point.z;
+			new_point.normal_x = point.normal_x;
+			new_point.normal_y = point.normal_y;
+			new_point.normal_z = point.normal_z;
+			
+			// point confidence (impacted by depth & support & conflict)
+			new_point.intensity = point.data_n[3]; 
+			
+			// maybe use to save gauss distance, but now don't make scence
+			// new_point.curvature = point.data_c[3];
+
+			pc.push_back(new_point);
+		}
+		pcl::io::savePLYFileASCII(sOutPCNormalFileName.str(), pc);
 
 		/** 
 			if the point cloud has too many points, ros may not wait it to save.
@@ -286,6 +307,29 @@ void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vClo
 
 }
 
+void HSVToRGB(float H, float S, float V, uint8_t& R, uint8_t& G, uint8_t& B) {
+
+	float C = V * S;
+	int FixFactor = int(H / 60) & 1;
+	float X = C * ((FixFactor ? -1 : 1) * (int(H) % 60) / 60.0 + FixFactor); // X 值的变化随H波动，锯齿状0-1之间周期变化
+	float m = V - C;
+	float R_, G_, B_;
+	switch(int(H) / 60)
+	{
+		case 1:		R_ = X;	G_ = C;	B_ = 0; break;	// 60  <= H < 120
+		case 2:		R_ = 0;	G_ = C;	B_ = X; break;	// 120 <= H < 180
+		case 3:		R_ = 0;	G_ = X;	B_ = C; break;	// 180 <= H < 240
+		case 4:		R_ = X;	G_ = 0;	B_ = C; break;	// 240 <= H < 300
+		case 5: 
+		case 6:		R_ = C;	G_ = 0;	B_ = X; break;	// 300 <= H < 360
+
+		default:	R_ = C;	G_ = X;	B_ = 0; 		// 0   <= H < 60 or outlier
+	}
+	R = (R_ + m) * 255;
+	G = (G_ + m) * 255;
+	B = (B_ + m) * 255;
+}
+
 /*************************************************
 Function: PublishPointCloud
 Description: publish point clouds (mainly used for display and test)
@@ -301,32 +345,10 @@ template<class T>
 void FramesFusion::PublishPointCloud(const pcl::PointCloud<T> & vCloud, const std::vector<float> & vFeatures, const std::string sTopicName) {
 	
 	//get colors
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr  pColorClouds (new pcl::PointCloud<pcl::PointXYZRGB>);
-
-	auto HSVToRGB = [](float H, float S, float V, uint8_t& R, uint8_t& G, uint8_t& B) {
-		float C = V * S;
-		int FixFactor = int(H / 60) & 1;
-		float X = C * ((FixFactor ? -1 : 1) * (int(H) % 60) / 60.0 + FixFactor); // X 值的变化随H波动，锯齿状0-1之间周期变化
-		float m = V - C;
-		float R_, G_, B_;
-		switch(int(H) / 60)
-		{
-			case 1:		R_ = X;	G_ = C;	B_ = 0; break;	// 60  <= H < 120
-			case 2:		R_ = 0;	G_ = C;	B_ = X; break;	// 120 <= H < 180
-			case 3:		R_ = 0;	G_ = X;	B_ = C; break;	// 180 <= H < 240
-			case 4:		R_ = X;	G_ = 0;	B_ = C; break;	// 240 <= H < 300
-			case 5: 
-			case 6:		R_ = C;	G_ = 0;	B_ = X; break;	// 300 <= H < 360
-
-			default:	R_ = C;	G_ = X;	B_ = 0; 		// 0   <= H < 60 or outlier
-		}
-		R = (R_ + m) * 255;
-		G = (G_ + m) * 255;
-		B = (B_ + m) * 255;
-	};
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr  pColorClouds(new pcl::PointCloud<pcl::PointXYZRGB>);
 
 	//to each point
-	for (int i = 0; i <  vCloud.points.size(); ++i){
+	for (int i = 0; i < vCloud.points.size() && i < vFeatures.size(); ++i){
 
 		pcl::PointXYZRGB oColorP;
 		oColorP.x = vCloud.points[i].x;
@@ -335,7 +357,7 @@ void FramesFusion::PublishPointCloud(const pcl::PointCloud<T> & vCloud, const st
 
 		float H = abs(vFeatures[i]) * 360.0f;
 		float S = vFeatures[i] < 0.0f ? 0.0f : 1.0f;
-		float V = 1.0f;
+		float V = vFeatures[i] < 0.0f ? 0.5f : 1.0f;
 
 		HSVToRGB(H, S, V, oColorP.r, oColorP.g, oColorP.b);
 
@@ -610,9 +632,22 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	//get the target point cloud to be modeled
 	m_mPCNMutex.lock();
 	NearbyClouds(m_vMapPCN, oBasedP, *pNearCloud, m_fNearLengths);
-	// int point_num = pNearCloud->size();
+	int point_num = pNearCloud->size();
 	NearbyClouds(m_vMapPCNAdded, oBasedP, *pNearCloud, m_fNearLengths);
 	m_mPCNMutex.unlock();
+
+	// 点云抽稀
+	int new_end = 0;
+	if(m_iSampleInPNum > 1 && pNearCloud->size() > 1e5) {
+		int past_point_num = point_num;
+		std::cout << "sample: " << m_iSampleInPNum << " | " << pNearCloud->size();
+		for(int i = 0; i < pNearCloud->size(); i+=m_iSampleInPNum) {
+			swap(pNearCloud->at(i), pNearCloud->at(new_end++));
+			if(i < past_point_num) point_num = new_end;
+		}
+		pNearCloud->erase(pNearCloud->begin() + new_end, pNearCloud->end());
+		std::cout << " | " << pNearCloud->size() << std::endl;
+	}
 
 	std::vector<float> temp_feature(pNearCloud->size());
 	PublishPointCloud(*pNearCloud, temp_feature, "/temp_near_cloud");
@@ -620,9 +655,27 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	///* output nearby cloud
 	if(m_bOutputFiles) {
 
+		pcl::PointCloud<pcl::PointXYZINormal> pc;
+		for(auto point : *pNearCloud) {
+			pcl::PointXYZINormal new_point;
+			new_point.x = point.x;
+			new_point.y = point.y;
+			new_point.z = point.z;
+			new_point.normal_x = point.normal_x;
+			new_point.normal_y = point.normal_y;
+			new_point.normal_z = point.normal_z;
+			
+			// point confidence (impacted by depth & support & conflict)
+			new_point.intensity = point.data_n[3];
+			
+			// maybe use to save gauss distance, but now don't make scence
+			// new_point.curvature = point.data_c[3];
+
+			pc.push_back(new_point);
+		}
 		std::stringstream filename;
 		filename << m_sFileHead << std::setw(4) << std::setfill('0') << iFrameId << "_pc.ply";
-		pcl::io::savePLYFileASCII(filename.str(), *pNearCloud);
+		pcl::io::savePLYFileASCII(filename.str(), pc);
 	}
 	//*/
 
@@ -645,8 +698,10 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	std::vector<float> vSignedDis = oSDer.NormalBasedGlance(pNearCloud, oVoxeler);
 
 	//传回去
-	// FusionNormalBackToPoint(*pNearCloud, m_vMapPCN, 0, point_num);
-	// FusionNormalBackToPoint(*pNearCloud, m_vMapPCNAdded, point_num + 1, pNearCloud->size() - point_num);
+	m_mPCNMutex.lock();
+	FusionNormalBackToPoint(*pNearCloud, m_vMapPCN, 0, point_num);
+	FusionNormalBackToPoint(*pNearCloud, m_vMapPCNAdded, point_num + 1, pNearCloud->size() - point_num);
+	m_mPCNMutex.unlock();
 
 	//record non-empty voxels
 	std::vector<bool> vVoxelStatus;
@@ -753,7 +808,7 @@ void FramesFusion::SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBa
 	std::cout << std::format_blue << "fusion true added point size: " << vTruePointCloudIndices.size()
 			  << "\t and the all added point size is: " << pNearCloudAdded->size() << std::format_white << std::endl;
 	for(int i = 0; i < vTruePointCloudIndices.size(); ++i) {
-		m_vMapPCNTrueAdded.push_back(pNearCloudAdded->points[vTruePointCloudIndices[i]], 0);
+		m_vMapPCNTrueAdded.push_back(pNearCloudAdded->points[vTruePointCloudIndices[i]]);
 	}
 
 	/**TODO: 存在的问题
@@ -916,7 +971,7 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 	}
 
 	if(pFramePN->is_dense == false) {//标识码
-		
+
 		if(m_bUseAdditionalPoints) {
 			
 			++m_iFusionFrameNum;
@@ -942,6 +997,8 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 	}
 	else {
 		
+		std::lock_guard<std::mutex> temp_lock(m_mPCNMutex);
+		
 		++m_iFusionFrameNum;
 
 		if(m_bSurfelFusion) {
@@ -963,7 +1020,6 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 		}
 
 		//merge one frame data
-		std::lock_guard<std::mutex> temp_lock(m_mPCNMutex);
 		m_vMapPCN += *pFramePN;
 	}
 
@@ -989,6 +1045,7 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 
 	return;
 }
+
 
 
   
@@ -1109,7 +1166,7 @@ void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 	//output the nearby surfaces
 	PublishMeshs(oNearbyMeshes);
 
-	auto vAllCloud = m_vMapPCN.AllCloud();
+	auto vAllCloud = AllCloud(m_vMapPCN);
 	std::cout << "### cloud_size: " << vAllCloud->size() << " ###" << std::endl; 
 	PublishPointCloud(*vAllCloud);
 }
@@ -1153,7 +1210,9 @@ void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory
 	m_oLastModelingTime = oTrajectory.header.stamp;
 	int now_frame_num = m_iReconstructFrameNum++;
 
-	std::thread Modeling([&, now_frame_num]() {
+	auto ModelingFunction = [&, now_frame_num]() {
+
+		std::cout << std::format_purple << "No. " << now_frame_num << " reconstruct start" << std::format_white << std::endl;
 
 		//save the position of trajectory
 		RosTimePoint oOdomPoint;
@@ -1184,9 +1243,9 @@ void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory
 
 		//output the nearby surfaces
 		PublishMeshs(oNearbyMeshes);
+	};
 
-		// PublishPointCloud(m_vMapPCN);
-	});
+	std::thread Modeling(ModelingFunction);
 
 	Modeling.detach();
 }
@@ -2012,6 +2071,8 @@ void FramesFusion::AddedSurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud
 */
 void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud) {
 
+	std::cout << "fusion start \t";
+
 	constexpr int yaw_dim_expand = 4;
 	constexpr int pitch_dim_expand = 2;
 	constexpr int yaw_dim = 360 * yaw_dim_expand;
@@ -2022,7 +2083,12 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 	constexpr double normal_support_factor = 0.8;
 
 	//计算点云每个点的角度，将其置于相机像素中 4ms - 8ms
-	clock_t start_time1 = clock();
+	// clock_t start_time1 = clock();
+
+	//验证性调试，假设视点不变
+	// oLidarPos.x = 0;
+	// oLidarPos.y = 0;
+	// oLidarPos.z = 0;
 
 	std::vector<std::vector<double>> depth_image(pitch_dim, std::vector<double>(yaw_dim));
 	std::vector<std::vector<int>> depth_index(pitch_dim, std::vector<int>(yaw_dim));
@@ -2079,15 +2145,15 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 		// */
 	}	
 
-	clock_t frames_fusion_time1 = 1000.0 * (clock() - start_time1) / CLOCKS_PER_SEC;
-	std::cout << std::format_purple 
-		<< "project_image_time: " << frames_fusion_time1 << "ms" 
-		<< std::format_white << std::endl;
+	// clock_t frames_fusion_time1 = 1000.0 * (clock() - start_time1) / CLOCKS_PER_SEC;
+	// std::cout << std::format_purple 
+	// 	<< "project_image_time: " << frames_fusion_time1 << "ms" 
+	// 	<< std::format_white << std::endl;
 	// input - lidar pos, measurement cloud | output - depth_image and depth_index
 	
 
 	// 把added点也考虑进来，并加入置信度系统
-	clock_t start_time2 = clock();
+	// clock_t start_time2 = clock();
 
 	pcl::PointCloud<pcl::PointNormal> vPointCloudBuffer;
 	// vPointCloudBuffer += m_vMapPCN;
@@ -2097,16 +2163,16 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 	int lidar_size = vPointCloudBuffer.size();
 	NearbyClouds(m_vMapPCNAdded, oBase, vPointCloudBuffer, max_depth);
 
-	clock_t frames_fusion_time2 = 1000.0 * (clock() - start_time2) / CLOCKS_PER_SEC;
-	std::cout << std::format_purple 
-		<< "copy_cloud_time: " << frames_fusion_time2 << "ms" 
-		<< std::format_white << std::endl;
+	// clock_t frames_fusion_time2 = 1000.0 * (clock() - start_time2) / CLOCKS_PER_SEC;
+	// std::cout << std::format_purple 
+	// 	<< "copy_cloud_time: " << frames_fusion_time2 << "ms" 
+	// 	<< std::format_white << std::endl;
 	// input - point clouds | output - vPointCloudBuffer
 
 	// /* 对于之前帧的所有点，对应位置建立匹配关系 60 - 150 ms
-	clock_t start_time3 = clock();
+	// clock_t start_time3 = clock();
 
-	std::vector<float> associated_feature(vPointCloudBuffer.size());
+	std::vector<float> associated_feature(vPointCloudBuffer.size(), 0);
 
 	for(int i = 0; i < vPointCloudBuffer.size(); ++i) {
 
@@ -2127,6 +2193,7 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 		int complict_count = 0;
 
 		pcl::PointNormal* pSupportPoint = nullptr;
+		pcl::PointNormal* pConflictPoint = nullptr;
 
 		if(row < pitch_dim && col < yaw_dim && depth_image[row][col]) {
 
@@ -2151,6 +2218,7 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 				else if(depth < dAssociatedDepth) { // 旧点的depth < 新点的depth
 					
 					++complict_count;
+					pConflictPoint = &oAssociatedPoint;
 				}
 				// occlusion关系
 				else {
@@ -2163,11 +2231,13 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 			
 			if(tight_support_count > 0) {
 
-				associated_feature[i] = 0.4f;
+				// associated_feature[i] = 0.4f;
+				associated_feature[i] = -1.f;
 			}
 			else {
 
-				associated_feature[i] = 0.15f;				
+				// associated_feature[i] = 0.15f;	
+				associated_feature[i] = -1.f;			
 			}
 
 			// 根据（深度）置信度融合
@@ -2178,6 +2248,7 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 				float& fOldConfidence = oOldPoint.data_n[3];
 				pcl::PointNormal& oNewPoint = *pSupportPoint;
 				float& fNewConfidence = oNewPoint.data_n[3];
+
 				Eigen::Vector3f oDiffVector(oOldPoint.x - oNewPoint.x, oOldPoint.y - oNewPoint.y, oOldPoint.z - oNewPoint.z);
 				Eigen::Vector3f oNewNormal(oNewPoint.normal_x, oNewPoint.normal_y, oNewPoint.normal_z);
 				Eigen::Vector3f oProjectDiff = - oDiffVector.dot(oNewNormal) * oNewNormal;
@@ -2191,26 +2262,57 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 		}
 		else if(complict_count > 0) {
 
-			associated_feature[i] = 0.0f;
+			//进一步精细的遮挡检查
+			
+			pcl::PointNormal& oOldPoint = i < lidar_size ? m_vMapPCN[vPointCloudBuffer[i].data_c[3]] : m_vMapPCNAdded[vPointCloudBuffer[i].data_c[3]];
+			float& fOldConfidence = oOldPoint.data_n[3];
+			pcl::PointNormal& oNewPoint = *pConflictPoint;
+			float& fNewConfidence = oNewPoint.data_n[3];
+
+			Eigen::Vector3f p1(oOldPoint.x - oLidarPos.x, oOldPoint.y - oLidarPos.y, oOldPoint.z - oLidarPos.z);
+			Eigen::Vector3f p2(oNewPoint.x - oLidarPos.x, oNewPoint.y - oLidarPos.y, oNewPoint.z - oLidarPos.z);
+			Eigen::Vector3f vp2 = p2 / p2.norm();
+			Eigen::Vector3f n2(oNewPoint.normal_x, oNewPoint.normal_y, oNewPoint.normal_z);
+			Eigen::Vector3f v12 = p2 - p1;
+
+			float r = abs( n2.dot(vp2) * support_factor );
+			Eigen::Vector3f vr = v12.dot(vp2) * vp2 - v12;
+			float a = p2.norm() - v12.dot(vp2), b = p2.norm();
+
+			if(vr.norm() < r * a / b && v12.dot(n2) < 0) {
+
+				associated_feature[i] = 0.0f;
+
+				// 减小点的置信度
+				fOldConfidence -= 0.8 * fNewConfidence;
+				if(fOldConfidence < 0.f) fOldConfidence = 0.f;
+			}
+			else associated_feature[i] = -1.f;
+
+			
+			// associated_feature[i] = 0.0f;
+
 		}
 		else if(occlusion_count > 0) {
 
-			associated_feature[i] = 0.6f;
+			// associated_feature[i] = 0.6f;
+			associated_feature[i] = -1.0f;
 		}
 		else {
 			associated_feature[i] = -1.0f;
 		}
 	}	
-	clock_t frames_fusion_time3 = 1000.0 * (clock() - start_time3) / CLOCKS_PER_SEC;
-	std::cout << std::format_purple 
-		<< "data_associate_time: " << frames_fusion_time3 << "ms" 
-		<< std::format_white << std::endl;
+
+	// clock_t frames_fusion_time3 = 1000.0 * (clock() - start_time3) / CLOCKS_PER_SEC;
+	// std::cout << std::format_purple 
+	// 	<< "data_associate_time: " << frames_fusion_time3 << "ms" 
+	// 	<< std::format_white << std::endl;
 	//  input - vPointCloudBuffer, lidar pos, measurement cloud, depth_image/index | output - vCurrentFuseIndex, associated_feature
 
 	// the first to fix - hold about 1/3 of the time (because of the large point set) !!!
 	// clock_t start_time5 = clock();
 
-	// PublishPointCloud(vPointCloudBuffer, associated_feature, "/debug_associated_point");
+	PublishPointCloud(vPointCloudBuffer, associated_feature, "/debug_associated_point");
 
 	// clock_t frames_fusion_time5 = 1000.0 * (clock() - start_time5) / CLOCKS_PER_SEC;
 	// std::cout << std::format_purple
@@ -2218,7 +2320,7 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 	// 	<< std::format_white << std::endl;
 
 	// 删除被新帧中的被融合点
-	clock_t start_time4 = clock();
+	// clock_t start_time4 = clock();
 	std::vector<float> point_feature(vDepthMeasurementCloud.size(), 0.5f);
 
 	int new_end = vCurrentFuseIndex.size();
@@ -2227,18 +2329,19 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 		if(vCurrentFuseIndex[i])
 		{
 			swap(vDepthMeasurementCloud.points[i],vDepthMeasurementCloud.points[--new_end]);
-			point_feature[new_end] = 0.9f;
+			point_feature[new_end] = 0.9f; 
 		}
 	}
+
 
 	// PublishPointCloud(vDepthMeasurementCloud, point_feature, "/current_frame_const");
 	vDepthMeasurementCloud.erase(vDepthMeasurementCloud.begin() + new_end, vDepthMeasurementCloud.end());
 	std::cout << std::format_blue << "new point num: " << vDepthMeasurementCloud.size() << std::format_white << "\t";
 
-	clock_t frames_fusion_time4 = 1000.0 * (clock() - start_time4) / CLOCKS_PER_SEC;
-	std::cout << std::format_purple << std::endl
-		<< "erase_point_time: " << frames_fusion_time4 << "ms" 
-		<< std::format_white << std::endl;
+	// clock_t frames_fusion_time4 = 1000.0 * (clock() - start_time4) / CLOCKS_PER_SEC;
+	// std::cout << std::format_purple << std::endl
+	// 	<< "erase_point_time: " << frames_fusion_time4 << "ms" 
+	// 	<< std::format_white << std::endl;
 
 	//*/
 }
@@ -2403,4 +2506,22 @@ void CloudVector::SaveFrame(int seq) {
 		pcl::io::savePLYFileASCII(save_path.str(), *save_cloud);
 	});
 	save_thread.detach();
+}
+
+pcl::PointCloud<pcl::PointNormal>::Ptr AllCloud(CloudVector& cloud_vector) {
+
+    pcl::PointCloud<pcl::PointNormal>::Ptr vOutputCloud(new pcl::PointCloud<pcl::PointNormal>());
+
+    for(auto [_,pc] : cloud_vector.data) {
+
+        *vOutputCloud += *pc;
+    }
+
+    return vOutputCloud;
+}
+
+pcl::PointCloud<pcl::PointNormal>::Ptr AllCloud(pcl::PointCloud<pcl::PointNormal>& cloud_vector) {
+
+    pcl::PointCloud<pcl::PointNormal>::Ptr vOutputCloud = cloud_vector.makeShared();
+    return vOutputCloud;
 }

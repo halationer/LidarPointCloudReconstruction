@@ -80,6 +80,7 @@ public:
     friend pcl::PointCloud<pcl::PointNormal>& operator+=(pcl::PointCloud<pcl::PointNormal>& vCloudA, const CloudVector& vCloudB);    
     friend CloudVector& operator+=(CloudVector &vCloudA, const CloudVector &vCloudB);
     friend CloudVector& operator+=(CloudVector &vCloudA, const pcl::PointCloud<pcl::PointNormal> vCloudB);
+    friend pcl::PointCloud<pcl::PointNormal>::Ptr AllCloud(CloudVector& cloud_vector);
     
     pcl::PointNormal& at(const int index);
     void erase(int index);
@@ -89,19 +90,7 @@ public:
         return this->at(index);
     }
 
-    pcl::PointCloud<pcl::PointNormal>::Ptr AllCloud() {
-
-        pcl::PointCloud<pcl::PointNormal>::Ptr vOutputCloud(new pcl::PointCloud<pcl::PointNormal>());
-
-        for(auto [_,pc] : data) {
-
-            *vOutputCloud += *pc;
-        }
-
-        return vOutputCloud;
-    }
-
-    void push_back(const pcl::PointNormal& point, int seq) {
+    void push_back(const pcl::PointNormal& point, int seq = 0) {
         
         dirty_flag = true;
         data[seq]->push_back(point);
@@ -125,8 +114,10 @@ private:
 
     // key := pointcloud.header.seq | value := &pointcloud
     std::map<int, pcl::PointCloud<pcl::PointNormal>::Ptr> data;
-
 };
+
+pcl::PointCloud<pcl::PointNormal>::Ptr AllCloud(CloudVector& cloud_vector);
+pcl::PointCloud<pcl::PointNormal>::Ptr AllCloud(pcl::PointCloud<pcl::PointNormal>& cloud_vector);
 
 //******************************************************************
 // this class below is to compute topological guidance map based on SLAM
@@ -288,9 +279,9 @@ private:
     //map point clouds with normals
     //accumulated processed point cloud
     std::mutex m_mPCNMutex;
-    CloudVector m_vMapPCN;
-    CloudVector m_vMapPCNAdded;
-    CloudVector m_vMapPCNTrueAdded;
+    pcl::PointCloud<pcl::PointNormal> m_vMapPCN;
+    pcl::PointCloud<pcl::PointNormal> m_vMapPCNAdded;
+    pcl::PointCloud<pcl::PointNormal> m_vMapPCNTrueAdded;
 
     bool m_bUseAdditionalPoints;
 
