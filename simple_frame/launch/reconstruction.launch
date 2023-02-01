@@ -21,12 +21,12 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="sf_output_path" default="" />
 
     <!-- use slam transfer -->
-    <arg name="cloudintopic" default="/slam_points" />
-    <arg name="odomintopic" default="/slam_odom" />
+    <!-- <arg name="cloudintopic" default="/slam_points" /> -->
+    <!-- <arg name="odomintopic" default="/slam_odom" /> -->
 
     <!-- use aloam -->
-    <!-- <arg name="cloudintopic" default="/velodyne_cloud_registered" /> -->
-    <!-- <arg name="odomintopic" default="/aft_mapped_to_init" /> -->
+    <arg name="cloudintopic" default="/velodyne_cloud_registered" />
+    <arg name="odomintopic" default="/aft_mapped_to_init" />
 
     <!-- lidar type -->
     <!-- in-outdoor -->

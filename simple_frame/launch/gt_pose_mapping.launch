@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<!--
+Software License Agreement (BSD)
+
+\file      mapping.launch
+\authors   Pengdi Huang <alualu628628@163.com>
+\copyright Copyright (c) 2022, 05, All rights reserved.
+
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WAR-
+RANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, IN-
+DIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<launch>
+    <arg name="rosbag" default="$(find frame_reconstruction)/../data/kitti_gt_06.bag" />
+
+    <!-- output evaluation files (point cloud and mesh )-->
+    <arg name="sf_output_path" default=""/>
+    <arg name="mf_output_path" default=""/>
+    <param name="sf_output_path" type="string" value="$(arg sf_output_path)" />
+    <param name="mf_output_path" type="string" value="$(arg mf_output_path)" />
+
+    <!--Use simulated time to prevent the public time of the TF structure from being unable to match with other messages-->
+    <param name="use_sim_time" value="true"/>
+
+    <arg name="rviz" default="true" />
+    <group if="$(arg rviz)">
+        <node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" args="-d $(find aloam_velodyne)/rviz_cfg/aloam_velodyne.rviz" />
+    </group>
+
+    <!-- use velodyne -->
+    <!-- <node pkg="tf" type="static_transform_publisher" name="camera_init_to_map"  args="0 0 0 1.570795 0 1.570795 /map /camera_init 10" /> -->
+
+    <!-- use aloam -->
+    <node pkg="tf" type="static_transform_publisher" name="camera_init_to_map"  args="0 0 0 0 0 0 /map /camera_init 10" />
+
+    <!-- SLAM transfer -->
+    <include file="$(find slam_trans)/launch/SLAM_to_map.launch"/>
+
+    <!-- launch frame reconstruction-->
+    <include file="$(find simple_frame)/launch/reconstruction.launch"/>
+
+    <!-- launch frame fusion-->
+    <include file="$(find frames_fusion)/launch/fusion.launch" />
+
+    <!-- launch poisson reconstruction -->
+    <!-- <include file="$(find poisson_reconstruction)/launch/poisson.launch" /> -->
+
+    <!-- rosbag related: replay with rate = 1 speed up, -d = 3 delay 3 seconds-->
+    <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 -d 3 $(arg rosbag)"/>
+
+    <!-- <include file="$(find aloam_velodyne)/launch/kitti_helper_simple.launch" /> -->
+
+</launch>
+
+
