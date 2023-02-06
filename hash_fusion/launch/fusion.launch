@@ -1,0 +1,107 @@
+<?xml version="1.0"?>
+<!--
+Software License Agreement (BSD)
+
+\file      fusion.launch
+\authors   Pengdi Huang <alualu628628@163.com>
+\copyright Copyright (c) 2022, 06, All rights reserved.
+
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WAR-
+RANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, IN-
+DIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<launch>
+
+    <arg name="mf_output_path" default="" />
+
+    <arg name="cloud_in_topic" default="/frame_cloudnormals" />
+
+    <!-- use slam transfer -->
+    <arg name="odom_in_topic" default="/slam_odom" />
+
+    <!-- aloam -->
+    <!-- <arg name="odomintopic" default="/aft_mapped_to_init" /> -->
+
+    <arg name="cloud_out_opic" default="/processed_clouds" />
+
+    <arg name="polygon_out_opic" default="/surrounding_meshes" />
+
+    <arg name="out_cloud_tf_id" default="map"/>
+
+    <arg name="polygon_tf_id" default="map"/>
+
+    <arg name="sample_pc_frame_num"  default="1" />
+
+    <arg name="sample_inp_num"  default="1" />
+
+    <arg name="voxel_cube_size" default="0.2"/> 
+
+    <arg name="voxel_total_size" default="30.0"/> 
+
+    <arg name="mesh_u_period" default="2.0"/> 
+
+    <arg name="use_surfel_fusion" default="true"/>
+
+    <arg name="quick_surfel_fusion" default="true" />
+
+    <arg name="additional_points" default="false"/>
+
+    <arg name="async_reconstruct" default="true"/>
+    
+
+    <!-- frames_fusion node in frames_fusion pkg-->
+    <node name="frames_fusion" pkg="frames_fusion" type="frames_fusion" output="screen">
+
+        <!-- parameters-->  
+
+        <param name="file_output_path" type="string" value="$(arg mf_output_path)"  />
+
+        <!-- define input topic name-->
+        <param name="cloud_in_topic" type="string" value="$(arg cloud_in_topic)"  />
+
+        <param name="odom_in_topic" type="string" value="$(arg odom_in_topic)" />
+
+        <!-- define output topic name-->
+        <param name="cloud_out_topic" type="string" value="$(arg cloud_out_opic)" />
+
+        <param name="polygon_out_topic" type="string" value="$(arg polygon_out_opic)" />
+        
+        <!-- frame id related-->
+        <param name="sample_pcframe_num" type="int" value="$(arg sample_pc_frame_num)" />
+
+        <!-- sampling number-->
+        <param name="sample_inputpoints_num"  type="int" value="$(arg sample_inp_num)" />
+
+        <!-- voxel related-->
+        <param name="voxel_cube_size"  type="double" value="$(arg voxel_cube_size)" />
+
+        <param name="voxel_total_size"  type="double" value="$(arg voxel_total_size)" />
+
+        <!-- mesh related-->
+
+        <param name="mesh_update_period" type="double" value="$(arg mesh_u_period)"/>
+
+        <!-- tf id related-->
+        <param name="outcloud_tf_id" type="string" value="$(arg out_cloud_tf_id)" />
+
+        <param name="polygon_tf_id" type="string" value="$(arg polygon_tf_id)" />
+
+        <!-- data association related -->
+        <param name="use_surfel_fusion" type="bool" value="$(arg use_surfel_fusion)" />
+
+        <param name="additional_points" type="bool" value="$(arg additional_points)" />
+
+        <param name="async_reconstruct" type="bool" value="$(arg async_reconstruct)" />
+
+        <param name="quick_surfel_fusion" type="bool" value="$(arg quick_surfel_fusion)" />
+
+    </node>
+
+
+</launch>
