@@ -89,7 +89,8 @@ int main(int argc, char** argv)
         }
     }
     calib_matrix.row(3) = Eigen::RowVector4d(0, 0, 0, 1);
-    std::cout << calib_matrix << std::endl;
+    Eigen::Matrix4d calib_matrix_inverse = calib_matrix.inverse();
+    std::cout << std::setprecision(15) << calib_matrix << std::endl << calib_matrix_inverse << std::endl;
 
     ros::Rate r(10.0 / publish_delay);
     while (std::getline(timestamp_file, line) && ros::ok())
@@ -255,6 +256,7 @@ int main(int argc, char** argv)
         // transform.block<3,3>(0, 0) = q_transform * gt_pose.topLeftCorner<3,3>();
         // transform.block<3,1>(0, 3) = q_transform * gt_pose.topRightCorner<3,1>();
         // transform.block<1,4>(3, 0) = gt_pose.row(3);
+        // std::cout << transform << std::endl;
         transform = calib_matrix.inverse() * transform.eval() * calib_matrix;
         pcl::transformPointCloud(laser_cloud, laser_cloud, transform);
 

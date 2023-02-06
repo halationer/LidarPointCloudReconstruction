@@ -649,6 +649,7 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 		std::cout << " | " << pNearCloud->size() << std::endl;
 	}
 
+	std::cout << "size: " << pNearCloud->size() << "\t";
 	std::vector<float> temp_feature(pNearCloud->size());
 	PublishPointCloud(*pNearCloud, temp_feature, "/temp_near_cloud");
 
