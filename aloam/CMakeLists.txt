@@ -61,3 +61,6 @@ target_link_libraries(pcdHelper ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 add_executable(kittiHelperWithGt src/kittiHelperWithGt.cpp)
 target_link_libraries(kittiHelperWithGt ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+
+add_executable(kittiHelperSingleTest src/kittiHelperSingleTest.cpp)
+target_link_libraries(kittiHelperSingleTest ${catkin_LIBRARIES} ${PCL_LIBRARIES})
