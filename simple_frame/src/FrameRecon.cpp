@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <pcl/io/ply_io.h>
 #include <thread>
+#include <random>
 
 /*************************************************
 Function: FrameRecon
@@ -714,8 +715,11 @@ void FrameRecon::SamplePoints(const pcl::PointCloud<pcl::PointXYZI> & vCloud, pc
 	//sample by interval number
 	if (bIntervalSamp){
 
-		for (int i = 0; i < vCloud.points.size(); i = i + iSampleNum)
-			vNewCloud.push_back(vCloud.points[i]);
+		// std::uniform_int_distribution <int> irandom(1, iSampleNum);
+		// std::default_random_engine e(time(0));
+		for (int i = 0; i < vCloud.points.size(); i += iSampleNum)
+			// if(irandom(e) == 1)
+				vNewCloud.push_back(vCloud.points[i]);
 
 		//over the function and output	
 		return;

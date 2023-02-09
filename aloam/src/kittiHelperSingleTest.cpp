@@ -60,8 +60,9 @@ void calculate_intensity(PointCloud & laser_cloud) {
             scanID = int((angle + 15) / 2 + 0.5);
             if (scanID > (N_SCANS - 1) || scanID < 0)
             {
-                count--;
-                continue;
+                // count--;
+                // continue;
+                scanID = 0;
             }
         }
         else if (N_SCANS == 32)
@@ -69,8 +70,9 @@ void calculate_intensity(PointCloud & laser_cloud) {
             scanID = int((angle + 92.0/3.0) * 3.0 / 4.0);
             if (scanID > (N_SCANS - 1) || scanID < 0)
             {
-                count--;
-                continue;
+                // count--;
+                // continue;
+                scanID = 0;
             }
         }
         else if (N_SCANS == 64)
@@ -83,8 +85,9 @@ void calculate_intensity(PointCloud & laser_cloud) {
             // use [0 50]  > 50 remove outlies 
             if (angle > 2 || angle < -24.33 || scanID > 50 || scanID < 0)
             {
-                count--;
-                continue;
+                // count--;
+                // continue;
+                scanID = 0;
             }
         }
         else
