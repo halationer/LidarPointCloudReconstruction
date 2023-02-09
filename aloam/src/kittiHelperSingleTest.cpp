@@ -141,6 +141,7 @@ int main(int argc, char** argv)
     // cloud output
     std::string timestamp_path = "fixed/sequences/" + sequence_number + "/times.txt";
     std::ifstream timestamp_file(dataset_folder + timestamp_path, std::ifstream::in);
+    std::cout << "Load " << timestamp_path << " finish..." << std::endl;
 
     bool to_bag;
     n.getParam("to_bag", to_bag);
@@ -149,6 +150,9 @@ int main(int argc, char** argv)
     int publish_delay;
     n.getParam("publish_delay", publish_delay);
     publish_delay = publish_delay <= 0 ? 1 : publish_delay;
+    
+    int bin_name_width;
+    n.getParam("bin_name_width", bin_name_width);
 
     ros::Publisher pub_laser_cloud = n.advertise<sensor_msgs::PointCloud2>("/velodyne_cloud_registered", 2);
 
@@ -156,6 +160,7 @@ int main(int argc, char** argv)
     rosbag::Bag bag_out;
     if (to_bag)
         bag_out.open(output_bag_file, rosbag::bagmode::Write);
+    std::cout << "Load " << output_bag_file << " finish..." << std::endl;
 
     std::string line;
     std::size_t line_num = 0;
@@ -183,7 +188,7 @@ int main(int argc, char** argv)
         // read lidar point cloud
         std::stringstream lidar_data_path;
         lidar_data_path << dataset_folder << "fixed/sequences/" + sequence_number + "/velodyne/" 
-                        << std::setfill('0') << std::setw(6) << line_num << ".bin";
+                        << std::setfill('0') << std::setw(bin_name_width) << line_num << ".bin";
         std::vector<float> lidar_data = read_lidar_data(lidar_data_path.str());
         std::cout << "totally " << lidar_data.size() / 4.0 << " points in this lidar frame \n";
 

@@ -5,6 +5,7 @@
 #include <sstream>
 #include <iomanip>
 #include <pcl/io/ply_io.h>
+#include <thread>
 
 /*************************************************
 Function: FrameRecon
@@ -406,7 +407,11 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 			
 			std::stringstream filename;
 			filename << m_sFileHead << std::setw(4) << std::setfill('0') << m_iReconstructFrameNum << "_pc.ply";
-			pcl::io::savePLYFileASCII(filename.str(), *pRawCloud);
+
+			std::thread tOutputThread([=](string path){
+				pcl::io::savePLYFileASCII(path, *pRawCloud);
+			}, filename.str());
+			tOutputThread.detach();
 		}
 		//*/
 		
@@ -508,10 +513,15 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 				vFullCloud += *m_oExplicitBuilder.m_vAllSectorClouds[sector_index];
 			}
 			pcl::toPCLPointCloud2(vFullCloud, oFullMesh.cloud);
-
+			
 			std::stringstream sOutputPath;
 			sOutputPath << m_sFileHead << std::setw(4) << std::setfill('0') << m_iReconstructFrameNum << "_mesh.ply";
-			pcl::io::savePLYFileBinary(sOutputPath.str(), oFullMesh); 
+
+			std::thread tOutputThread([=](string path){
+				pcl::io::savePLYFileBinary(path, oFullMesh); 
+			}, sOutputPath.str());
+
+			tOutputThread.detach();
 		}
 		
 		//*/

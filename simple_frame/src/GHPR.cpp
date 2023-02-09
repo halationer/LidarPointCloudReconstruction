@@ -492,8 +492,8 @@ std::vector<pcl::Vertices> GHPR::ConstructSurfaceIdxFiltered(const int line_min,
 
 			int nowScanID = m_pTransCloud->points[m_vHullInInputIdx[iOneLocalIdx]].intensity;
 			// std::cout << "now ScanID: " << nowScanID << "\n";
-			if(nowScanID == line_min) bAllZeroLine |= 1 << j;
-			if(nowScanID == line_max) bAllMaxLine |= 1 << j; // 此处需要设置参数以适配雷达类型
+			if(nowScanID <= line_min) bAllZeroLine |= 1 << j;
+			if(nowScanID >= line_max) bAllMaxLine |= 1 << j; // 此处line_min/max是适配雷达类型的参数
 
 			minID = min(nowScanID, minID);
 			maxID = max(nowScanID, maxID);
