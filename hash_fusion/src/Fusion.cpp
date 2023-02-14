@@ -206,18 +206,19 @@ pcl::PointNormal Fusion::NormalFusion(const std::vector<int> & vPointIdx, const 
 
 }
 
-pcl::PointNormal Fusion::NormalFusionWeighted(const std::vector<int> & vPointIdx, pcl::PointCloud<pcl::PointNormal> & vCloudNormal){
-
+pcl::PointNormal Fusion::NormalFusionWeighted(
+	const std::vector<int> & vPointIdx, 
+	pcl::PointCloud<pcl::PointNormal> & vCloudNormal, 
+	const pcl::PointNormal & oBase)
+{
 	//Initialize output
-	pcl::PointNormal oOnePN;
-	oOnePN.x = 0.0f;
-	oOnePN.y = 0.0f;
-	oOnePN.z = 0.0f;
+	pcl::PointNormal oOnePN = oBase;
 	float& normal_distribution_distance = oOnePN.data_c[3];
-	oOnePN.normal_x = 0.0f;
-	oOnePN.normal_y = 0.0f;
-	oOnePN.normal_z = 0.0f;
 	float& all_weight = oOnePN.data_n[3];
+	oOnePN.normal_x *= all_weight;
+	oOnePN.normal_y *= all_weight;
+	oOnePN.normal_z *= all_weight;
+	float fNum = all_weight > 0 ? 1 : 0;
 
 	//linear increase
 	for (int i = 0; i != vPointIdx.size(); ++i){
@@ -236,7 +237,7 @@ pcl::PointNormal Fusion::NormalFusionWeighted(const std::vector<int> & vPointIdx
 
 	if(all_weight == 0.f) return oOnePN;
 	
-	float fNum = float(vPointIdx.size());
+	fNum += vPointIdx.size();
 
 	if (vPointIdx.size()){
 		//take the mean
@@ -267,6 +268,4 @@ pcl::PointNormal Fusion::NormalFusionWeighted(const std::vector<int> & vPointIdx
 	}
 
 	return oOnePN;
-
-
 }

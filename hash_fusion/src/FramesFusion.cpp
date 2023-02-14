@@ -203,6 +203,7 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
  	m_oVoxelRes.x = fCubeSize;
 	m_oVoxelRes.y = fCubeSize;
 	m_oVoxelRes.z = fCubeSize;
+	m_oVoxeler.GetResolution(m_oVoxelRes);
 
 	//use surfel fusion?
 	nodeHandle.param("use_surfel_fusion", m_bSurfelFusion, true);
@@ -386,6 +387,7 @@ void FramesFusion::PublishPointCloud(const pcl::PointCloud<T> & vCloud, const st
 	m_vDebugPublishers[sTopicName].publish(vCloudData);
 }
 template void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointNormal>&, const std::vector<float>&, const std::string);
+template void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ>&, const std::vector<float>&, const std::string);
 
 
 /*************************************************
@@ -604,7 +606,6 @@ void FramesFusion::FusionNormalBackToPoint(const pcl::PointCloud<pcl::PointNorma
 	}
 }
 
-// XXX
 /*************************************************
 Function: SurroundModeling
 Description: Build surface models based on surrounding points with computed normals
@@ -636,20 +637,21 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	m_mPCNMutex.unlock();
 
 	// 点云抽稀
-	// int new_end = 0;
-	// if(m_iSampleInPNum > 1 && pProcessedCloud->size() > 1e5) {
-	// 	int past_point_num = point_num;
-	// 	std::cout << "sample: " << m_iSampleInPNum << " | " << pProcessedCloud->size();
-	// 	for(int i = 0; i < pProcessedCloud->size(); i+=m_iSampleInPNum) {
-	// 		swap(pProcessedCloud->at(i), pProcessedCloud->at(new_end++));
-	// 		if(i < past_point_num) point_num = new_end;
-	// 	}
-	// 	pProcessedCloud->erase(pProcessedCloud->begin() + new_end, pProcessedCloud->end());
-	// 	std::cout << " | " << pProcessedCloud->size() << std::endl;
-	// }
+	int new_end = 0, point_num = pProcessedCloud->size();
+	if(m_iSampleInPNum > 1 && point_num > 1e5) {
+		int past_point_num = point_num;
+		std::cout << "sample: " << m_iSampleInPNum << " | " << pProcessedCloud->size();
+		for(int i = 0; i < pProcessedCloud->size(); i+=m_iSampleInPNum) {
+			swap(pProcessedCloud->at(i), pProcessedCloud->at(new_end++));
+			if(i < past_point_num) point_num = new_end;
+		}
+		pProcessedCloud->erase(pProcessedCloud->begin() + new_end, pProcessedCloud->end());
+		std::cout << " | " << pProcessedCloud->size() << std::endl;
+	}
 
 	std::vector<float> temp_feature(pProcessedCloud->size());
 	PublishPointCloud(*pProcessedCloud, temp_feature, "/temp_near_cloud");
+
 
 	///* output nearby cloud
 	if(m_bOutputFiles) {
@@ -679,47 +681,53 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	//*/
 
 	//******voxelization********
-	//set voxelization parameters based on point cloud extent
-	Voxelization oVoxeler(*pProcessedCloud);
-
-	//set the number of voxels
-	//set voxel resolution or voxel size
-	//oVoxeler.GetIntervalNum(100,100,100);
-	oVoxeler.GetResolution(m_oVoxelRes);
-
-	//voxelize the space
-	oVoxeler.VoxelizeSpace();
-
 	//using signed distance
 	SignedDistance oSDer;
 
 	//compute signed distance based on centroids and its normals within voxels
-	std::vector<float> vSignedDis = oSDer.NormalBasedGlance(pProcessedCloud, oVoxeler);
+	std::unordered_map<HashPos, float, HashFunc> vSignedDis = oSDer.NormalBasedGlance(pProcessedCloud, m_oVoxeler);
+
+	// debug
+	// pcl::PointCloud<pcl::PointNormal> vVolumeCloud;
+	// std::vector<float> vVoxelValue;
+	// for(auto && [oPos, oPoint] : m_oVoxeler.m_vVolume) {
+	// 	vVolumeCloud.push_back(oPoint);
+	// 	vVoxelValue.push_back(oPoint.data_n[3] > 1 ? 0.3f : 0.0f);
+	// }
+	// PublishPointCloud(vVolumeCloud, vVoxelValue, "/temp_voxel_cloud");
+
+	// pcl::PointCloud<pcl::PointXYZ> vSignedDisCloud;
+	// std::vector<float> vSignedDisValue;
+	// for(auto && [oPos, fSDF] : vSignedDis) {
+	// 	vSignedDisCloud.push_back(m_oVoxeler.HashPosTo3DPos(oPos));
+	// 	vSignedDisValue.push_back(fSDF > 0 ? 0.5f : 0.0f);
+	// } 
+	// PublishPointCloud(vSignedDisCloud, vSignedDisValue, "/temp_sdf_cloud");
 
 	//传回去
-	m_mPCNMutex.lock();
-	FusionNormalBackToPoint(*pProcessedCloud, m_vMapPCN, 0, point_num);
-	FusionNormalBackToPoint(*pProcessedCloud, m_vMapPCNAdded, point_num + 1, pProcessedCloud->size() - point_num);
-	m_mPCNMutex.unlock();
+	// m_mPCNMutex.lock();
+	// FusionNormalBackToPoint(*pProcessedCloud, m_vMapPCN, 0, point_num);
+	// FusionNormalBackToPoint(*pProcessedCloud, m_vMapPCNAdded, point_num + 1, pProcessedCloud->size() - point_num);
+	// m_mPCNMutex.unlock();
 
 	//record non-empty voxels
-	std::vector<bool> vVoxelStatus;
-	oVoxeler.OutputNonEmptyVoxels(vVoxelStatus);
+	// std::vector<bool> vVoxelStatus;
+	// oVoxeler.OutputNonEmptyVoxels(vVoxelStatus);
 
 	//clear accelerated data
-	oVoxeler.ClearMiddleData();
+	// oVoxeler.ClearMiddleData();
 
 	//******construction********
 	//marching cuber
 	CIsoSurface<float> oMarchingCuber;
 	//get surface mesh based on voxel related algorithm
-	oMarchingCuber.GenerateSurface(vSignedDis, vVoxelStatus, 0,
-			                       oVoxeler.m_iFinalVoxelNum.ixnum - 1, oVoxeler.m_iFinalVoxelNum.iynum - 1, oVoxeler.m_iFinalVoxelNum.iznum - 1, 
-			                       oVoxeler.m_oVoxelLength.x, oVoxeler.m_oVoxelLength.y, oVoxeler.m_oVoxelLength.z);
+	oMarchingCuber.GenerateSurface(vSignedDis, oSDer.m_vVolumeCopy, 0,
+			                       m_oVoxeler.m_oVoxelLength.x, m_oVoxeler.m_oVoxelLength.y, m_oVoxeler.m_oVoxelLength.z);
 
 	//move the mesh position to the actual starting point
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
-	oMarchingCuber.OutputMesh(oVoxeler.m_oOriCorner, oCBModel, pMCResultCloud);
+	pcl::PointXYZ oOffset(0, 0, 0);
+	oMarchingCuber.OutputMesh(oOffset, oCBModel, pMCResultCloud);
 	
 	///* output result mesh
 	if(m_bOutputFiles) {
@@ -744,198 +752,6 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 
 }
 
-// this is the main fusion function
-/*	input 
-	  @param oBasedP 视点 
-	output
-	  @param oCBModel 输出网格
-*/
-void FramesFusion::SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId) {
-
-	//output mesh
-	//oCBModel.cloud.clear();
-	oCBModel.polygons.clear();
-
-	//get the target points for construction
-	pcl::PointCloud<pcl::PointNormal>::Ptr pNearCloud(new pcl::PointCloud<pcl::PointNormal>);
-	pcl::PointCloud<pcl::PointNormal>::Ptr pNearCloudAdded(new pcl::PointCloud<pcl::PointNormal>);
-
-	//based on received point cloud and normal vector
-	//get the target point cloud to be modeled
-	NearbyClouds(m_vMapPCN, oBasedP, *pNearCloud, m_fNearLengths);
-	int raw_point_num = pNearCloud->size();
-	NearbyClouds(m_vMapPCNTrueAdded, oBasedP, *pNearCloud, m_fNearLengths);
-	ExtractNearbyClouds(m_vMapPCNAdded, oBasedP, *pNearCloudAdded, m_fNearLengths);
-	// NearbyClouds(m_vMapPCNAdded, oBasedP, *pNearCloudAdded, m_fNearLengths);
-
-	///* output nearby cloud
-	if(m_bOutputFiles) {
-
-		std::stringstream filename;
-		filename << m_sFileHead << std::setw(4) << std::setfill('0') << iFrameId << "_pc.ply";
-		pcl::io::savePLYFileASCII(filename.str(), *pNearCloud);
-	}
-	//*/
-
-	//******voxelization********
-	//set voxelization parameters based on point cloud extent
-	Voxelization oVoxeler(*pNearCloud);
-	
-	//set the number of voxels
-	//set voxel resolution or voxel size
-	//oVoxeler.GetIntervalNum(100,100,100);
-	oVoxeler.GetResolution(m_oVoxelRes);
-
-	//voxelize the space
-	oVoxeler.VoxelizeSpace();
-
-	//using signed distance
-	SignedDistance oSDer;
-
-	//compute signed distance based on centroids and its normals within voxels
-	std::vector<float> vSignedDis = oSDer.NormalBasedGlance(pNearCloud, oVoxeler);
-	//record non-empty voxels
-	std::vector<bool> vVoxelStatus;
-	oVoxeler.OutputNonEmptyVoxels(vVoxelStatus);
-
-	// 注意，步骤到此，oVoxeler中已经记录了voxel中包含原始点云的信息 m_vVoxelPointIdx，以及融合后的点的信息 m_pVoxelNormals
-	// 除此之外，还有 vSignedDis 以及 vVoxel Status(可以用 m_vVoxelPointIdx[i].size()代替) 等信息； 
-	// pNearCloud 的法向量也已经被更新（此时只是用于重建的副本点云被更新，未涉及到真正的回传）
-	// 对补全点的正确性进行判断
-	std::vector<int> vTruePointCloudIndices;
-	CheckAddedPointWithOcclusion(*pNearCloudAdded, oVoxeler, oBasedP, vTruePointCloudIndices);
-	std::cout << std::format_blue << "fusion true added point size: " << vTruePointCloudIndices.size()
-			  << "\t and the all added point size is: " << pNearCloudAdded->size() << std::format_white << std::endl;
-	for(int i = 0; i < vTruePointCloudIndices.size(); ++i) {
-		m_vMapPCNTrueAdded.push_back(pNearCloudAdded->points[vTruePointCloudIndices[i]]);
-	}
-
-	/**TODO: 存在的问题
-	 * 1. 射线相交判断不准确，导致遗漏大量点
-	 * 2. 上一步经过确认的点与原来的点不能保持坐标对应查询
-	 * 3. 补全步骤延迟过大
-	 */
-	
-
-	//传回去
-	FusionNormalBackToPoint(*pNearCloud, m_vMapPCN, 0, raw_point_num);
-	// FusionNormalBackToPoint(*pNearCloud, m_vMapPCNAdded, raw_point_num + 1, pNearCloud->size() - raw_point_num);
-
-	//clear accelerated data
-	oVoxeler.ClearMiddleData();
-
-	//******construction********
-	//marching cuber
-	CIsoSurface<float> oMarchingCuber;
-	//get surface mesh based on voxel related algorithm
-	oMarchingCuber.GenerateSurface(vSignedDis, vVoxelStatus, 0,
-			                       oVoxeler.m_iFinalVoxelNum.ixnum - 1, oVoxeler.m_iFinalVoxelNum.iynum - 1, oVoxeler.m_iFinalVoxelNum.iznum - 1, 
-			                       oVoxeler.m_oVoxelLength.x, oVoxeler.m_oVoxelLength.y, oVoxeler.m_oVoxelLength.z);
-
-	//move the mesh position to the actual starting point
-	pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
-	oMarchingCuber.OutputMesh(oVoxeler.m_oOriCorner, oCBModel, pMCResultCloud);
-
-	///* output result mesh
-	if(m_bOutputFiles) {
-
-		std::stringstream sOutputPath;
-		sOutputPath << m_sFileHead << std::setw(4) << std::setfill('0') << iFrameId << "_mesh.ply";
-		pcl::io::savePLYFileBinary(sOutputPath.str(), oCBModel);
-	}
-	//*/
-	
-	// //new a mesh operation object for re-order the triangle vertex，in order to make the adjacency triangles face to the same direction
-	// MeshOperation oReOrder;
-
-	// //compute the normal vector of each face for its centerpoint
-	// //the normal vector will be facing away from the viewpoint
-	// Eigen::MatrixXf oMCMatNormal;
-	// Eigen::VectorXf vMCfDParam;
-
-	// //note a bug releases
-	// //sometimes the triangular generated by the CB algorithm has two same vertices but does not affect the result
-	// oReOrder.ComputeAllFaceParams(oBasedP, *pMCResultCloud, oCBModel.polygons, oMCMatNormal, vMCfDParam);
-}
-
-// New Fusion Function
-void FramesFusion::SurroundModelingOnlyCheckOcclusion(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId) {
-
-	//oCBModel.cloud.clear();
-	oCBModel.polygons.clear();
-
-	//get the target points for construction
-	pcl::PointCloud<pcl::PointNormal>::Ptr pNearCloud(new pcl::PointCloud<pcl::PointNormal>);
-	pcl::PointCloud<pcl::PointNormal>::Ptr pNearCloudAdded(new pcl::PointCloud<pcl::PointNormal>);
-	pcl::PointCloud<pcl::PointNormal>::Ptr pNearTrueAdded(new pcl::PointCloud<pcl::PointNormal>);
-
-	//based on received point cloud and normal vector
-	//get the target point cloud to be modeled
-	NearbyClouds(m_vMapPCN, oBasedP, *pNearCloud, m_fNearLengths);
-	NearbyClouds(m_vMapPCNAdded, oBasedP, *pNearCloudAdded, m_fNearLengths);
-
-	//******voxelization********
-	//set voxelization parameters based on point cloud extent
-	Voxelization oVoxeler(*pNearCloud);
-	
-	//set the number of voxels
-	//set voxel resolution or voxel size
-	//oVoxeler.GetIntervalNum(100,100,100);
-	oVoxeler.GetResolution(m_oVoxelRes);
-
-	//voxelize the space
-	oVoxeler.VoxelizeSpace();
-
-	//using signed distance
-	SignedDistance oSDer;
-
-	//compute signed distance based on centroids and its normals within voxels
-	std::vector<float> vSignedDis = oSDer.NormalBasedGlance(pNearCloud, oVoxeler);
-	// 注意，步骤到此，oVoxeler中已经记录了voxel中包含原始点云的信息 m_vVoxelPointIdx，以及融合后的点的信息 m_pVoxelNormals
-	// 除此之外，还有 vSignedDis 以及 vVoxel Status(可以用 m_vVoxelPointIdx[i].size()代替) 等信息； 
-	// pNearCloud 的法向量也已经被更新（此时只是用于重建的副本点云被更新，未涉及到真正的回传）
-	// 对补全点的正确性进行判断
-	std::vector<int> vTruePointCloudIndices;
-	CheckAddedPointWithOcclusion(*pNearCloudAdded, oVoxeler, oBasedP, vTruePointCloudIndices);
-	std::cout << std::format_blue << "fusion true added point size: " << vTruePointCloudIndices.size()
-			  << "\t and the all added point size is: " << pNearCloudAdded->size() << std::format_white << std::endl;
-	for(int i = 0; i < vTruePointCloudIndices.size(); ++i) {
-		pNearTrueAdded->push_back(pNearCloudAdded->points[vTruePointCloudIndices[i]]);
-	}
-
-	// add new points to the pointset and record
-	int raw_point_num = pNearCloud->size();
-	*pNearCloud += *pNearTrueAdded;
-
-	// 第二次体素化
-	Voxelization oVoxelerFixed(*pNearCloud);
-	oVoxelerFixed.GetResolution(m_oVoxelRes);
-	oVoxelerFixed.VoxelizeSpace();
-	std::vector<float> vSignedDisFixed = oSDer.NormalBasedGlance(pNearCloud, oVoxelerFixed);
-	//record non-empty voxels
-	std::vector<bool> vVoxelStatus;
-	oVoxelerFixed.OutputNonEmptyVoxels(vVoxelStatus);
-
-	//传回去
-	// FusionNormalBackToPoint(*pNearCloud, m_vMapPCN, 0, raw_point_num);
-	// FusionNormalBackToPoint(*pNearCloud, m_vMapPCNAdded, raw_point_num + 1, pNearCloud->size() - raw_point_num);
-
-	//clear accelerated data
-	oVoxeler.ClearMiddleData();
-	oVoxelerFixed.ClearMiddleData();
-
-	//******construction********
-	//marching cuber
-	CIsoSurface<float> oMarchingCuber;
-	//get surface mesh based on voxel related algorithm
-	oMarchingCuber.GenerateSurface(vSignedDisFixed, vVoxelStatus, 0,
-			                       oVoxelerFixed.m_iFinalVoxelNum.ixnum - 1, oVoxelerFixed.m_iFinalVoxelNum.iynum - 1, oVoxelerFixed.m_iFinalVoxelNum.iznum - 1, 
-			                       oVoxelerFixed.m_oVoxelLength.x, oVoxelerFixed.m_oVoxelLength.y, oVoxelerFixed.m_oVoxelLength.z);
-
-	//move the mesh position to the actual starting point
-	pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
-	oMarchingCuber.OutputMesh(oVoxelerFixed.m_oOriCorner, oCBModel, pMCResultCloud);
-}
 
 /*************************************************
 Function: HandleRightLaser
@@ -1020,7 +836,7 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 
 		//merge one frame data
 		// m_vMapPCN += *pFramePN;
-		m_vNewPoints += *pFramePN;
+		m_vNewPoints += *pFramePN; //
 	}
 
 	// output point cloud with (depth & view) confidence
@@ -1150,9 +966,10 @@ void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 	// Mesh Generate
 	clock_t start_time = clock();
 
-	if(!m_bSurfelFusion && m_bUseAdditionalPoints) 
-		SurroundModelingWithPointProcessing(oOdomPoint.oLocation, oNearbyMeshes, m_iReconstructFrameNum);
-	else SurroundModeling(oOdomPoint.oLocation, oNearbyMeshes, m_iReconstructFrameNum);
+	// if(!m_bSurfelFusion && m_bUseAdditionalPoints) 
+	// 	SurroundModelingWithPointProcessing(oOdomPoint.oLocation, oNearbyMeshes, m_iReconstructFrameNum);
+	// else 
+	SurroundModeling(oOdomPoint.oLocation, oNearbyMeshes, m_iReconstructFrameNum);
 	clock_t frames_fusion_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
 
 	++m_iReconstructFrameNum;
@@ -1166,9 +983,9 @@ void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 	//output the nearby surfaces
 	PublishMeshs(oNearbyMeshes);
 
-	auto vAllCloud = AllCloud(m_vMapPCN);
-	std::cout << "### cloud_size: " << vAllCloud->size() << " ###" << std::endl; 
-	PublishPointCloud(*vAllCloud);
+	// auto vAllCloud = AllCloud(m_vMapPCN);
+	// std::cout << "### cloud_size: " << vAllCloud->size() << " ###" << std::endl; 
+	// PublishPointCloud(*vAllCloud);
 }
 
 void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory) {
@@ -1226,9 +1043,10 @@ void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory
 		struct timeval start;
 		gettimeofday(&start, NULL);
 
-		if(!m_bSurfelFusion && m_bUseAdditionalPoints) 
-			SurroundModelingWithPointProcessing(oOdomPoint.oLocation, oNearbyMeshes, now_frame_num);
-		else SurroundModeling(oOdomPoint.oLocation, oNearbyMeshes, now_frame_num);
+		// if(!m_bSurfelFusion && m_bUseAdditionalPoints) 
+		// 	SurroundModelingWithPointProcessing(oOdomPoint.oLocation, oNearbyMeshes, now_frame_num);
+		// else 
+		SurroundModeling(oOdomPoint.oLocation, oNearbyMeshes, now_frame_num);
 
 		struct timeval end;
 		gettimeofday(&end,NULL);
@@ -1359,135 +1177,6 @@ void FramesFusion::OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, c
 
 }
 
-void FramesFusion::CheckAddedPointWithOcclusion(const pcl::PointCloud<pcl::PointNormal> & vAddedCloud, Voxelization & oVoxeler, 
-												const pcl::PointXYZ & oViewPoint, std::vector<int> & vTruePointIndices) {
-	
-	auto MoveToNextVoxel = [&oVoxeler](Eigen::Vector3f& point, const Eigen::Vector3f& rayDirection) {		
-		/** 射线与AABB 相交 **/
-
-		IndexinAxis oVoxelPositon;
-		int iVoxelIndex = oVoxeler.PointBelongVoxel(point, oVoxelPositon);
-
-		std::vector<int> vCornerIdxs;
-		oVoxeler.CornerIdxs(oVoxelPositon, vCornerIdxs);
-		pcl::PointXYZ oMinCorner = oVoxeler.m_pCornerCloud->points[vCornerIdxs.front()];
-		pcl::PointXYZ oMaxCorner = oVoxeler.m_pCornerCloud->points[vCornerIdxs.back()];
-		
-		Eigen::Vector3f oEigenMin(oMinCorner.x, oMinCorner.y, oMinCorner.z);
-		Eigen::Vector3f oEigenMax(oMaxCorner.x, oMaxCorner.y, oMaxCorner.z);
-
-		// border judge
-		bool bPointInBox = (Eigen::Vector3f(oEigenMin.array().min(point.array())) == oEigenMin);
-		bPointInBox = bPointInBox && (Eigen::Vector3f(oEigenMax.array().max(point.array())) == oEigenMax);
-		// if(bPointInBox) std::cout << "true" << std::endl;
-		// else std::cout << std::format_red << "false" << std::format_white << std::endl;
-		if(!bPointInBox) return -1;
-
-		Eigen::Vector3f oLenMin = (oEigenMin.array() - point.array()) / rayDirection.array();
-		Eigen::Vector3f oLenMax = (oEigenMax.array() - point.array()) / rayDirection.array();
-
-		float fIntersectionLen = 1e10;
-		if(oLenMin.x() > 0 && oLenMin.x() < fIntersectionLen) fIntersectionLen = oLenMin.x();
-		if(oLenMin.y() > 0 && oLenMin.y() < fIntersectionLen) fIntersectionLen = oLenMin.y();
-		if(oLenMin.z() > 0 && oLenMin.z() < fIntersectionLen) fIntersectionLen = oLenMin.z();
-		if(oLenMax.x() > 0 && oLenMax.x() < fIntersectionLen) fIntersectionLen = oLenMax.x();
-		if(oLenMax.y() > 0 && oLenMax.y() < fIntersectionLen) fIntersectionLen = oLenMax.y();
-		if(oLenMax.z() > 0 && oLenMax.z() < fIntersectionLen) fIntersectionLen = oLenMax.z();
-
-		if(fIntersectionLen == 1e10) {
-			
-			std::cout << "find false: \n"
-					  << "     len:       " << oLenMin.transpose() << "\t" << oLenMax.transpose() << "\n"
-					  << "     corner:    " << oEigenMin.transpose() << "\t" << oEigenMax.transpose() << "\n"
-					  << "     point,ray: " << point.transpose() << "\t" << rayDirection.transpose() << std::endl;
-			point += rayDirection;	/** 固定长度采样 **/
-		}
-		else {
-			
-			point += rayDirection * (fIntersectionLen + 0.001);
-		}
-		
-
-		IndexinAxis oVoxelPositionNext;
-		int iVoxelIndexNext = oVoxeler.PointBelongVoxel(point, oVoxelPositionNext);
-		if(oVoxeler.OutOfBorder(oVoxelPositionNext)) return -1;
-		return iVoxelIndexNext;
-	};
-
-	Eigen::Vector3f oStartPoint(oViewPoint.x, oViewPoint.y, oViewPoint.z);
-
-	//对点云进行随机采样(弃用)
-	// std::default_random_engine oRandomEngine(time(0));
-	// uniform_int_distribution<int> oRandomIntGenerator(1, 5);
-
-	//跳跃采样法
-	constexpr int iJumpStep = 5;
-	for(int i = 0; i < vAddedCloud.size(); i += iJumpStep) {
-
-		Eigen::Vector3f oRayDirection;
-		oRayDirection.x() = vAddedCloud[i].x - oViewPoint.x;
-		oRayDirection.y() = vAddedCloud[i].y - oViewPoint.y;
-		oRayDirection.z() = vAddedCloud[i].z - oViewPoint.z;
-		// float fAddedPointStep = oRayDirection.norm() / oVoxeler.m_oVoxelLength.x;
-
-		oRayDirection.normalize();
-		// oRayDirection *= oVoxeler.m_oVoxelLength.x;
-
-		Eigen::Vector3f oNowPoint(oStartPoint);
-		int iVoxelIndex = MoveToNextVoxel(oNowPoint, oRayDirection);
-		// int iNowStep = 1;
-		bool bIsTruePoint = true;
-
-		while(iVoxelIndex != -1) {
-
-			bool bVoxelHasPoint = oVoxeler.m_vVoxelPointIdx[iVoxelIndex].size();
-
-			if(bVoxelHasPoint) {
-
-				pcl::PointNormal oPatch = oVoxeler.m_pVoxelNormals->points[iVoxelIndex];
-
-				//计算射线是否与平面相交
-				Eigen::Vector3f oPatchPoint(oPatch.x, oPatch.y, oPatch.z);
-				Eigen::Vector3f oPatchNormal(oPatch.normal_x, oPatch.normal_y, oPatch.normal_z);
-
-				Eigen::Vector3f oIntersectPoint = ((oPatchPoint - oNowPoint).dot(oPatchNormal) / oRayDirection.dot(oPatchNormal)) * oRayDirection + oNowPoint;
-
-				bIsTruePoint = !((oIntersectPoint - oPatchPoint).norm() * 2 < oVoxeler.m_oVoxelLength.x);
-
-				if(!bIsTruePoint) break;
-
-				// if(fabs(fAddedPointStep - iNowStep) < 1.5) { //added_point close to voxel
-				// 	bIsTruePoint = true;
-				// 	break;
-				// }
-
-				// if(fAddedPointStep < iNowStep) { // added_point occlude the voxel
-					
-				// 	bIsTruePoint = false;
-				// 	break;
-				// }
-				// else { // voxel occlude the added_point
-
-				// 	bIsTruePoint = false;
-				// 	break;
-				// }
-			}
-
-			iVoxelIndex = MoveToNextVoxel(oNowPoint, oRayDirection);
-			// ++iNowStep;
-		}
-
-		//只要跳跃采样点通过计算测试成功，则被跳跃的点也一并加入集合之中，视为正确的点（局部性原理）
-		if(bIsTruePoint) {
-
-			for(int j = 0; j < iJumpStep && (i + j) < vAddedCloud.size(); ++j) {
-				vTruePointIndices.push_back(i + j);
-			}
-
-			// vTruePointIndices.push_back(i);
-		}
-	}
-}
 
 /** 基于反投影的点云融合
    @param 	pcl::PointNormal 					oLidarPos - m_oCurrentViewPoint 雷达视点的位置

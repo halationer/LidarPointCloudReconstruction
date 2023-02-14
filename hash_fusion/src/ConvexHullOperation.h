@@ -7,6 +7,8 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/kdtree/kdtree.h>
 
+#include "HashVoxeler.h"
+
 //The plane general formula is Ax + By + Cz + D = 0, where (A, B, C)is the normal vector of the plane is
 //and D is the offset from coordinate origin
 //oNormal - the normal vector (A, B, C)
@@ -114,6 +116,9 @@ public:
 	//Calculate equation parameters for all faces with a given base point (reference)
 	void ComputeAllFaceParams(const pcl::PointCloud<pcl::PointNormal> & vPNormals, std::vector<FacePara> & vFaceParams);
 
+	//Calculate equation parameters for all faces with a given base point (reference)
+	void ComputeAllFaceParams(const HashVoxeler::HashVolume & vVolume, std::unordered_map<HashPos, FacePara, HashFunc> & vFaceParams);
+
 	//compute face params in two space
 	void FaceParamInTwoSpace(const pcl::PointCloud<pcl::PointXYZ> & vConvertVertices, const std::vector<pcl::Vertices> & vConvertMeshIdxs,
 		                     const pcl::PointCloud<pcl::PointXYZ> & vEuclidVertices, const std::vector<pcl::Vertices> & vEuclidMeshIdxs);
@@ -183,13 +188,13 @@ private:
 //int main(){
 //
 //
-//	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);//Ô­Ê¼pcdµãÔÆ
+//	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);//Ô­Ê¼pcdï¿½ï¿½ï¿½ï¿½
 //	pcl::PointCloud<pcl::PointXYZ>::Ptr pQuerycloud(new pcl::PointCloud<pcl::PointXYZ>);
-//	std::vector<Point3D> point3d;//Point3DÄ¿±êµÄÌØÕ÷¼ÆËãµãÔÆ
-//	//¶ÁÈ¡µãÔÆÊý¾Ý
+//	std::vector<Point3D> point3d;//Point3DÄ¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//	//ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 //	HPDpointclouddataread("bunny.las", cloud, point3d, 1);
 //	std::vector<Point3D> oripoint3d(point3d);
-//	//ÉèÖÃÊÓµã;
+//	//ï¿½ï¿½ï¿½ï¿½ï¿½Óµï¿½;
 //	pcl::PointXYZ oViewPoint;
 //	//x 0.535947 y  0.62239 z 0.535947 bunny
 //	//x 0.457275 y  0.500000 z 1.814216 Cassette.las
@@ -197,9 +202,9 @@ private:
 //	oViewPoint.x = 0.535947;
 //	oViewPoint.y = 0.62239;
 //	oViewPoint.z = 0.535947;
-//	//³õÊ¼»¯HPRÀà
+//	//ï¿½ï¿½Ê¼ï¿½ï¿½HPRï¿½ï¿½
 //	GHPR hpdhpr(oViewPoint, 3.6);
-//	//ÉèÖÃÕÚµ²Ë÷Òý
+//	//ï¿½ï¿½ï¿½ï¿½ï¿½Úµï¿½ï¿½ï¿½ï¿½ï¿½
 //	std::vector<int> occindices;
 //	hpdhpr.Compute(cloud, false);
 //
@@ -220,11 +225,11 @@ private:
 //	pcl::PointCloud<pcl::Normal>::Ptr pFaceNormal(new pcl::PointCloud<pcl::Normal>);
 //	oConvexHullOPer.GetPCLNormal(pFaceNormal);
 //	//center of each face
-//	pcl::PointCloud<pcl::PointXYZ>::Ptr pCenterCloud(new pcl::PointCloud<pcl::PointXYZ>);//Ô­Ê¼pcdµãÔÆ
+//	pcl::PointCloud<pcl::PointXYZ>::Ptr pCenterCloud(new pcl::PointCloud<pcl::PointXYZ>);//Ô­Ê¼pcdï¿½ï¿½ï¿½ï¿½
 //	oConvexHullOPer.ComputeCenterPoint(*hpdhpr.m_pHullVertices, hpdhpr.m_vHullPolygonIdxs, *pCenterCloud);
 //
 //
-//	//´°¿Ú¿ªÆô
+//	//ï¿½ï¿½ï¿½Ú¿ï¿½ï¿½ï¿½
 //	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 //	HpdDisplay hpdisplay;
 //	viewer = hpdisplay.Showsimplecolor(pCenterCloud, "red");

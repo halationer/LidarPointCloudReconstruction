@@ -627,6 +627,34 @@ void ConvexHullOperation::ComputeAllFaceParams(const pcl::PointCloud<pcl::PointN
 }
 
 
+/*=======================================
+ComputeAllFaceParams
+Input: vPNormals - point cloud with a correct normal vector
+Output: vFaceParams - all parameters of the plane equation
+Function: calculate the implicit plane equation where the point with normal vector is given
+========================================*/
+void ConvexHullOperation::ComputeAllFaceParams(const HashVoxeler::HashVolume & vVolume, std::unordered_map<HashPos, FacePara, HashFunc> & vFaceParams) {
+
+ 	//define output
+	vFaceParams.clear();
+
+	//to each face
+	for (auto&& [oPos,oPoint] : vVolume){
+
+		//set point and parameters
+		FacePara oFacePara;
+
+		//the normal vector consistently faces outside the face (different side from reference point)
+		CaculateTriangleNormal(oPoint, oFacePara);
+
+		//get parameters of face in which the nearest point is
+		vFaceParams[oPos] = oFacePara;
+	}
+
+	//parameters have beeb computed
+	bParamFlag = true;
+}
+
 
 /*=======================================
 ComputeAllFaceParams

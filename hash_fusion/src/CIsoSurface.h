@@ -16,16 +16,32 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/Vertices.h>
 #include "Vectors.h"
+#include "HashVoxeler.h"
 
 struct POINT3DID {
 	unsigned int newID;
 	float x, y, z;
 };
 
-typedef std::map<unsigned int, POINT3DID> ID2POINT3DID;
+struct EDGEID {
+	int x, y, z, w;
+	EDGEID(){}
+	EDGEID(int x, int y, int z, int w):x(x),y(y),z(z),w(w){}
+	EDGEID(const EDGEID& id):x(id.x),y(id.y),z(id.z),w(id.w){}
+};
+bool operator == (const EDGEID & a, const EDGEID & b);
+
+struct HashEdgeFunc {
+    size_t operator()(const EDGEID& id) const {
+        return abs(((id.x * 131.1f + id.y) * 131.2f + id.z) * 131.2f + id.w);
+    }
+};
+
+typedef std::unordered_map<EDGEID, POINT3DID, HashEdgeFunc> ID2POINT3DID;
 
 struct TRIANGLE {
 	unsigned int pointID[3];
+	EDGEID edgeID[3];
 };
 
 typedef std::vector<TRIANGLE> TRIANGLEVECTOR;
@@ -38,9 +54,8 @@ public:
 	
 	// Generates the isosurface from the scalar field contained in the
 	// buffer ptScalarField[].
-	void GenerateSurface(const std::vector<T> & ptScalarField, T tIsoLevel, unsigned int nCellsX, unsigned int nCellsY, unsigned int nCellsZ, float fCellLengthX, float fCellLengthY, float fCellLengthZ);
-	//reload
-	void GenerateSurface(const std::vector<T> & ptScalarField, const std::vector<bool> & vNodeStats, T tIsoLevel, unsigned int nCellsX, unsigned int nCellsY, unsigned int nCellsZ, float fCellLengthX, float fCellLengthY, float fCellLengthZ);
+	void GenerateSurface(const std::unordered_map<HashPos, T, HashFunc> & ptScalarField, const HashVoxeler::HashVolume & vVolume, T tIsoLevel, float fCellLengthX, float fCellLengthY, float fCellLengthZ);
+
 
 	// Returns true if a valid surface has been generated.
 	bool IsSurfaceValid();
@@ -89,14 +104,11 @@ public:
 protected:
 
 	// Returns the edge ID.
-	unsigned int GetEdgeID(unsigned int nX, unsigned int nY, unsigned int nZ, unsigned int nEdgeNo);
-
-	// Returns the vertex ID.
-	unsigned int GetVertexID(unsigned int nX, unsigned int nY, unsigned int nZ);
+	EDGEID GetEdgeID(int nX, int nY, int nZ, unsigned int nEdgeNo);
 
 	// Calculates the intersection point of the isosurface with an
 	// edge.
-	POINT3DID CalculateIntersection(unsigned int nX, unsigned int nY, unsigned int nZ, unsigned int nEdgeNo);
+	POINT3DID CalculateIntersection(int nX, int nY, int nZ, unsigned int nEdgeNo);
 
 	// Interpolates between two grid points to produce the point at which
 	// the isosurface intersects an edge.
@@ -109,14 +121,11 @@ protected:
 	// Calculates the normals.
 	void CalculateNormals();
 
-	// No. of cells in x, y, and z directions.
-	unsigned int m_nCellsX, m_nCellsY, m_nCellsZ;
-
 	// Cell length in x, y, and z directions.
 	float m_fCellLengthX, m_fCellLengthY, m_fCellLengthZ;
 
 	// The buffer holding the scalar field.
-	std::vector<T> m_ptScalarField;
+	std::unordered_map<HashPos, T, HashFunc> m_ptScalarField;
 	
 	// The isosurface value.
 	T m_tIsoLevel;

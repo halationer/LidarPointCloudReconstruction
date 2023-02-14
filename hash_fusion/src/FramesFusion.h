@@ -33,6 +33,7 @@
 #include "CIsoSurface.h"
 #include "MeshOperation.h"
 #include "OutputUtils.h"
+#include "HashVoxeler.h"
 
 // Trajectory state data. 
 struct RosTimePoint{
@@ -177,8 +178,7 @@ public:
 
     //build surrounding models
     void SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId);
-    void SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId);
-    void SurroundModelingOnlyCheckOcclusion(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId);
+    // void SurroundModelingWithPointProcessing(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId);
 
     void FusionNormalBackToPoint(const pcl::PointCloud<pcl::PointNormal>& pNearCloud, pcl::PointCloud<pcl::PointNormal> & pRawCloud, int offset, int point_num);
     void FusionNormalBackToPoint(const pcl::PointCloud<pcl::PointNormal>& pNearCloud, CloudVector & pRawCloud, int offset, int point_num);
@@ -203,9 +203,6 @@ public:
 
     //reload, output point cloud with given feature for test
     void OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures, bool bAllRecord = false);
-
-    void CheckAddedPointWithOcclusion(const pcl::PointCloud<pcl::PointNormal> & vAddedCloud, Voxelization & oVoxeler,
-        const pcl::PointXYZ & oViewPoint, std::vector<int> & vTruePointIndices);
 
 private:
 
@@ -282,7 +279,6 @@ private:
     pcl::PointCloud<pcl::PointNormal> m_vMapPCN;
     pcl::PointCloud<pcl::PointNormal> m_vMapPCNAdded;
     pcl::PointCloud<pcl::PointNormal> m_vMapPCNTrueAdded;
-    pcl::PointCloud<pcl::PointNormal> m_vNewPoints;
 
     bool m_bUseAdditionalPoints;
 
@@ -318,6 +314,10 @@ private:
     std::unordered_map<std::string, ros::Publisher> m_vDebugPublishers;
 
     ros::Rate m_OdomLoopRate;
+
+    // add for hash fusion
+    pcl::PointCloud<pcl::PointNormal> m_vNewPoints; //
+    HashVoxeler m_oVoxeler;
 };
 
 #endif
