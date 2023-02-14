@@ -7,6 +7,7 @@
 #include<unordered_map>
 #include<Eigen/Core>
 #include<vector>
+#include<shared_mutex>
 
 //IndexinAxis
 //index value on x, y, z axis
@@ -37,6 +38,9 @@ class HashVoxeler{
 public:
 	typedef std::unordered_map<HashPos, pcl::PointNormal, HashFunc> HashVolume;
 	std::unordered_map<HashPos, pcl::PointXYZ, HashFunc> m_vCorner;
+
+private:
+	mutable std::shared_mutex m_mVolumeLock;
     HashVoxeler::HashVolume m_vVolume;
 
 public:
@@ -46,7 +50,8 @@ public:
 
 	~HashVoxeler();
 
-	// 注：哈希方法需要首先设置分辨率，之后再传入点云，并计算bbox
+	// get volume
+	void GetVolume(HashVoxeler::HashVolume & vVolumeCopy) const;
 
 	// set the resolution of voxel
 	void GetResolution(pcl::PointXYZ & oLength);

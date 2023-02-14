@@ -151,8 +151,6 @@ public:
     //Reads and verifies the ROS parameters.
     bool ReadLaunchParams(ros::NodeHandle & nodeHandle);  
 
-    void SamplePoints(const pcl::PointCloud<pcl::PointXYZ> & vCloud, pcl::PointCloud<pcl::PointXYZ> & vNewCloud, int iSampleNum, bool bIntervalSamp = true);
-
     //*************main function*************
     //handle the ground point clouds topic
     void HandlePointClouds(const sensor_msgs::PointCloud2 & vCloudRosData);
@@ -161,6 +159,13 @@ public:
     void HandleTrajectory(const nav_msgs::Odometry & oTrajectory);
     //multiple thread version
     void HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory);
+
+    // Build surface models based on new points that received from ros
+    void SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFrameId);
+    
+
+////////////
+    void SamplePoints(const pcl::PointCloud<pcl::PointXYZ> & vCloud, pcl::PointCloud<pcl::PointXYZ> & vNewCloud, int iSampleNum, bool bIntervalSamp = true);
 
     //get the nearby point for reconstruction
     void GetNearClouds(float fNearLengths);
@@ -316,6 +321,7 @@ private:
     ros::Rate m_OdomLoopRate;
 
     // add for hash fusion
+    std::mutex m_mNewPointMutex;
     pcl::PointCloud<pcl::PointNormal> m_vNewPoints; //
     HashVoxeler m_oVoxeler;
 };

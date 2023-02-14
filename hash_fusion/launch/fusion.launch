@@ -52,7 +52,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="additional_points" default="false"/>
 
-    <arg name="async_reconstruct" default="false"/>
+    <arg name="async_reconstruct" default="true"/>
     
 
     <!-- frames_fusion node in frames_fusion pkg-->

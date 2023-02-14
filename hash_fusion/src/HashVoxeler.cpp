@@ -21,6 +21,12 @@ HashVoxeler::HashVoxeler() :
 HashVoxeler::~HashVoxeler(){}
 
 
+void HashVoxeler::GetVolume(HashVoxeler::HashVolume & vVolumeCopy) const {
+	
+	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
+	vVolumeCopy = m_vVolume;
+}
+
 /*=======================================
 GetResolution
 Input: oLength - length of each dim of voxel (m)
@@ -59,6 +65,8 @@ Function: put the points into their voxels and fusion
 ========================================*/
 void HashVoxeler::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vCloud) {
 	
+	std::unique_lock<std::shared_mutex> lock(m_mVolumeLock);
+
 	// put points into voxels
     std::unordered_map<HashPos, std::vector<int>, HashFunc> vPointContainer;
 	HashPos oCurrentPos;

@@ -3,9 +3,10 @@
 std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance(pcl::PointCloud<pcl::PointNormal>::Ptr & pCloudNormals, HashVoxeler & oVoxeler){
 
 
-	//****get the nodes that are near the surface****
-	oVoxeler.VoxelizePointsAndFusion(*pCloudNormals); 
-	m_vVolumeCopy = oVoxeler.m_vVolume;
+	//****get the nodes that are near the surface**** 
+	HashVoxeler::HashVolume vTempVolumeCopy;
+	oVoxeler.GetVolume(vTempVolumeCopy);
+	m_vVolumeCopy = vTempVolumeCopy;
 
 	// /*
 	clock_t start_time, conv_time;
@@ -17,7 +18,7 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 	constexpr float conv_fusion_distance_ref1 = 0.95f;
 
 	start_time = clock();
-	for(auto && [oPos, _] : oVoxeler.m_vVolume) {
+	for(auto && [oPos, _] : vTempVolumeCopy) {
 
 		pcl::PointNormal oFusedNormal;
 		float & normal_distribution_distance = oFusedNormal.data_c[3];
@@ -31,9 +32,9 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 
 					const HashPos oCurrentPos(oPos.x + dx, oPos.y + dy, oPos.z + dz);
 
-					if(oVoxeler.m_vVolume.count(oCurrentPos)) {
+					if(vTempVolumeCopy.count(oCurrentPos)) {
 
-						const pcl::PointNormal& oVoxelNormal = oVoxeler.m_vVolume[oCurrentPos];
+						const pcl::PointNormal& oVoxelNormal = vTempVolumeCopy[oCurrentPos];
 						const float& fCurrentWeight = oVoxelNormal.data_n[3];
 
 						// oFusedNormal.x += oVoxelNormal.x;

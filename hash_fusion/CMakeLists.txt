@@ -4,7 +4,7 @@ project(hash_fusion)
 
 ## Compile as C++11
 SET(CMAKE_C_COMPILER g++)
-add_compile_options(-std=c++11)
+add_compile_options(-std=c++17)
 # supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 
