@@ -4,8 +4,9 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 
 
 	//****get the nodes that are near the surface**** 
+	constexpr int iKeepTime = 5;
 	HashVoxeler::HashVolume vTempVolumeCopy;
-	oVoxeler.GetVolume(vTempVolumeCopy);
+	oVoxeler.GetRecentVolume(vTempVolumeCopy, iKeepTime);
 	m_vVolumeCopy = vTempVolumeCopy;
 
 	// /*
@@ -18,7 +19,7 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 	constexpr float conv_fusion_distance_ref1 = 0.95f;
 
 	start_time = clock();
-	for(auto && [oPos, _] : vTempVolumeCopy) {
+	for(auto && [oPos,_] : vTempVolumeCopy) {
 
 		pcl::PointNormal oFusedNormal;
 		float & normal_distribution_distance = oFusedNormal.data_c[3];

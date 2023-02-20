@@ -36,13 +36,13 @@ struct HashFunc {
 class HashVoxeler{
 
 public:
+	int m_iFrameCount;
 	typedef std::unordered_map<HashPos, pcl::PointNormal, HashFunc> HashVolume;
 	std::unordered_map<HashPos, pcl::PointXYZ, HashFunc> m_vCorner;
 
 private:
 	mutable std::shared_mutex m_mVolumeLock;
     HashVoxeler::HashVolume m_vVolume;
-
 public:
 
 	// Constructor and destructor.
@@ -52,6 +52,7 @@ public:
 
 	// get volume
 	void GetVolume(HashVoxeler::HashVolume & vVolumeCopy) const;
+	void GetRecentVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) const;
 
 	// set the resolution of voxel
 	void GetResolution(pcl::PointXYZ & oLength);

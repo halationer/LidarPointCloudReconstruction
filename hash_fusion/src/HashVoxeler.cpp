@@ -14,7 +14,7 @@ std::ostream & operator << (std::ostream & out, const HashPos & pos) {
 HashVoxeler::HashVoxeler() :
 					m_fMinX(FLT_MAX),m_fMinY(FLT_MAX),m_fMinZ(FLT_MAX),
                     m_fMaxX(-FLT_MAX),m_fMaxY(-FLT_MAX),m_fMaxZ(-FLT_MAX),
-					m_fDefault(0.0), m_fExpandNum(1.0),
+					m_fDefault(0.0), m_fExpandNum(1.0),m_iFrameCount(0),
 					m_pCornerCloud(new pcl::PointCloud<pcl::PointXYZ>),
 					m_pVoxelNormals(new pcl::PointCloud<pcl::PointNormal>){}
 
@@ -25,6 +25,16 @@ void HashVoxeler::GetVolume(HashVoxeler::HashVolume & vVolumeCopy) const {
 	
 	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
 	vVolumeCopy = m_vVolume;
+}
+
+
+void HashVoxeler::GetRecentVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) const {
+
+	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
+	vVolumeCopy.clear();
+	for(auto && [oPos, oVoxel] : m_vVolume)
+		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime)
+			vVolumeCopy[oPos] = oVoxel;
 }
 
 /*=======================================
@@ -66,6 +76,7 @@ Function: put the points into their voxels and fusion
 void HashVoxeler::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vCloud) {
 	
 	std::unique_lock<std::shared_mutex> lock(m_mVolumeLock);
+	++m_iFrameCount;
 
 	// put points into voxels
     std::unordered_map<HashPos, std::vector<int>, HashFunc> vPointContainer;
@@ -82,6 +93,8 @@ void HashVoxeler::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vC
 		pcl::PointNormal oBasePoint;
 		if(m_vVolume.count(oPos)) oBasePoint = m_vVolume[oPos];
 		pcl::PointNormal oFusedPoint = oVoxelFusion.NormalFusionWeighted(IndexList, vCloud, oBasePoint);
+		float& fTimeStamp = oFusedPoint.data_c[2];
+		fTimeStamp = m_iFrameCount;
 		m_vVolume[oPos] = oFusedPoint;
 	}
 }
