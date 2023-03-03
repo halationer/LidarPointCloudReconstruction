@@ -46,13 +46,19 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="mesh_u_period" default="2.0"/> 
 
-    <arg name="use_surfel_fusion" default="false"/>
+    <arg name="use_surfel_fusion" default="true"/>
 
-    <arg name="quick_surfel_fusion" default="false" />
+    <arg name="quick_surfel_fusion" default="true" />
 
     <arg name="additional_points" default="false"/>
 
     <arg name="async_reconstruct" default="true"/>
+    
+    <!-- meshing params -->
+    <arg name="keep_time" default="500" />
+    <arg name="conv_dim" default="3" />
+    <arg name="conv_add_point_ref" default="4" />
+    <arg name="conv_distance_ref" default="0.95" />
     
 
     <!-- frames_fusion node in frames_fusion pkg-->
@@ -100,6 +106,15 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <param name="async_reconstruct" type="bool" value="$(arg async_reconstruct)" />
 
         <param name="quick_surfel_fusion" type="bool" value="$(arg quick_surfel_fusion)" />
+
+        <!-- meshing params -->
+        <param name="keep_time" type="int" value="$(arg keep_time)" />
+
+        <param name="conv_dim" type="int" value="$(arg conv_dim)" />
+
+        <param name="conv_add_point_ref" type="int" value="$(arg conv_add_point_ref)" />
+
+        <param name="conv_distance_ref" type="double" value="$(arg conv_distance_ref)" />
 
     </node>
 

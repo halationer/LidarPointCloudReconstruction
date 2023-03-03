@@ -280,7 +280,7 @@ private:
 
     //map point clouds with normals
     //accumulated processed point cloud
-    std::mutex m_mPCNMutex;
+    // std::mutex m_mPCNMutex;
     pcl::PointCloud<pcl::PointNormal> m_vMapPCN;
     pcl::PointCloud<pcl::PointNormal> m_vMapPCNAdded;
     pcl::PointCloud<pcl::PointNormal> m_vMapPCNTrueAdded;
@@ -321,9 +321,15 @@ private:
     ros::Rate m_OdomLoopRate;
 
     // add for hash fusion
-    std::mutex m_mNewPointMutex;
-    pcl::PointCloud<pcl::PointNormal> m_vNewPoints; //
+    // std::mutex m_mNewPointMutex;
+    // pcl::PointCloud<pcl::PointNormal> m_vNewPoints; //
     HashVoxeler m_oVoxeler;
+
+    // meshing params
+	int m_iKeepTime;
+	int m_iConvDim;
+	int m_iConvAddPointNumRef;
+	float m_fConvFusionDistanceRef1;
 };
 
 #endif

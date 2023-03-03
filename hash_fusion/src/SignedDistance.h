@@ -31,12 +31,12 @@ public:
 	
 	HashVoxeler::HashVolume m_vVolumeCopy;
 
-	SignedDistance() { };
+	SignedDistance(int iKeepTime = 50, int iConvDim = 3, int iConvAddPointNumRef = 5, float fConvFusionDistanceRef1 = 0.95f);
 
 	~SignedDistance() { };
 
 	//compute the signed distance based on surfel(point with normal)
-	std::unordered_map<HashPos, float, HashFunc> & NormalBasedGlance(pcl::PointCloud<pcl::PointNormal>::Ptr & pCloudNormals, HashVoxeler & oVoxeler);
+	std::unordered_map<HashPos, float, HashFunc> & NormalBasedGlance(HashVoxeler & oVoxeler);
 
 	//compute the signed distance based on corners to plan in a voxel
 	std::unordered_map<HashPos, float, HashFunc> & PlanDistance(const HashVoxeler::HashVolume & vVolume, const std::unordered_map<HashPos, FacePara, HashFunc> & vNormalPara, const pcl::PointXYZ oVoxelSize);
@@ -47,6 +47,14 @@ public:
 
 	//
 	std::vector<pcl::Vertices> m_vGlanceFaceIdxs;
+
+private:
+
+	int m_iKeepTime;
+	int m_iConvDim;
+	int m_iConvHalfDim;
+	int m_iConvAddPointNumRef;
+	float m_fConvFusionDistanceRef1;
 
 };
 

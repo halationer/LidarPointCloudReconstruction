@@ -53,7 +53,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="samplepcframenum"  default="1" />
 
     <!-- step value in “for” point cloud,  larger means fewer points-->
-    <arg name="sampleinpnum"  default="1" />
+    <arg name="sampleinpnum"  default="4" />
 
     <arg name="sectornum"  default="12" />
 

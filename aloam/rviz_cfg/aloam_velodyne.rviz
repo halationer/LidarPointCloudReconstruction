@@ -28,7 +28,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: AssociatedDebug
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -228,7 +228,7 @@ Visualization Manager:
               Scale: 1
               Value: true
             Value: true
-          Enabled: true
+          Enabled: false
           Keep: 100
           Name: Odometry
           Position Tolerance: 0.10000000149011612
@@ -244,7 +244,7 @@ Visualization Manager:
             Value: Arrow
           Topic: /aft_mapped_to_init
           Unreliable: false
-          Value: true
+          Value: false
       Enabled: true
       Name: SLAM
     - Class: rviz/Group
@@ -254,7 +254,7 @@ Visualization Manager:
           Marker Topic: /frame_meshs
           Name: GHPRMesh
           Namespaces:
-            "": true
+            {}
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -285,7 +285,7 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: true
           Value: false
-      Enabled: true
+      Enabled: false
       Name: SingleFrame
     - Class: rviz/Group
       Displays:
@@ -294,7 +294,7 @@ Visualization Manager:
           Marker Topic: /surrounding_meshes
           Name: CubeMesh
           Namespaces:
-            {}
+            "": true
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -497,7 +497,7 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: true
           Value: false
-      Enabled: false
+      Enabled: true
       Name: FramesFusion
     - Class: rviz/Group
       Displays:
@@ -539,25 +539,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 44.75054168701172
+      Distance: 36.53917694091797
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 7.22142219543457
-        Y: 1.469253420829773
-        Z: -1.0700816346798092e-5
+        X: -3.6274023056030273
+        Y: 4.987544059753418
+        Z: -6.0441161622293293e-5
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.22020462155342102
+      Pitch: 0.4452056288719177
       Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 3.319453477859497
+      Yaw: 1.6289576292037964
     Saved: ~
 Window Geometry:
   Displays:

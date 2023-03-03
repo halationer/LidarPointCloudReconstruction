@@ -2103,6 +2103,7 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 
 		// 计算投影位置和深度
 		double depth = oRefPoint.norm();
+		if(depth < 1e-5) continue;
 		max_depth = max_depth < depth ? depth : max_depth;
 
 		oRefPoint.normalize();
@@ -2112,6 +2113,8 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 		// 将投影结果存储
 		double row = (pitch + 180) * pitch_dim_expand;
 		double col = (yaw   + 180) * yaw_dim_expand;
+		if(int(row) < 0 || int(row) >= pitch_dim || int(col) < 0 || int(col) >= yaw_dim) continue;
+
 		if(depth_image[int(row)][int(col)] > 0)
 			vCurrentFuseIndex[depth_index[int(row)][int(col)]] = true;
 		depth_image[int(row)][int(col)] = depth;
@@ -2181,12 +2184,14 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 		Eigen::Vector3f oRefPoint(oCurrentPoint.x - oLidarPos.x, oCurrentPoint.y - oLidarPos.y, oCurrentPoint.z - oLidarPos.z);
 
 		double depth = oRefPoint.norm();
+		if(depth < 1e-5) continue;
 		oRefPoint.normalize();
 		double yaw = std::atan2((double)oRefPoint.y(), (double)oRefPoint.x()) / M_PI * 180.0;
 		double pitch = std::asin((double)oRefPoint.z()) / M_PI * 180.0;
 		
 		int row = (pitch + 180) * pitch_dim_expand;
 		int col = (yaw   + 180) * yaw_dim_expand;
+		if(row < 0 || row >= pitch_dim || col < 0 || col >= yaw_dim) continue;
 
 		int support_count = 0;
 		int tight_support_count = 0;

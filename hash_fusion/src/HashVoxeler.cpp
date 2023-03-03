@@ -11,14 +11,9 @@ std::ostream & operator << (std::ostream & out, const HashPos & pos) {
 	return out;
 }
 
-HashVoxeler::HashVoxeler() :
-					m_fMinX(FLT_MAX),m_fMinY(FLT_MAX),m_fMinZ(FLT_MAX),
-                    m_fMaxX(-FLT_MAX),m_fMaxY(-FLT_MAX),m_fMaxZ(-FLT_MAX),
-					m_fDefault(0.0), m_fExpandNum(1.0),m_iFrameCount(0),
-					m_pCornerCloud(new pcl::PointCloud<pcl::PointXYZ>),
-					m_pVoxelNormals(new pcl::PointCloud<pcl::PointNormal>){}
+HashVoxeler::HashVoxeler() : m_iFrameCount(0), m_pUpdateStrategy(new StrictStaticStrategy) {}
 
-HashVoxeler::~HashVoxeler(){}
+HashVoxeler::~HashVoxeler() {}
 
 
 void HashVoxeler::GetVolume(HashVoxeler::HashVolume & vVolumeCopy) const {
@@ -27,13 +22,21 @@ void HashVoxeler::GetVolume(HashVoxeler::HashVolume & vVolumeCopy) const {
 	vVolumeCopy = m_vVolume;
 }
 
+void HashVoxeler::GetVolumeCloud(pcl::PointCloud<pcl::PointNormal> & vVolumeCloud) const {
+
+	vVolumeCloud.clear();
+	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
+	for(auto && [_,oVoxelPoint] : m_vVolume)
+		vVolumeCloud.push_back(oVoxelPoint);
+}
+
 
 void HashVoxeler::GetRecentVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) const {
 
 	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
 	vVolumeCopy.clear();
 	for(auto && [oPos, oVoxel] : m_vVolume)
-		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime)
+		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]))
 			vVolumeCopy[oPos] = oVoxel;
 }
 
@@ -43,7 +46,7 @@ Input: oLength - length of each dim of voxel (m)
 Output: m_oVoxelLength - member of the class, record the voxel length info
 Function: Set the resolution of the voxel in 3 dims
 ========================================*/
-void HashVoxeler::GetResolution(pcl::PointXYZ & oLength){
+void HashVoxeler::SetResolution(pcl::PointXYZ & oLength){
 
 	m_oVoxelLength.x = oLength.x;
 	m_oVoxelLength.y = oLength.y;
@@ -66,6 +69,7 @@ void HashVoxeler::PointBelongVoxelPos(const PointType & oPoint, HashPos & oPos) 
 }
 template void HashVoxeler::PointBelongVoxelPos(const pcl::PointXYZ & oPoint, HashPos & oPos);
 template void HashVoxeler::PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oPos);
+
 
 /*=======================================
 VoxelizePoints
@@ -93,11 +97,48 @@ void HashVoxeler::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vC
 		pcl::PointNormal oBasePoint;
 		if(m_vVolume.count(oPos)) oBasePoint = m_vVolume[oPos];
 		pcl::PointNormal oFusedPoint = oVoxelFusion.NormalFusionWeighted(IndexList, vCloud, oBasePoint);
+		float& fConflictTime = oFusedPoint.data_c[1];
+		m_pUpdateStrategy->Support(fConflictTime);
 		float& fTimeStamp = oFusedPoint.data_c[2];
 		fTimeStamp = m_iFrameCount;
 		m_vVolume[oPos] = oFusedPoint;
 	}
 }
+
+
+/*=======================================
+UpdateConflictResult
+Input: vVolumeCloud - the conflict result that calculated by the 'surfel fusion' liked method
+Output: m_vVolume - update the volume
+Function: decrease the confidence of dynamic point and record conflict
+========================================*/
+void HashVoxeler::UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & vVolumeCloud) {
+
+	std::unique_lock<std::shared_mutex> lock(m_mVolumeLock);
+
+	HashPos oPos;
+	for(auto && oVoxelPoint : vVolumeCloud) {
+
+		PointBelongVoxelPos(oVoxelPoint, oPos);
+		const float& fDeconfidence = oVoxelPoint.data_n[3];
+
+		if(fDeconfidence < 0 && m_vVolume.count(oPos)) {
+
+			float& fConflictTime = m_vVolume[oPos].data_c[1];
+			bool bToDelete = m_pUpdateStrategy->Conflict(fConflictTime);
+
+			if(bToDelete) {
+				m_vVolume.erase(oPos);
+			} 
+			else {
+				float& fConfidence = m_vVolume[oPos].data_n[3];
+				fConfidence -= fDeconfidence;
+				if(fConfidence < 0) fConfidence = 0;
+			}
+		}
+	}
+}
+
 
 /*=======================================
 CornerIdxs
@@ -128,11 +169,11 @@ void HashVoxeler::GetCornerPoses(const HashPos & oVoxel, std::vector<HashPos> & 
 	vCornerPoses.emplace_back(oVoxel.x + 1, 	oVoxel.y,	 	oVoxel.z + 1);
 }
 
-void HashVoxeler::HashPosTo3DPos(const HashPos & oCornerPos, const pcl::PointXYZ & oVoxelSize, Eigen::Vector3f & oCorner3DPos) {
+void HashVoxeler::HashPosTo3DPos(const HashPos & oCornerPos, const pcl::PointXYZ & oVoxelLength, Eigen::Vector3f & oCorner3DPos) {
 	
-	oCorner3DPos.x() = oCornerPos.x * oVoxelSize.x;
-	oCorner3DPos.y() = oCornerPos.y * oVoxelSize.y;
-	oCorner3DPos.z() = oCornerPos.z * oVoxelSize.z;
+	oCorner3DPos.x() = oCornerPos.x * oVoxelLength.x;
+	oCorner3DPos.y() = oCornerPos.y * oVoxelLength.y;
+	oCorner3DPos.z() = oCornerPos.z * oVoxelLength.z;
 }
 
 pcl::PointXYZ HashVoxeler::HashPosTo3DPos(const HashPos & oPos) {

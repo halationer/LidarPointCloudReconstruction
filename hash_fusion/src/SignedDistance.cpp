@@ -1,23 +1,36 @@
 ﻿#include"SignedDistance.h"
 
-std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance(pcl::PointCloud<pcl::PointNormal>::Ptr & pCloudNormals, HashVoxeler & oVoxeler){
+
+SignedDistance::SignedDistance(int iKeepTime, int iConvDim, int iConvAddPointNumRef, float fConvFusionDistanceRef1) :
+	m_iKeepTime(iKeepTime), m_iConvDim(iConvDim), m_iConvAddPointNumRef(iConvAddPointNumRef), m_fConvFusionDistanceRef1(fConvFusionDistanceRef1) 
+{ 
+	m_iConvHalfDim = m_iConvDim / 2;
+};
+
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance(HashVoxeler & oVoxeler){
 
 
-	//****get the nodes that are near the surface**** 
-	constexpr int iKeepTime = 5;
+	//****get the nodes that are near the surface****
 	HashVoxeler::HashVolume vTempVolumeCopy;
-	oVoxeler.GetRecentVolume(vTempVolumeCopy, iKeepTime);
+	oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
 	m_vVolumeCopy = vTempVolumeCopy;
+
+	// expand - 效果不好
+	// for(auto && [oPos,oPoint] : vTempVolumeCopy) {		
+	// 	for(int dz = -m_iConvHalfDim; dz <= m_iConvHalfDim; ++dz) {
+	// 	for(int dy = -m_iConvHalfDim; dy <= m_iConvHalfDim; ++dy) {
+	// 	for(int dx = -m_iConvHalfDim; dx <= m_iConvHalfDim; ++dx) {
+
+	// 		const HashPos oCurrentPos(oPos.x + dx, oPos.y + dy, oPos.z + dz);
+	// 		if(!vTempVolumeCopy.count(oCurrentPos)) 
+	// 			vTempVolumeCopy[oPos] = pcl::PointNormal();
+	// 	}}}
+	// }
 
 	// /*
 	clock_t start_time, conv_time;
 
 	// multi-resolution by convolution method
-	constexpr int conv_dim = 3;
-	constexpr int conv_half_dim = conv_dim / 2;
-	constexpr int conv_add_point_num_ref = 5;
-	constexpr float conv_fusion_distance_ref1 = 0.95f;
-
 	start_time = clock();
 	for(auto && [oPos,_] : vTempVolumeCopy) {
 
@@ -27,9 +40,9 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 
 		// start conv
 		int point_count = 0;
-		for(int dz = -conv_half_dim; dz <= conv_half_dim; ++dz) {
-			for(int dy = -conv_half_dim; dy <= conv_half_dim; ++dy) {
-				for(int dx = -conv_half_dim; dx <= conv_half_dim; ++dx) {
+		for(int dz = -m_iConvHalfDim; dz <= m_iConvHalfDim; ++dz) {
+			for(int dy = -m_iConvHalfDim; dy <= m_iConvHalfDim; ++dy) {
+				for(int dx = -m_iConvHalfDim; dx <= m_iConvHalfDim; ++dx) {
 
 					const HashPos oCurrentPos(oPos.x + dx, oPos.y + dy, oPos.z + dz);
 
@@ -37,6 +50,7 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 
 						const pcl::PointNormal& oVoxelNormal = vTempVolumeCopy[oCurrentPos];
 						const float& fCurrentWeight = oVoxelNormal.data_n[3];
+						if(fCurrentWeight == 0) continue;
 
 						// oFusedNormal.x += oVoxelNormal.x;
 						// oFusedNormal.y += oVoxelNormal.y;
@@ -73,15 +87,17 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 			//经过观察发现 all_weight 和 normal_distribution_disance 之间的关系也能得出一些信息： 如果 all_weight 较小，normal_distribution_distance = 1 则说明该4x4的区域只有一个点，很有可能是噪点
 
 			// use min level to update the normal
-			if(normal_distribution_distance > conv_fusion_distance_ref1) {
+			if(normal_distribution_distance > m_fConvFusionDistanceRef1) {
 
 				const HashPos oCurrentPos(oPos.x, oPos.y, oPos.z);
 
 				// copy fused points to octree neighbors
-				if(m_vVolumeCopy.count(oCurrentPos) || point_count >= conv_add_point_num_ref) {
+				if(point_count < 3) {
+					m_vVolumeCopy.erase(oCurrentPos);
+				}
+				else if(m_vVolumeCopy.count(oCurrentPos) || point_count >= m_iConvAddPointNumRef) {
 					
 					pcl::PointNormal& oVoxelNormal = m_vVolumeCopy[oCurrentPos];
-					// pcl::PointNormal& oVoxelNormal = vCompareCopy.at(current_index);
 					oVoxelNormal.x = oFusedNormal.x;
 					oVoxelNormal.y = oFusedNormal.y;
 					oVoxelNormal.z = oFusedNormal.z;
@@ -90,9 +106,6 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 					oVoxelNormal.normal_y = oFusedNormal.normal_y;
 					oVoxelNormal.normal_z = oFusedNormal.normal_z;
 					oVoxelNormal.data_n[3] = all_weight;
-				}
-				else if(point_count <= 3) {
-					m_vVolumeCopy.erase(oCurrentPos);
 				}
 			}
 		}
