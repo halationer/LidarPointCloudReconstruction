@@ -47,7 +47,7 @@ private:
 		point.data-n[3] - confidence */ 
     HashVoxeler::HashVolume m_vVolume;
 
-	std::unique_ptr<VolumeUpdateStrategy> m_pUpdateStrategy;
+	std::shared_ptr<VolumeUpdateStrategy> m_pUpdateStrategy;
 
 public:
 
@@ -63,6 +63,7 @@ public:
 
 	// set the resolution of voxel
 	void SetResolution(pcl::PointXYZ & oLength);
+	void SetStrategy(enum vus eStrategy);
 
 	// transfer the position
 	template<class PointType>

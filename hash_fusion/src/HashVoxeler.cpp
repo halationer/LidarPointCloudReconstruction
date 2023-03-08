@@ -11,7 +11,7 @@ std::ostream & operator << (std::ostream & out, const HashPos & pos) {
 	return out;
 }
 
-HashVoxeler::HashVoxeler() : m_iFrameCount(0), m_pUpdateStrategy(new StrictStaticStrategy) {}
+HashVoxeler::HashVoxeler() : m_iFrameCount(0) {}
 
 HashVoxeler::~HashVoxeler() {}
 
@@ -51,6 +51,11 @@ void HashVoxeler::SetResolution(pcl::PointXYZ & oLength){
 	m_oVoxelLength.x = oLength.x;
 	m_oVoxelLength.y = oLength.y;
 	m_oVoxelLength.z = oLength.z;
+}
+
+void HashVoxeler::SetStrategy(enum vus eStrategy) {
+
+	m_pUpdateStrategy = std::shared_ptr<VolumeUpdateStrategy>(CreateStrategy(eStrategy));	
 }
 
 

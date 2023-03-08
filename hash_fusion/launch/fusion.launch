@@ -59,6 +59,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="conv_dim" default="3" />
     <arg name="conv_add_point_ref" default="4" />
     <arg name="conv_distance_ref" default="0.95" />
+
+    <arg name="strategy_type" default="2"/>
     
 
     <!-- frames_fusion node in frames_fusion pkg-->
@@ -88,6 +90,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <param name="voxel_cube_size"  type="double" value="$(arg voxel_cube_size)" />
 
         <param name="voxel_total_size"  type="double" value="$(arg voxel_total_size)" />
+
+        <param name="strategy_type" type="int" value="$(arg strategy_type)" />
 
         <!-- mesh related-->
 

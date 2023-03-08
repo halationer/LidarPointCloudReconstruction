@@ -205,6 +205,10 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	m_oVoxelRes.z = fCubeSize;
 	m_oVoxeler.SetResolution(m_oVoxelRes);
 
+	int eStrategyType;
+  	nodeHandle.param("strategy_type", eStrategyType, static_cast<int>(eEmptyStrategy));
+	m_oVoxeler.SetStrategy(static_cast<vus>(eStrategyType));
+
 	//use surfel fusion?
 	nodeHandle.param("use_surfel_fusion", m_bSurfelFusion, true);
 	// use additional points for reconstruction?

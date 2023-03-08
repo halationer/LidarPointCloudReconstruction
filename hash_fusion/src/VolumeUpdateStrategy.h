@@ -1,6 +1,12 @@
 #ifndef __VOLUME_UPDATE_STRATEGY__
 #define __VOLUME_UPDATE_STRATEGY__
 
+// strategy maker
+enum vus{
+    eEmptyStrategy = 1, eRealTimeStrategy, eStrictStaticStrategy
+};
+
+// interface class
 class VolumeUpdateStrategy {
 
 // Input :  fUpdateParam - the update param should be processed only by this class
@@ -15,6 +21,8 @@ public:
     // Output : bool - is the point a static point?
     virtual bool IsStatic(const float& fUpdateParam) = 0;
 };
+
+VolumeUpdateStrategy* CreateStrategy(enum vus eStrategy);
 
 //////////////////////////////////////////////////////////
 // Empty strategy means do not remove any dynamic points
