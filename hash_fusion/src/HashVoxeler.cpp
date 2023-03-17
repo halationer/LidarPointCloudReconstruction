@@ -1,6 +1,6 @@
-#include"HashVoxeler.h"
-
+#include "HashVoxeler.h"
 #include "Fusion.h"
+#include "SignedDistance.h"
 
 bool operator == (const HashPos & a, const HashPos & b) {
 	return a.x == b.x && a.y == b.y && a.z == b.z;
@@ -17,9 +17,21 @@ HashVoxeler::~HashVoxeler() {}
 
 
 void HashVoxeler::GetVolume(HashVoxeler::HashVolume & vVolumeCopy) const {
-	
+
+	vVolumeCopy.clear();
 	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
-	vVolumeCopy = m_vVolume;
+	for(auto && [oPos, oVoxel] : m_vVolume)
+		if(m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]))
+			vVolumeCopy[oPos] = oVoxel;
+}
+
+void HashVoxeler::GetStrictStaticVolume(HashVoxeler::HashVolume & vVolumeCopy) const {
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
+	for(auto && [oPos, oVoxel] : m_vVolume)
+		if(!m_pUpdateStrategy->IsSoftDynamic(oVoxel.data_c[1]))
+			vVolumeCopy[oPos] = oVoxel;
 }
 
 void HashVoxeler::GetVolumeCloud(pcl::PointCloud<pcl::PointNormal> & vVolumeCloud) const {
@@ -33,15 +45,204 @@ void HashVoxeler::GetVolumeCloud(pcl::PointCloud<pcl::PointNormal> & vVolumeClou
 
 void HashVoxeler::GetRecentVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) const {
 
-	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
 	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
 	for(auto && [oPos, oVoxel] : m_vVolume)
 		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]))
 			vVolumeCopy[oPos] = oVoxel;
 }
 
+void HashVoxeler::GetRecentMaxConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) {
+
+	UnionSet oTempSet;
+	RebuildUnionSet(oTempSet, iRecentTime);
+
+	UpdateUnionConflict(oTempSet);
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
+	for(auto && [oPos, oVoxel] : m_vVolume)
+		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && oTempSet.InMaxSet(oPos))
+			vVolumeCopy[oPos] = oVoxel;
+	// GetRecentVolume(vVolumeCopy, iRecentTime); 
+}
+
+
+bool HashVoxeler::IsNoneFlow(const HashPos& oPos) {
+
+	if(m_vPointFlow.count(oPos) == 0) return true; 
+	pcl::PointNormal& oPoint = m_vVolume[oPos];
+	pcl::PointNormal& oPointFlow = m_vPointFlow[oPos];
+	Eigen::Vector3f vTranslate(oPointFlow.x, oPointFlow.y, oPointFlow.z);
+	Eigen::Vector3f vNormal(oPoint.normal_x, oPoint.normal_y, oPoint.normal_z);
+	// std::cout << abs(vTranslate.dot(vNormal)) << std::endl;
+	Eigen::Vector3f vNormalChange(oPointFlow.normal_x, oPointFlow.normal_y, oPointFlow.normal_z);
+	vTranslate /= oPointFlow.curvature;
+	vNormalChange /= oPointFlow.curvature;
+	if(abs(vTranslate.dot(vNormal)) < 0.3 && vNormalChange.norm() < 0.3) return true; 
+	return false;
+}
+
+void HashVoxeler::GetRecentNoneFlowVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) {
+	
+	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
+	vVolumeCopy.clear();
+	for(auto && [oPos, oVoxel] : m_vVolume)
+		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && IsNoneFlow(oPos))
+			vVolumeCopy[oPos] = oVoxel;
+}
+
+void HashVoxeler::RebuildUnionSet(UnionSet& oUnionSet, const int iRecentTime) {
+
+	// copy avoid of block
+	HashVoxeler::HashVolume vVolumeCopy;
+	GetVolume(vVolumeCopy);
+
+	// SignedDistance oSdf(iRecentTime);
+	// auto vSdf = oSdf.NormalBasedGlance(*this);
+
+	// constexpr int xyz_order[][4] = {{0, 1, 4, 5}, {0, 3, 4, 7}, {0, 1, 2, 3}};
+	// constexpr int xyz_delta[][3] = {{-1, 0, 0}, {0, -1, 0}, {0, 0, -1}};
+
+	for(auto && [oPos, oPoint] : vVolumeCopy) {
+		/* 隐式场连通性
+		std::vector<HashPos> vCornerPoses;
+		GetCornerPoses(oPos, vCornerPoses);
+		for(int dim = 0; dim < 3; ++dim) {
+			for(int i = 0; i < 3; ++i) {
+				if(vSdf[vCornerPoses[xyz_order[dim][i]]] * vSdf[vCornerPoses[xyz_order[dim][i+1]]] < 0) {
+					HashPos oNearPos(oPos.x + xyz_delta[dim][0], oPos.y + xyz_delta[dim][1], oPos.z + xyz_delta[dim][2]);
+					if(vVolumeCopy.count(oNearPos)) oUnionSet.Union(oPos, oNearPos);
+					break;
+				}
+			}	
+		}
+		//*/
+
+		/* 法向相似性
+		Eigen::Vector3f vNormal(oPoint.normal_x, oPoint.normal_y, oPoint.normal_z);
+		for(int dx = -1; dx <= 0; ++dx) {
+			for(int dy = -1; dy <= 0; ++dy) {
+				for(int dz = -1; dz <= 0; ++dz) {
+					HashPos oNearPos(oPos.x + dx, oPos.y + dy, oPos.z + dz);
+					if(vVolumeCopy.count(oNearPos) == 0) continue;
+					Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
+					if(vNormal.dot(vNearNormal) > 0.9f) oUnionSet.Union(oPos, oNearPos);
+				}
+			}
+		}
+		//*/
+		
+		// /* 面片连通性 Ax + By + Cz + D = 0 (+法向限制）
+		constexpr float strict_normal_dot_ref = 0.95f;
+		float normal_dot_ref = m_pUpdateStrategy->IsSoftDynamic(oPoint.data_c[1]) ? strict_normal_dot_ref : 0.3f;
+		Eigen::Vector3f vNormal(oPoint.normal_x, oPoint.normal_y, oPoint.normal_z);
+		float A = oPoint.normal_x, B = oPoint.normal_y, C = oPoint.normal_z;
+		float neg_D = A * oPoint.x + B * oPoint.y + C * oPoint.z;
+		pcl::PointXYZ oPosPoint = HashPosTo3DPos(oPos);
+		int cross_x0 = A ? (neg_D - B * oPosPoint.y - C * oPosPoint.z) / A - oPosPoint.x : -1;
+		int cross_y0 = B ? (neg_D - A * oPosPoint.x - C * oPosPoint.z) / B - oPosPoint.y : -1;
+		int cross_z0 = C ? (neg_D - A * oPosPoint.x - B * oPosPoint.y) / C - oPosPoint.z : -1;
+		int cross_x1 = A ? (neg_D - B * (oPosPoint.y + m_oVoxelLength.y) - C * oPosPoint.z) / A - oPosPoint.x : -1;
+		int cross_y1 = B ? (neg_D - A * oPosPoint.x - C * (oPosPoint.z + m_oVoxelLength.z)) / B - oPosPoint.y : -1;
+		int cross_z1 = C ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - B * oPosPoint.y) / C - oPosPoint.z : -1;
+		cross_x0 /= m_oVoxelLength.x;
+		cross_y0 /= m_oVoxelLength.y;
+		cross_z0 /= m_oVoxelLength.z;
+		cross_x1 /= m_oVoxelLength.x;
+		cross_y1 /= m_oVoxelLength.y;
+		cross_z1 /= m_oVoxelLength.z;
+		#define CROSS_VALID(x) ((x)>=0 && (x)<=1)
+		bool cross_neg_dx = CROSS_VALID(cross_y0) || CROSS_VALID(cross_z0) || CROSS_VALID(cross_y1);
+		bool cross_neg_dy = CROSS_VALID(cross_x0) || CROSS_VALID(cross_z0) || CROSS_VALID(cross_z1);
+		bool cross_neg_dz = CROSS_VALID(cross_x0) || CROSS_VALID(cross_y0) || CROSS_VALID(cross_x1);
+		if(cross_neg_dx) {
+			HashPos oNearPos(oPos.x - 1, oPos.y, oPos.z);
+			if(vVolumeCopy.count(oNearPos)) {
+				pcl::PointNormal& oNearPoint = vVolumeCopy[oNearPos];
+				float A = oNearPoint.normal_x, B = oNearPoint.normal_y, C = oNearPoint.normal_z;
+				float neg_D = A * oNearPoint.x + B * oNearPoint.y + C * oNearPoint.z;
+				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
+				int cross_y1 = B ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - C * oPosPoint.z) / B - oPosPoint.y : -1;
+				int cross_y2 = B ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - C * (oPosPoint.z + m_oVoxelLength.z)) / B - oPosPoint.y : -1;
+				int cross_z1 = C ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - B * oPosPoint.y) / C - oPosPoint.z : -1;
+				cross_y1 /= m_oVoxelLength.y;
+				cross_y2 /= m_oVoxelLength.y;
+				cross_z1 /= m_oVoxelLength.z;
+				bool cross_pos_dx = CROSS_VALID(cross_y1) || CROSS_VALID(cross_y2) || CROSS_VALID(cross_z1);
+				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
+				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? strict_normal_dot_ref : normal_dot_ref;
+				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
+				if(cross_pos_dx && normal_dot) oUnionSet.Union(oPos, oNearPos);
+			}
+		}
+		if(cross_neg_dy) {
+			HashPos oNearPos(oPos.x, oPos.y - 1, oPos.z);
+			if(vVolumeCopy.count(oNearPos)) {
+				pcl::PointNormal& oNearPoint = vVolumeCopy[oNearPos];
+				float A = oNearPoint.normal_x, B = oNearPoint.normal_y, C = oNearPoint.normal_z;
+				float neg_D = A * oNearPoint.x + B * oNearPoint.y + C * oNearPoint.z;
+				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
+				int cross_z1 = C ? (neg_D - A * oPosPoint.x - B * (oPosPoint.y + m_oVoxelLength.y)) / C - oPosPoint.z : -1;
+				int cross_z2 = C ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - B * (oPosPoint.y + m_oVoxelLength.y)) / C - oPosPoint.z : -1;
+				int cross_x1 = A ? (neg_D - B * (oPosPoint.y + m_oVoxelLength.y) - C * oPosPoint.z) / A - oPosPoint.x : -1;
+				cross_z1 /= m_oVoxelLength.z;
+				cross_z2 /= m_oVoxelLength.z;
+				cross_x1 /= m_oVoxelLength.x;
+				bool cross_pos_dy = CROSS_VALID(cross_z1) || CROSS_VALID(cross_z2) || CROSS_VALID(cross_x1);
+				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
+				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? strict_normal_dot_ref : normal_dot_ref;
+				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
+				if(cross_pos_dy && normal_dot) oUnionSet.Union(oPos, oNearPos);
+			}
+		}
+		if(cross_neg_dz) {
+			HashPos oNearPos(oPos.x, oPos.y, oPos.z - 1);
+			if(vVolumeCopy.count(oNearPos)) {
+				pcl::PointNormal& oNearPoint = vVolumeCopy[oNearPos];
+				float A = oNearPoint.normal_x, B = oNearPoint.normal_y, C = oNearPoint.normal_z;
+				float neg_D = A * oNearPoint.x + B * oNearPoint.y + C * oNearPoint.z;
+				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
+				int cross_y1 = B ? (neg_D - A * oPosPoint.x - C * (oPosPoint.z + m_oVoxelLength.z)) / B - oPosPoint.y : -1;
+				int cross_y2 = B ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - C * (oPosPoint.z + m_oVoxelLength.z)) / B - oPosPoint.y : -1;
+				int cross_x1 = A ? (neg_D - B * oPosPoint.y - C * (oPosPoint.z + m_oVoxelLength.z)) / A - oPosPoint.x : -1;
+				cross_y1 /= m_oVoxelLength.y;
+				cross_y2 /= m_oVoxelLength.y;
+				cross_x1 /= m_oVoxelLength.x;
+				bool cross_pos_dz = CROSS_VALID(cross_y1) || CROSS_VALID(cross_y2) || CROSS_VALID(cross_x1);
+				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
+				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? strict_normal_dot_ref : normal_dot_ref;
+				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
+				if(cross_pos_dz && normal_dot) oUnionSet.Union(oPos, oNearPos);
+			}
+		}
+		//*/
+	}
+}
+
+void HashVoxeler::UpdateUnionConflict(UnionSet& oUnionSet) {
+
+	constexpr int remove_set_size_ref = 200;
+	constexpr float remove_voxel_time_ref = 10.0f;
+
+	auto vVoxelSets = oUnionSet.GetSets();
+
+	std::unique_lock<std::shared_mutex> write_lock(m_mVolumeLock);
+	for(auto && [oPos, oPosList] : vVoxelSets) {
+		if(oPosList.size() < remove_set_size_ref && !oUnionSet.InMaxSet(oPos)) {
+			for(auto && oPosInSet : oPosList) {
+				float& fTimeStamp = m_vVolume[oPosInSet].data_c[2];
+				if(m_iFrameCount - fTimeStamp > remove_voxel_time_ref) {
+					float& fConflictTime = m_vVolume[oPosInSet].data_c[1];
+					m_pUpdateStrategy->Conflict(fConflictTime);
+				}
+			}
+		}
+	}
+}
+
 /*=======================================
-GetResolution
+SetResolution
 Input: oLength - length of each dim of voxel (m)
 Output: m_oVoxelLength - member of the class, record the voxel length info
 Function: Set the resolution of the voxel in 3 dims
@@ -53,6 +254,13 @@ void HashVoxeler::SetResolution(pcl::PointXYZ & oLength){
 	m_oVoxelLength.z = oLength.z;
 }
 
+
+/*=======================================
+SetStrategy
+Input: eStrategy, the strategy of fusion and remove dynamic points
+Output: m_pUpdateStrategy - the pointer of the strategy
+Function: Set the strategy of fusion and remove dynamic points
+========================================*/
 void HashVoxeler::SetStrategy(enum vus eStrategy) {
 
 	m_pUpdateStrategy = std::shared_ptr<VolumeUpdateStrategy>(CreateStrategy(eStrategy));	
@@ -80,7 +288,7 @@ template void HashVoxeler::PointBelongVoxelPos(const pcl::PointNormal & oPoint, 
 VoxelizePoints
 Input: vCloud - the input point cloud
 Output: m_vVolume - the volume result of all points
-Function: put the points into their voxels and fusion
+Function: put the points into their voxels and fusion, update the union set
 ========================================*/
 void HashVoxeler::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vCloud) {
 	
@@ -98,15 +306,52 @@ void HashVoxeler::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vC
 
 	// fusion the points
 	Fusion oVoxelFusion;
-	for(auto&& [oPos, IndexList] : vPointContainer) {
+	for(auto&& [oPos, vIndexList] : vPointContainer) {
+
+		bool bNewVoxel = !m_vVolume.count(oPos);
+
+		// init base point
 		pcl::PointNormal oBasePoint;
-		if(m_vVolume.count(oPos)) oBasePoint = m_vVolume[oPos];
-		pcl::PointNormal oFusedPoint = oVoxelFusion.NormalFusionWeighted(IndexList, vCloud, oBasePoint);
+		if(!bNewVoxel) {
+			oBasePoint = m_vVolume[oPos];
+		}
+
+		// comptue point flow
+		if(!bNewVoxel) {
+			pcl::PointNormal oZeroPoint;
+			pcl::PointNormal oFusedDirect = oVoxelFusion.NormalFusionWeighted(vIndexList, vCloud, oZeroPoint);
+			pcl::PointNormal& oFlow = m_vPointFlow[oPos];
+			oFlow.x += oFusedDirect.x - oBasePoint.x;
+			oFlow.y += oFusedDirect.y - oBasePoint.y;
+			oFlow.z += oFusedDirect.z - oBasePoint.z;
+			oFlow.normal_x += oFusedDirect.normal_x - oBasePoint.normal_x;
+			oFlow.normal_y += oFusedDirect.normal_y - oBasePoint.normal_y;
+			oFlow.normal_z += oFusedDirect.normal_z - oBasePoint.normal_z;
+			++oFlow.curvature; //count
+		}
+
+		// fusion points
+		pcl::PointNormal oFusedPoint = oVoxelFusion.NormalFusionWeighted(vIndexList, vCloud, oBasePoint);
 		float& fConflictTime = oFusedPoint.data_c[1];
 		m_pUpdateStrategy->Support(fConflictTime);
 		float& fTimeStamp = oFusedPoint.data_c[2];
 		fTimeStamp = m_iFrameCount;
 		m_vVolume[oPos] = oFusedPoint;
+
+		// update union set
+		// if(bNewVoxel) {
+		// 	Eigen::Vector3f vNormal(m_vVolume[oPos].normal_x, m_vVolume[oPos].normal_y, m_vVolume[oPos].normal_z);
+		// 	for(int dx = -1; dx <= 1; ++dx) {
+		// 		for(int dy = -1; dy <= 1; ++dy) {
+		// 			for(int dz = -1; dz <= 1; ++dz) {
+		// 				HashPos oNearPos(oPos.x + dx, oPos.y + dy, oPos.z + dz);
+		// 				if(m_vVolume.count(oNearPos) == 0) continue;
+		// 				Eigen::Vector3f vNearNormal(m_vVolume[oNearPos].normal_x, m_vVolume[oNearPos].normal_y, m_vVolume[oNearPos].normal_z);
+		// 				if(vNormal.dot(vNearNormal) > 0.9) m_oUnionSet.Union(oPos, oNearPos);
+		// 			}
+		// 		}
+		// 	}
+		// }
 	}
 }
 

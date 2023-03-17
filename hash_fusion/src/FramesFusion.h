@@ -330,6 +330,10 @@ private:
 	int m_iConvDim;
 	int m_iConvAddPointNumRef;
 	float m_fConvFusionDistanceRef1;
+
+    // // sdf
+    // SignedDistance* m_pSdf;
+    // std::mutex m_mSdfMutex;
 };
 
 #endif

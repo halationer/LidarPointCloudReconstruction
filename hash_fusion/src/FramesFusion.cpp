@@ -231,6 +231,7 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	nodeHandle.param("conv_dim", m_iConvDim, 3);
 	nodeHandle.param("conv_add_point_ref", m_iConvAddPointNumRef, 5); 
 	nodeHandle.param("conv_distance_ref", m_fConvFusionDistanceRef1, 0.95f);
+	// m_pSdf = new SignedDistance(m_iKeepTime, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
 
 	return true;
 
@@ -698,7 +699,7 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	SignedDistance oSDer;
 
 	//compute signed distance based on centroids and its normals within voxels
-	std::unordered_map<HashPos, float, HashFunc> vSignedDis = oSDer.NormalBasedGlance(m_oVoxeler);
+	std::unordered_map<HashPos, float, HashFunc> vSignedDis = oSDer.ConvedNormalBasedGlance(m_oVoxeler);
 
 	// debug
 	// pcl::PointCloud<pcl::PointNormal> vVolumeCloud;
@@ -773,7 +774,7 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 	//using signed distance
 	SignedDistance oSDer(m_iKeepTime, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
 	//compute signed distance based on centroids and its normals within voxels
-	std::unordered_map<HashPos, float, HashFunc> vSignedDis = oSDer.NormalBasedGlance(m_oVoxeler);
+	std::unordered_map<HashPos, float, HashFunc> vSignedDis = oSDer.ConvedNormalBasedGlance(m_oVoxeler);
 
 	//marching cuber
 	CIsoSurface<float> oMarchingCuber;
@@ -861,14 +862,18 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 
 		if(m_bSurfelFusion) {
 
-			clock_t start_time = clock();
+			struct timeval start;
+			gettimeofday(&start, NULL);
 
 			// the function will change m_vCurrentFramePoints, m_vMapPCNAdded
 			if(m_bQuickSurfelFusion)
 				SurfelFusionQuick(oViewPoint, *pFramePN);
 			else SurfelFusion(oViewPoint, *pFramePN);
 
-			clock_t frames_fusion_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
+			struct timeval end;
+			gettimeofday(&end,NULL);
+			double frames_fusion_time = (end.tv_sec - start.tv_sec) * 1000.0 +(end.tv_usec - start.tv_usec) * 0.001;
+			
 			std::cout << std::format_purple 
 				<< "The No. " << m_iFusionFrameNum 
 				<< ";\tframes_fusion_time: " << frames_fusion_time << "ms" 
@@ -1958,6 +1963,13 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 	// 更新volume
 	m_oVoxeler.UpdateConflictResult(vPointCloudBuffer);
 
+	// output connect
+	// pcl::PointCloud<pcl::PointNormal> vMaxConnected;
+	// m_oVoxeler.GetMaxConnectCloud(vMaxConnected);
+	// std::vector<float> feature(vMaxConnected.size(), 0.8f);
+	// PublishPointCloud(vMaxConnected, feature, "/debug_max_connect");
+
+	// output dynamic
 	PublishPointCloud(vPointCloudBuffer, associated_feature, "/debug_associated_point");
 }
 

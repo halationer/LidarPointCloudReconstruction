@@ -2,37 +2,9 @@
 
 #include "MeshOperation.h"
 
-//double KalmanFilter(KalmanInfo* kalmanInfo, double lastMeasurement)
-//{
-//	//Ԥ����һʱ�̵�ֵ
-//	double predictValue = kalmanInfo->A* kalmanInfo->filterValue;   //x�������������һ��ʱ���ĺ������ֵ��������Ϣ�������˴���Ҫ���ݻ�վ�߶���һ���޸�
-//
-//	//��Э����
-//	kalmanInfo->P = kalmanInfo->A*kalmanInfo->A*kalmanInfo->P + kalmanInfo->Q;  //������������� p(n|n-1)=A^2*p(n-1|n-1)+q
-//	double preValue = kalmanInfo->filterValue;  //��¼�ϴ�ʵ�������ֵ
-//
-//	//����kalman����
-//	kalmanInfo->kalmanGain = kalmanInfo->P*kalmanInfo->H / (kalmanInfo->P*kalmanInfo->H*kalmanInfo->H + kalmanInfo->R);  //Kg(k)= P(k|k-1) H�� / (H P(k|k-1) H�� + R)
-//	//����������������˲�ֵ
-//	kalmanInfo->filterValue = predictValue + (lastMeasurement - predictValue)*kalmanInfo->kalmanGain;  //���ò������Ϣ���ƶ�x(t)�Ĺ��ƣ�����������ƣ����ֵҲ�������  X(k|k)= X(k|k-1)+Kg(k) (Z(k)-H X(k|k-1))
-//	//���º������
-//	kalmanInfo->P = (1 - kalmanInfo->kalmanGain*kalmanInfo->H)*kalmanInfo->P;//������������  P[n|n]=(1-K[n]*H)*P[n|n-1]
-//
-//	return  kalmanInfo->filterValue;
-//}
-
-
-
-Fusion::Fusion(){
-
-
-}
+Fusion::Fusion(){}
 	
-Fusion::~Fusion(){
-
-
-
-}
+Fusion::~Fusion(){}
 
 /*=======================================
 SetAccDisSize

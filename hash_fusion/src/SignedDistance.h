@@ -35,7 +35,11 @@ public:
 
 	~SignedDistance() { };
 
+	// build union set according to 
+	void BuildUnionSet(HashVoxeler & oVoxeler, UnionSet& oUnionSet);
+
 	//compute the signed distance based on surfel(point with normal)
+	std::unordered_map<HashPos, float, HashFunc> & ConvedNormalBasedGlance(HashVoxeler & oVoxeler);
 	std::unordered_map<HashPos, float, HashFunc> & NormalBasedGlance(HashVoxeler & oVoxeler);
 
 	//compute the signed distance based on corners to plan in a voxel

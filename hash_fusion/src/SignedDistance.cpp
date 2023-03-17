@@ -7,12 +7,64 @@ SignedDistance::SignedDistance(int iKeepTime, int iConvDim, int iConvAddPointNum
 	m_iConvHalfDim = m_iConvDim / 2;
 };
 
-std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance(HashVoxeler & oVoxeler){
+void SignedDistance::BuildUnionSet(HashVoxeler & oVoxeler, UnionSet& oUnionSet) {
+
+	constexpr int xyz_order[][4] = {{0, 1, 4, 5}, {0, 3, 4, 7}, {0, 1, 2, 3}};
+	constexpr int xyz_delta[][3] = {{-1, 0, 0}, {0, -1, 0}, {0, 0, -1}};
+
+	for(auto && [oPos, oPoint] : m_vVolumeCopy) {
+
+		std::vector<HashPos> vCornerPoses;
+		oVoxeler.GetCornerPoses(oPos, vCornerPoses);
+		for(int dim = 0; dim < 3; ++dim) {
+			for(int i = 0; i < 3; ++i) {
+				if(m_vSignedDistance[vCornerPoses[xyz_order[dim][i]]] * m_vSignedDistance[vCornerPoses[xyz_order[dim][i+1]]] < 0) {
+					HashPos oNearPos(oPos.x + xyz_delta[dim][0], oPos.y + xyz_delta[dim][1], oPos.z + xyz_delta[dim][2]);
+					if(m_vVolumeCopy.count(oNearPos)) oUnionSet.Union(oPos, oNearPos);
+					break;
+				}
+			}	
+		}
+	}
+}
+
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance(HashVoxeler & oVoxeler) {
+
+	//****get the nodes that are near the surface****
+	HashVoxeler::HashVolume vTempVolumeCopy;
+	// oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
+	oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
+	// oVoxeler.GetRecentNoneFlowVolume(vTempVolumeCopy, m_iKeepTime);
+	m_vVolumeCopy = vTempVolumeCopy;
+
+	// meshing
+	const HashVoxeler::HashVolume & vVolumeToMeshing = m_vVolumeCopy;
+
+	//compute the sampled point normal based on the face normal
+	ConvexHullOperation oConvexHullOPer;
+
+	std::unordered_map<HashPos, FacePara, HashFunc> vVoxelNormalPara;
+
+	//compute the sampled point normal and divde it into point and normal
+	oConvexHullOPer.ComputeAllFaceParams(vVolumeToMeshing, vVoxelNormalPara);
+
+	//output
+	return PlanDistance(vVolumeToMeshing, vVoxelNormalPara, oVoxeler.m_oVoxelLength);
+}
+
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedNormalBasedGlance(HashVoxeler & oVoxeler){
 
 
 	//****get the nodes that are near the surface****
 	HashVoxeler::HashVolume vTempVolumeCopy;
-	oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
+	// oVoxeler.GetRecentMaxConnectVolume(vTempVolumeCopy, m_iKeepTime);
+	// oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
+	oVoxeler.GetRecentNoneFlowVolume(vTempVolumeCopy, m_iKeepTime);
+
+	// UnionSet oTempSet;
+	// BuildUnionSet(oVoxeler, oTempSet);
+	// oVoxeler.UpdateUnionConflict(oTempSet);
+	// oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
 	m_vVolumeCopy = vTempVolumeCopy;
 
 	// expand - 效果不好
@@ -145,7 +197,7 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 
 unordered_map<HashPos, float, HashFunc> & SignedDistance::PlanDistance(const HashVoxeler::HashVolume & vVolume, const unordered_map<HashPos, FacePara, HashFunc> & vNormalPara, const pcl::PointXYZ oVoxelSize) {
 
-	unordered_map<HashPos, float, HashFunc> & vSignedDis = m_vSignedDistance;
+	m_vSignedDistance.clear();
 	unordered_map<HashPos, int, HashFunc> vCornerHits;
 
 	ConvexHullOperation oNormalOper;
@@ -160,14 +212,14 @@ unordered_map<HashPos, float, HashFunc> & SignedDistance::PlanDistance(const Has
 			Eigen::Vector3f oOneCorner;
 			HashVoxeler::HashPosTo3DPos(oCornerPos, oVoxelSize, oOneCorner);
 			float fSignValue = oNormalOper.PointToFaceDis(oOneCorner, vNormalPara.at(oPos).oNormal, vNormalPara.at(oPos).fDparam);
-			vSignedDis[oCornerPos] += fSignValue;
+			m_vSignedDistance[oCornerPos] += fSignValue;
 			++vCornerHits[oCornerPos];
 		}
 	}
 
-	for (auto & [oPos, oSignedDis] : vSignedDis) 
+	for (auto & [oPos, oSignedDis] : m_vSignedDistance) 
 		if(vCornerHits.count(oPos))
 			oSignedDis /= vCornerHits[oPos];
 
-	return vSignedDis;
+	return m_vSignedDistance;
 }

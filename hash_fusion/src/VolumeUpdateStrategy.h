@@ -20,6 +20,8 @@ public:
 
     // Output : bool - is the point a static point?
     virtual bool IsStatic(const float& fUpdateParam) = 0;
+
+    virtual bool IsSoftDynamic(const float& fUpdateParam) {return !IsStatic(fUpdateParam);}
 };
 
 VolumeUpdateStrategy* CreateStrategy(enum vus eStrategy);
@@ -66,6 +68,10 @@ public:
 
     virtual bool IsStatic(const float& fUpdateParam) {
         return fUpdateParam <= max_conflict;
+    }
+
+    virtual bool IsSoftDynamic(const float& fUpdateParam) override {
+        return fUpdateParam >= max_conflict;
     }
 };
 
