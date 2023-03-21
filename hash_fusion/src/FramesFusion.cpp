@@ -770,6 +770,9 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 	oResultMesh.polygons.clear();
 
 	//******make mesh********
+	//check connection
+	m_oVoxeler.RebuildUnionSet();
+	m_oVoxeler.UpdateUnionConflict();
 
 	//using signed distance
 	SignedDistance oSDer(m_iKeepTime, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
@@ -1028,10 +1031,11 @@ void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 	m_oLastModelingTime = oTrajectory.header.stamp;
 
 	//save the position of trajectory
-	RosTimePoint oOdomPoint;
-	oOdomPoint.oLocation.x = oTrajectory.pose.pose.position.x;
-	oOdomPoint.oLocation.y = oTrajectory.pose.pose.position.y;
-	oOdomPoint.oLocation.z = oTrajectory.pose.pose.position.z;
+	Eigen::Vector3f oLidarPos;
+	oLidarPos.x() = oTrajectory.pose.pose.position.x;
+	oLidarPos.y() = oTrajectory.pose.pose.position.y;
+	oLidarPos.z() = oTrajectory.pose.pose.position.z;
+	m_oVoxeler.UpdateLidarCenter(oLidarPos);
 
 	//get the reconstructed surfaces
 	pcl::PolygonMesh oNearbyMeshes;
@@ -1078,6 +1082,12 @@ void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory
 	if(!bComputeFlag) return;
 	m_oLastModelingTime = oTrajectory.header.stamp;
 	
+	Eigen::Vector3f oLidarPos;
+	oLidarPos.x() = oTrajectory.pose.pose.position.x;
+	oLidarPos.y() = oTrajectory.pose.pose.position.y;
+	oLidarPos.z() = oTrajectory.pose.pose.position.z;
+	m_oVoxeler.UpdateLidarCenter(oLidarPos);
+
 	//if need to be updated
 	//get the newest information
 	int now_frame_num = m_iReconstructFrameNum++;

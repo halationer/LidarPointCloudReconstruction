@@ -57,9 +57,9 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedNormalBased
 
 	//****get the nodes that are near the surface****
 	HashVoxeler::HashVolume vTempVolumeCopy;
-	// oVoxeler.GetRecentMaxConnectVolume(vTempVolumeCopy, m_iKeepTime);
+	oVoxeler.GetRecentMaxConnectVolume(vTempVolumeCopy, m_iKeepTime);
 	// oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
-	oVoxeler.GetRecentNoneFlowVolume(vTempVolumeCopy, m_iKeepTime);
+	// oVoxeler.GetRecentNoneFlowVolume(vTempVolumeCopy, m_iKeepTime);
 
 	// UnionSet oTempSet;
 	// BuildUnionSet(oVoxeler, oTempSet);

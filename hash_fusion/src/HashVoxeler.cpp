@@ -2,72 +2,155 @@
 #include "Fusion.h"
 #include "SignedDistance.h"
 
-bool operator == (const HashPos & a, const HashPos & b) {
-	return a.x == b.x && a.y == b.y && a.z == b.z;
-}
 
-std::ostream & operator << (std::ostream & out, const HashPos & pos) {
-	out << "(" << pos.x << "," << pos.y << "," << pos.z << ")";
-	return out;
-}
-
-HashVoxeler::HashVoxeler() : m_iFrameCount(0) {}
+HashVoxeler::HashVoxeler() : 
+	m_iFrameCount(0), m_iMaxRecentKeep(500), m_fLidarSpeed(0), m_fRadiusExpandFactor(1.25f),
+	m_iRecentTimeToGetRadius(30) {}
 
 HashVoxeler::~HashVoxeler() {}
 
+/*=======================================
+GetRadiusExpand
+Function: Get m_fRadiusExpandFactor
+========================================*/
+float HashVoxeler::GetRadiusExpand() const {
+	
+	std::shared_lock<std::shared_mutex> center_read_lock(m_mCenterLock);
+	return m_fRadiusExpandFactor;
+}
 
-void HashVoxeler::GetVolume(HashVoxeler::HashVolume & vVolumeCopy) const {
+/*=======================================
+UpdateCenter
+Input: 	oLidarCenter - current lidar center
+Output: m_fLidarSpeed - lidar distance between this time and last time
+		m_fRadiusExpandFactor - expand the radius of union set building
+		m_oLidarCenter - current lidar center
+Function: update vehicle center and related variables
+========================================*/
+void HashVoxeler::UpdateLidarCenter(Eigen::Vector3f& oLidarCenter) {
+
+	constexpr float speed_trans_factor = 0.4f;
+
+	// std::cout << "\n" << m_fLidarSpeed << " is the speed; ";
+	// std::cout << "and the factor is: " << m_fRadiusExpandFactor << std::endl;
+
+	std::unique_lock<std::shared_mutex> center_write_lock(m_mCenterLock);
+	m_fLidarSpeed = (m_oLidarCenter - oLidarCenter).norm(); 
+	m_fRadiusExpandFactor = 3.25f - std::clamp(m_fLidarSpeed * speed_trans_factor, 1.25f, 2.0f);
+	m_oLidarCenter = oLidarCenter;
+}
+
+
+/*=======================================
+GetStaticVolume
+Input: 	m_vVolume - the whole volume
+Output: vVolumeCopy - the output volume result
+Function: get the whole volume without dynamic voxels
+========================================*/
+void HashVoxeler::GetStaticVolume(HashVoxeler::HashVolume & vVolumeCopy) const {
 
 	vVolumeCopy.clear();
-	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 	for(auto && [oPos, oVoxel] : m_vVolume)
 		if(m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]))
 			vVolumeCopy[oPos] = oVoxel;
 }
 
+
+/*=======================================
+GetStrictStaticVolume
+Input: 	m_vVolume - the whole volume
+Output: vVolumeCopy - the output volume result
+Function: get the whole volume without probably dynamic voxels
+========================================*/
 void HashVoxeler::GetStrictStaticVolume(HashVoxeler::HashVolume & vVolumeCopy) const {
 
 	vVolumeCopy.clear();
-	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 	for(auto && [oPos, oVoxel] : m_vVolume)
 		if(!m_pUpdateStrategy->IsSoftDynamic(oVoxel.data_c[1]))
 			vVolumeCopy[oPos] = oVoxel;
 }
 
+
+/*=======================================
+GetVolumeCloud
+Input: 	m_vVolume - the whole surfel volume
+Output: vVolumeCloud - the output surfel cloud
+Function: transfer and get a surfel cloud of the volume
+========================================*/
 void HashVoxeler::GetVolumeCloud(pcl::PointCloud<pcl::PointNormal> & vVolumeCloud) const {
 
 	vVolumeCloud.clear();
-	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 	for(auto && [_,oVoxelPoint] : m_vVolume)
 		vVolumeCloud.push_back(oVoxelPoint);
 }
 
 
+/*=======================================
+GetRecentVolume
+Input: 	iRecentTime - recent time
+		m_vRecentVolume - surfel volume of max recent time
+Output: vVolumeCopy - the output volume result
+Function: get the volume of recent time
+========================================*/
 void HashVoxeler::GetRecentVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) const {
 
 	vVolumeCopy.clear();
-	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
-	for(auto && [oPos, oVoxel] : m_vVolume)
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+	for(auto && [oPos, oVoxel] : m_vRecentVolume)
 		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]))
 			vVolumeCopy[oPos] = oVoxel;
 }
 
+
+/*=======================================
+GetRecentMaxConnectVolume
+Input: 	iRecentTime - recent time
+		m_vRecentVolume - surfel volume of max recent time
+		m_oUnionSet - the connectivity record union-find set
+Output: vVolumeCopy - the output volume result
+Function: get the volume of recent time and its voxels are in the largest set of m_oUnionSet
+========================================*/
 void HashVoxeler::GetRecentMaxConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) {
 
-	UnionSet oTempSet;
-	RebuildUnionSet(oTempSet, iRecentTime);
-
-	UpdateUnionConflict(oTempSet);
-
 	vVolumeCopy.clear();
-	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
-	for(auto && [oPos, oVoxel] : m_vVolume)
-		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && oTempSet.InMaxSet(oPos))
+	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+	for(auto && [oPos, oVoxel] : m_vRecentVolume)
+		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && m_oUnionSet.InMaxSet(oPos))
 			vVolumeCopy[oPos] = oVoxel;
 	// GetRecentVolume(vVolumeCopy, iRecentTime); 
 }
 
 
+/*=======================================
+GetLocalVolume
+Input: 	vCenter - the center point of an area
+		fRadius - the radius of an area
+		m_vVolume - the whole surfel volume
+Output: vVolumeCopy - the output volume result
+Function: get the voxels in the area
+========================================*/
+void HashVoxeler::GetLocalVolume(HashVoxeler::HashVolume & vVolumeCopy, const Eigen::Vector3f vCenter, const float fRadius) const {
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+	for(auto && [oPos, oVoxel] : m_vVolume) {
+		Eigen::Vector3f vCurrent(oPos.x, oPos.y, oPos.z);
+		if((vCurrent - vCenter).norm() <= fRadius)
+			vVolumeCopy[oPos] = oVoxel;
+	}
+}
+
+
+/*=======================================
+IsNoneFlow
+Input: 	oPos - the pos of a voxel
+Output: bool - whether the voxel is flow static
+Function: return the flow status of the voxel
+========================================*/
 bool HashVoxeler::IsNoneFlow(const HashPos& oPos) {
 
 	if(m_vPointFlow.count(oPos) == 0) return true; 
@@ -83,20 +166,53 @@ bool HashVoxeler::IsNoneFlow(const HashPos& oPos) {
 	return false;
 }
 
+
+/*=======================================
+GetRecentNoneFlowVolume
+Input: 	iRecentTime - recent time
+		m_vRecentVolume - surfel volume of max recent time
+Output: vVolumeCopy - the output volume result
+Function: get the volume of recent time and its voxels is flow static 
+========================================*/
 void HashVoxeler::GetRecentNoneFlowVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) {
 	
-	std::shared_lock<std::shared_mutex> lock(m_mVolumeLock);
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 	vVolumeCopy.clear();
-	for(auto && [oPos, oVoxel] : m_vVolume)
+	for(auto && [oPos, oVoxel] : m_vRecentVolume)
 		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && IsNoneFlow(oPos))
 			vVolumeCopy[oPos] = oVoxel;
 }
 
-void HashVoxeler::RebuildUnionSet(UnionSet& oUnionSet, const int iRecentTime) {
+
+/*=======================================
+RebuildUnionSet
+Input: m_vRecentVolume - the surfel volume of max recent time
+Output: m_oUnionSet - use recent volume to build union set
+Function: rebuild union set according to recent surfel volume
+========================================*/
+void HashVoxeler::RebuildUnionSet() {
 
 	// copy avoid of block
 	HashVoxeler::HashVolume vVolumeCopy;
-	GetVolume(vVolumeCopy);
+	GetRecentVolume(vVolumeCopy, m_iRecentTimeToGetRadius);
+	
+	// XXX: get center and radius
+	Eigen::Vector3f vCenter(0, 0, 0);
+	for(auto && [oPos,_] : vVolumeCopy) {
+		Eigen::Vector3f vCurrent(oPos.x, oPos.y, oPos.z);
+		vCenter += vCurrent;
+	}
+	vCenter /= vVolumeCopy.size();
+	float fRadius = 0.0f;
+	for(auto && [oPos, _] : vVolumeCopy) {
+		Eigen::Vector3f vCurrent(oPos.x, oPos.y, oPos.z);
+		fRadius = max(fRadius, (vCurrent - vCenter).norm());
+	}
+	fRadius *= GetRadiusExpand();
+	GetLocalVolume(vVolumeCopy, vCenter, fRadius);
+
+	std::unique_lock<std::shared_mutex> union_write_lock(m_mUnionSetLock);
+	m_oUnionSet.Clear();
 
 	// SignedDistance oSdf(iRecentTime);
 	// auto vSdf = oSdf.NormalBasedGlance(*this);
@@ -112,7 +228,7 @@ void HashVoxeler::RebuildUnionSet(UnionSet& oUnionSet, const int iRecentTime) {
 			for(int i = 0; i < 3; ++i) {
 				if(vSdf[vCornerPoses[xyz_order[dim][i]]] * vSdf[vCornerPoses[xyz_order[dim][i+1]]] < 0) {
 					HashPos oNearPos(oPos.x + xyz_delta[dim][0], oPos.y + xyz_delta[dim][1], oPos.z + xyz_delta[dim][2]);
-					if(vVolumeCopy.count(oNearPos)) oUnionSet.Union(oPos, oNearPos);
+					if(vVolumeCopy.count(oNearPos)) m_oUnionSet.Union(oPos, oNearPos);
 					break;
 				}
 			}	
@@ -127,7 +243,7 @@ void HashVoxeler::RebuildUnionSet(UnionSet& oUnionSet, const int iRecentTime) {
 					HashPos oNearPos(oPos.x + dx, oPos.y + dy, oPos.z + dz);
 					if(vVolumeCopy.count(oNearPos) == 0) continue;
 					Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
-					if(vNormal.dot(vNearNormal) > 0.9f) oUnionSet.Union(oPos, oNearPos);
+					if(vNormal.dot(vNearNormal) > 0.9f) m_oUnionSet.Union(oPos, oNearPos);
 				}
 			}
 		}
@@ -173,7 +289,7 @@ void HashVoxeler::RebuildUnionSet(UnionSet& oUnionSet, const int iRecentTime) {
 				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
 				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? strict_normal_dot_ref : normal_dot_ref;
 				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
-				if(cross_pos_dx && normal_dot) oUnionSet.Union(oPos, oNearPos);
+				if(cross_pos_dx && normal_dot) m_oUnionSet.Union(oPos, oNearPos);
 			}
 		}
 		if(cross_neg_dy) {
@@ -193,7 +309,7 @@ void HashVoxeler::RebuildUnionSet(UnionSet& oUnionSet, const int iRecentTime) {
 				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
 				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? strict_normal_dot_ref : normal_dot_ref;
 				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
-				if(cross_pos_dy && normal_dot) oUnionSet.Union(oPos, oNearPos);
+				if(cross_pos_dy && normal_dot) m_oUnionSet.Union(oPos, oNearPos);
 			}
 		}
 		if(cross_neg_dz) {
@@ -213,33 +329,47 @@ void HashVoxeler::RebuildUnionSet(UnionSet& oUnionSet, const int iRecentTime) {
 				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
 				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? strict_normal_dot_ref : normal_dot_ref;
 				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
-				if(cross_pos_dz && normal_dot) oUnionSet.Union(oPos, oNearPos);
+				if(cross_pos_dz && normal_dot) m_oUnionSet.Union(oPos, oNearPos);
 			}
 		}
 		//*/
 	}
 }
 
-void HashVoxeler::UpdateUnionConflict(UnionSet& oUnionSet) {
+
+/*=======================================
+UpdateUnionConflict
+Input: m_oUnionSet - the union set saved in volume
+Output: m_vVolume - update the volume according to the union set
+Function: if the size of the connected set of a voxel is below a const int, then remove the voxel
+========================================*/
+void HashVoxeler::UpdateUnionConflict() {
 
 	constexpr int remove_set_size_ref = 200;
 	constexpr float remove_voxel_time_ref = 10.0f;
 
-	auto vVoxelSets = oUnionSet.GetSets();
+	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
+	auto vVoxelSets = m_oUnionSet.GetSets();
 
-	std::unique_lock<std::shared_mutex> write_lock(m_mVolumeLock);
+	std::unique_lock<std::shared_mutex> volume_write_lock(m_mVolumeLock);
 	for(auto && [oPos, oPosList] : vVoxelSets) {
-		if(oPosList.size() < remove_set_size_ref && !oUnionSet.InMaxSet(oPos)) {
+		if(oPosList.size() < remove_set_size_ref && !m_oUnionSet.InMaxSet(oPos)) {
 			for(auto && oPosInSet : oPosList) {
 				float& fTimeStamp = m_vVolume[oPosInSet].data_c[2];
 				if(m_iFrameCount - fTimeStamp > remove_voxel_time_ref) {
 					float& fConflictTime = m_vVolume[oPosInSet].data_c[1];
 					m_pUpdateStrategy->Conflict(fConflictTime);
 				}
+				
+				// sync recent voxel
+				if(m_vRecentVolume.count(oPos)) {
+					m_vRecentVolume[oPos] = m_vVolume[oPos];
+				}
 			}
 		}
 	}
 }
+
 
 /*=======================================
 SetResolution
@@ -292,7 +422,7 @@ Function: put the points into their voxels and fusion, update the union set
 ========================================*/
 void HashVoxeler::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vCloud) {
 	
-	std::unique_lock<std::shared_mutex> lock(m_mVolumeLock);
+	std::unique_lock<std::shared_mutex> volume_write_lock(m_mVolumeLock);
 	++m_iFrameCount;
 
 	// put points into voxels
@@ -338,21 +468,19 @@ void HashVoxeler::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vC
 		fTimeStamp = m_iFrameCount;
 		m_vVolume[oPos] = oFusedPoint;
 
-		// update union set
-		// if(bNewVoxel) {
-		// 	Eigen::Vector3f vNormal(m_vVolume[oPos].normal_x, m_vVolume[oPos].normal_y, m_vVolume[oPos].normal_z);
-		// 	for(int dx = -1; dx <= 1; ++dx) {
-		// 		for(int dy = -1; dy <= 1; ++dy) {
-		// 			for(int dz = -1; dz <= 1; ++dz) {
-		// 				HashPos oNearPos(oPos.x + dx, oPos.y + dy, oPos.z + dz);
-		// 				if(m_vVolume.count(oNearPos) == 0) continue;
-		// 				Eigen::Vector3f vNearNormal(m_vVolume[oNearPos].normal_x, m_vVolume[oNearPos].normal_y, m_vVolume[oNearPos].normal_z);
-		// 				if(vNormal.dot(vNearNormal) > 0.9) m_oUnionSet.Union(oPos, oNearPos);
-		// 			}
-		// 		}
-		// 	}
-		// }
+		// update recent volume
+		m_vRecentVolume[oPos] = oFusedPoint;
 	}
+
+	// delete not recent voxels
+	std::vector<HashPos> vPosToDelete;
+	for(auto && [oPos,oPoint] : m_vRecentVolume) {
+		float& fTimeStamp = oPoint.data_c[2];
+		if(m_iFrameCount - fTimeStamp >= m_iMaxRecentKeep)
+			vPosToDelete.emplace_back(oPos);
+	}
+	for(auto && oPos : vPosToDelete)
+		m_vRecentVolume.erase(oPos);
 }
 
 
@@ -364,7 +492,7 @@ Function: decrease the confidence of dynamic point and record conflict
 ========================================*/
 void HashVoxeler::UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & vVolumeCloud) {
 
-	std::unique_lock<std::shared_mutex> lock(m_mVolumeLock);
+	std::unique_lock<std::shared_mutex> volume_write_lock(m_mVolumeLock);
 
 	HashPos oPos;
 	for(auto && oVoxelPoint : vVolumeCloud) {
@@ -379,11 +507,19 @@ void HashVoxeler::UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> &
 
 			if(bToDelete) {
 				m_vVolume.erase(oPos);
+				// delete recent voxel
+				if(m_vRecentVolume.count(oPos)) {
+					m_vRecentVolume.erase(oPos);
+				}
 			} 
 			else {
 				float& fConfidence = m_vVolume[oPos].data_n[3];
 				fConfidence -= fDeconfidence;
 				if(fConfidence < 0) fConfidence = 0;
+				// delete recent voxel
+				if(m_vRecentVolume.count(oPos)) {
+					m_vRecentVolume[oPos] = m_vVolume[oPos];
+				}
 			}
 		}
 	}
@@ -400,15 +536,6 @@ void HashVoxeler::GetCornerPoses(const HashPos & oVoxel, std::vector<HashPos> & 
 
 	vCornerPoses.clear();
 
-	// vCornerPoses.emplace_back(oVoxel.x, 		oVoxel.y, 		oVoxel.z	);
-	// vCornerPoses.emplace_back(oVoxel.x + 1, 	oVoxel.y, 		oVoxel.z	);
-	// vCornerPoses.emplace_back(oVoxel.x, 		oVoxel.y + 1, 	oVoxel.z	);
-	// vCornerPoses.emplace_back(oVoxel.x, 		oVoxel.y, 		oVoxel.z + 1);
-	// vCornerPoses.emplace_back(oVoxel.x + 1, 	oVoxel.y, 		oVoxel.z + 1);
-	// vCornerPoses.emplace_back(oVoxel.x + 1, 	oVoxel.y + 1, 	oVoxel.z	);
-	// vCornerPoses.emplace_back(oVoxel.x, 		oVoxel.y + 1,	oVoxel.z + 1);
-	// vCornerPoses.emplace_back(oVoxel.x + 1, 	oVoxel.y + 1, 	oVoxel.z + 1);
-
 	vCornerPoses.emplace_back(oVoxel.x, 		oVoxel.y, 		oVoxel.z	);
 	vCornerPoses.emplace_back(oVoxel.x, 		oVoxel.y + 1,	oVoxel.z	);
 	vCornerPoses.emplace_back(oVoxel.x + 1, 	oVoxel.y + 1, 	oVoxel.z	);
@@ -419,6 +546,13 @@ void HashVoxeler::GetCornerPoses(const HashPos & oVoxel, std::vector<HashPos> & 
 	vCornerPoses.emplace_back(oVoxel.x + 1, 	oVoxel.y,	 	oVoxel.z + 1);
 }
 
+/*=======================================
+HashPosTo3DPos(static)
+Input: 	oCornerPos - the 3d index of a voxel cube corner
+		oVoxelLength - the edge length of a voxel cube
+Output: oCorner3DPos - the 3d gt position of the corner point 
+Function: transfer a HashPos variable to 3d gt position (eigen styled)
+========================================*/
 void HashVoxeler::HashPosTo3DPos(const HashPos & oCornerPos, const pcl::PointXYZ & oVoxelLength, Eigen::Vector3f & oCorner3DPos) {
 	
 	oCorner3DPos.x() = oCornerPos.x * oVoxelLength.x;
@@ -426,6 +560,13 @@ void HashVoxeler::HashPosTo3DPos(const HashPos & oCornerPos, const pcl::PointXYZ
 	oCorner3DPos.z() = oCornerPos.z * oVoxelLength.z;
 }
 
+
+/*=======================================
+HashPosTo3DPos(static)
+Input: 	oPos - the 3d index of a voxel cube corner
+Output: pcl::PointXYZ - the 3d gt position of the corner point
+Function: transfer a HashPos variable to 3d gt position (pcl styled)
+========================================*/
 pcl::PointXYZ HashVoxeler::HashPosTo3DPos(const HashPos & oPos) {
 
 	return pcl::PointXYZ(oPos.x * m_oVoxelLength.x, oPos.y * m_oVoxelLength.y, oPos.z * m_oVoxelLength.z);

@@ -21,6 +21,7 @@ public:
     // Output : bool - is the point a static point?
     virtual bool IsStatic(const float& fUpdateParam) = 0;
 
+    // Output : bool - is the point probably a dynamic point?
     virtual bool IsSoftDynamic(const float& fUpdateParam) {return !IsStatic(fUpdateParam);}
 };
 

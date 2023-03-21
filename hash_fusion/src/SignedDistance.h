@@ -4,7 +4,6 @@
 #include <pcl/io/ply_io.h>
 #include <pcl/io/obj_io.h>
 #include <pcl/PolygonMesh.h>
-#include "GHPR.h"
 #include "HashVoxeler.h"
 #include "ConvexHullOperation.h"
 #include "MeshSample.h"
@@ -12,18 +11,8 @@
 #include "Fusion.h"
 #include "readtxt.h"
 
-class SignedDisParam{
 
-public:
-
-	SignedDisParam() :m_GHPRParam(3.6) { };
-
-	~SignedDisParam() { };
-
-	float m_GHPRParam;
-};
-
-class SignedDistance : public SignedDisParam{
+class SignedDistance {
 
 public:
 

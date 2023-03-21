@@ -40,6 +40,7 @@ include_directories(
 
 
 aux_source_directory(src DIR_SRCS)
+aux_source_directory(src/tools DIR_SRCS)
 
 ###### build ########
 add_executable(hash_fusion ${DIR_SRCS})
