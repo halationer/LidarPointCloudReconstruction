@@ -490,16 +490,15 @@ std::vector<pcl::Vertices> GHPR::ConstructSurfaceIdxFiltered(const int line_min,
 			if (iOneWorldIdx == m_iViewWorldIdx)
 				bNonViewPoint = false;
 
-			int nowScanID = m_pTransCloud->points[m_vHullInInputIdx[iOneLocalIdx]].intensity;
+			int nowScanID = m_pTransCloud->points[iOneWorldIdx].intensity;
 			// std::cout << "now ScanID: " << nowScanID << "\n";
 			if(nowScanID <= line_min) bAllZeroLine |= 1 << j;
 			if(nowScanID >= line_max) bAllMaxLine |= 1 << j; // 此处line_min/max是适配雷达类型的参数
-
 			minID = min(nowScanID, minID);
 			maxID = max(nowScanID, maxID);
 		}//end j
 
-		bAllZeroLine = bAllZeroLine == 7 ? true : false;
+		bAllZeroLine = bAllZeroLine | bAllMaxLine == 7 ? true : false;
 		bAllMaxLine = bAllMaxLine == 7 ? true : false;
 		// std::cout << "all_zero? " << ( bAllZeroLine ? "true" : "false") << std::endl;
 		// if(bAllZeroLine) std::cout << "wrong bottom face" << std::endl;

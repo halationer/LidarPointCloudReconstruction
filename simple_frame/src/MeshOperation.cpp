@@ -239,7 +239,8 @@ void MeshOperation::LocalFaceNormalAndConfidence(const pcl::PointCloud<pcl::Poin
 	//for the point whose normal has not been calculated:
 	//Mode 1(*), compute ray from point to viewpoint as normals (note: consistently reversed)
 	//Mode 2, culling
-	for (int i = 0; i != vNormalCount.size(); ++i){
+	unsigned int uFinalSize = vNormalCount.size();
+	for (int i = 0; i != uFinalSize; ++i){
 		
 		//if the normal of this query point is computed
 		if (vNormalCount[i]){
@@ -253,14 +254,20 @@ void MeshOperation::LocalFaceNormalAndConfidence(const pcl::PointCloud<pcl::Poin
 		//instead by rays if normal vector loss
 		}else{
 			
-			//normal vector facing away from the viewpoint
-			vCombinedNormal.points[i].normal_x = vVertices.points[i].x - oViewPoint.x;
-			vCombinedNormal.points[i].normal_y = vVertices.points[i].y - oViewPoint.y;
-			vCombinedNormal.points[i].normal_z = vVertices.points[i].z - oViewPoint.z;
+			// remove points that do not connect faces
+			std::swap(vCombinedNormal.points[i], vCombinedNormal.points[--uFinalSize]);
+			std::swap(vNormalCount[i], vNormalCount[uFinalSize]);
+			--i;
+			continue;
+
+			/*normal vector facing away from the viewpoint
+			vCombinedNormal.points[i].normal_x = oViewPoint.x - vVertices.points[i].x;
+			vCombinedNormal.points[i].normal_y = oViewPoint.y - vVertices.points[i].y;
+			vCombinedNormal.points[i].normal_z = oViewPoint.z - vVertices.points[i].z;
 			
 			//get unit vector
 			VectorNormalization(vCombinedNormal.points[i].normal_x, vCombinedNormal.points[i].normal_y, vCombinedNormal.points[i].normal_z);
-
+			//*/
 		}
 
 		// XXX: Confidence compute
@@ -270,6 +277,7 @@ void MeshOperation::LocalFaceNormalAndConfidence(const pcl::PointCloud<pcl::Poin
 		if(vCombinedNormal.points[i].data_n[3] <= 0) vCombinedNormal.points[i].data_n[3] = 1e-10;
 	}//end for i
 
+	vCombinedNormal.erase(vCombinedNormal.begin()+uFinalSize, vCombinedNormal.end());
 }
 
 //compute the normal and confidence of the vertex of faces
