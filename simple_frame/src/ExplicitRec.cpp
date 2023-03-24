@@ -298,7 +298,7 @@ void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vS
 				std::vector<pcl::Vertices> vOneNewFaces;
 				for (int j = 0; j != vTrueFaceStatus.size(); ++j){
 
-					if ( vTrueFaceStatus[j] || true ){			// TODO: 是否要剔除面片呢?
+					if ( vTrueFaceStatus[j] || false ){			// TODO: 是否要剔除面片呢?
 						pcl::Vertices oOneFace(vOneFaces[j]);
 						vOneNewFaces.push_back(oOneFace);
 					}//end if

@@ -41,6 +41,12 @@ int main(int argc, char** argv)
     int publish_delay;
     n.getParam("publish_delay", publish_delay);
     publish_delay = publish_delay <= 0 ? 1 : publish_delay;
+    
+    int bin_name_width;
+    n.param("bin_name_width", bin_name_width, 6);
+
+    int unit_fix;
+    n.param("unit_fix", unit_fix, 1);
 
     ros::Publisher pub_laser_cloud = n.advertise<sensor_msgs::PointCloud2>("/velodyne_points", 2);
 
@@ -60,7 +66,7 @@ int main(int argc, char** argv)
         // read lidar point cloud
         std::stringstream lidar_data_path;
         lidar_data_path << dataset_folder << "velodyne/sequences/" + sequence_number + "/velodyne/" 
-                        << std::setfill('0') << std::setw(6) << line_num << ".bin";
+                        << std::setfill('0') << std::setw(bin_name_width) << line_num << ".bin";
         std::vector<float> lidar_data = read_lidar_data(lidar_data_path.str());
         std::cout << "totally " << lidar_data.size() / 4.0 << " points in this lidar frame \n";
 
@@ -68,9 +74,9 @@ int main(int argc, char** argv)
         for (std::size_t i = 0; i < lidar_data.size(); i += 4)
         {
             pcl::PointXYZI point;
-            point.x = lidar_data[i];
-            point.y = lidar_data[i + 1];
-            point.z = lidar_data[i + 2];
+            point.x = unit_fix * lidar_data[i];
+            point.y = unit_fix * lidar_data[i + 1];
+            point.z = unit_fix * lidar_data[i + 2];
             point.intensity = lidar_data[i + 3];
             laser_cloud.push_back(point);
         }
