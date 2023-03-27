@@ -402,19 +402,6 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		pcl::PointCloud<pcl::PointXYZI>::Ptr pRawCloud(new pcl::PointCloud<pcl::PointXYZI>);
 		////message from ROS type to PCL type
 		pcl::fromROSMsg(vLaserData, *pRawCloud);
-
-		// /*TODO: out put raw point cloud
-		if(m_bOutputFiles) {
-			
-			std::stringstream filename;
-			filename << m_sFileHead << std::setw(4) << std::setfill('0') << m_iReconstructFrameNum << "_pc.ply";
-
-			std::thread tOutputThread([=](string path){
-				pcl::io::savePLYFileASCII(path, *pRawCloud);
-			}, filename.str());
-			tOutputThread.detach();
-		}
-		//*/
 		
 		//if have corresponding trajectory point (viewpoint)
 		pcl::PointXYZI oCurrentViewP;
@@ -440,6 +427,18 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		pcl::PointCloud<pcl::PointXYZI>::Ptr pSceneCloud(new pcl::PointCloud<pcl::PointXYZI>);
 		SamplePoints(*pRawCloud, *pSceneCloud, m_iSampleInPNum);
 		
+		// /*TODO: out put raw point cloud
+		if(m_bOutputFiles) {
+			
+			std::stringstream filename;
+			filename << m_sFileHead << std::setw(4) << std::setfill('0') << m_iReconstructFrameNum << "_pc.ply";
+
+			std::thread tOutputThread([=](string path){
+				pcl::io::savePLYFileASCII(path, *pSceneCloud);
+			}, filename.str());
+			tOutputThread.detach();
+		}
+		//*/
 
 		// frame reconstruct
 		struct timeval reconstruct_start;
