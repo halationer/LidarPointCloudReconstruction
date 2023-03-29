@@ -298,14 +298,13 @@ private:
     // data association switch
     bool m_bSurfelFusion;
     // viewpoint and current frame for surfel fusion
-    void SurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
+    // void SurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
     // more strict when filtering the points
-    void AddedSurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
+    // void AddedSurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
     // viewpoint and current frame for surfel fusion - multi-thread
     void SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
 
     bool m_bAsyncReconstruction;
-    bool m_bQuickSurfelFusion;
 
     // data associate time statics
     double m_dAverageFusionTime;
@@ -329,6 +328,10 @@ private:
 	int m_iConvDim;
 	int m_iConvAddPointNumRef;
 	float m_fConvFusionDistanceRef1;
+
+    // use union set to judge connection
+    bool m_bUseUnionSetConnection;
+    bool m_bOnlyMaxUnionSet;
 
     // // sdf
     // SignedDistance* m_pSdf;

@@ -32,7 +32,6 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 
 	//****get the nodes that are near the surface****
 	HashVoxeler::HashVolume vTempVolumeCopy;
-	// oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
 	oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
 	// oVoxeler.GetRecentNoneFlowVolume(vTempVolumeCopy, m_iKeepTime);
 	m_vVolumeCopy = vTempVolumeCopy;
@@ -52,32 +51,42 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 	return PlanDistance(vVolumeToMeshing, vVoxelNormalPara, oVoxeler.m_oVoxelLength);
 }
 
-std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedNormalBasedGlance(HashVoxeler & oVoxeler){
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlance(HashVoxeler & oVoxeler) {
+	
+	HashVoxeler::HashVolume vTempVolumeCopy;
+	oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
+	// oVoxeler.GetRecentNoneFlowVolume(vTempVolumeCopy, m_iKeepTime);
+	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
+}
 
-
-	//****get the nodes that are near the surface****
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceOnlyMaxUnion(HashVoxeler & oVoxeler) {
+	
 	HashVoxeler::HashVolume vTempVolumeCopy;
 	oVoxeler.GetRecentMaxConnectVolume(vTempVolumeCopy, m_iKeepTime);
-	// oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
-	// oVoxeler.GetRecentNoneFlowVolume(vTempVolumeCopy, m_iKeepTime);
+	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
+}
 
-	// UnionSet oTempSet;
-	// BuildUnionSet(oVoxeler, oTempSet);
-	// oVoxeler.UpdateUnionConflict(oTempSet);
-	// oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceCore(HashVoxeler::HashVolume& vTempVolumeCopy, const pcl::PointXYZ oVoxelSize) {
+
 	m_vVolumeCopy = vTempVolumeCopy;
 
-	// expand - 效果不好
-	// for(auto && [oPos,oPoint] : vTempVolumeCopy) {		
-	// 	for(int dz = -m_iConvHalfDim; dz <= m_iConvHalfDim; ++dz) {
-	// 	for(int dy = -m_iConvHalfDim; dy <= m_iConvHalfDim; ++dy) {
-	// 	for(int dx = -m_iConvHalfDim; dx <= m_iConvHalfDim; ++dx) {
+	///* expand - not that good, only fill small holes, but runs too slow(if 3d expand)
+	for(auto && [oPos,oPoint] : vTempVolumeCopy) {
 
-	// 		const HashPos oCurrentPos(oPos.x + dx, oPos.y + dy, oPos.z + dz);
-	// 		if(!vTempVolumeCopy.count(oCurrentPos)) 
-	// 			vTempVolumeCopy[oPos] = pcl::PointNormal();
-	// 	}}}
-	// }
+		Eigen::Vector3f vNormal(oPoint.normal_x, oPoint.normal_y, oPoint.normal_z);
+		int index;
+		vNormal.minCoeff(&index);
+
+		for(int dx = -m_iConvHalfDim; dx <= m_iConvHalfDim; ++dx) {
+
+			const HashPos oCurrentPos(oPos.x + (index == 0 ? dx : 0), oPos.y + (index == 1 ? dx : 0), oPos.z + (index == 2 ? dx : 0));
+			if(!vTempVolumeCopy.count(oCurrentPos)) {
+				vTempVolumeCopy[oCurrentPos] = pcl::PointNormal();
+				vTempVolumeCopy[oCurrentPos].data_c[2] = 0;
+			}
+		}
+	}
+	//*/
 
 	// /*
 	clock_t start_time, conv_time;
@@ -98,7 +107,7 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedNormalBased
 
 					const HashPos oCurrentPos(oPos.x + dx, oPos.y + dy, oPos.z + dz);
 
-					if(vTempVolumeCopy.count(oCurrentPos)) {
+					if(vTempVolumeCopy.count(oCurrentPos) && vTempVolumeCopy[oCurrentPos].data_c[2]) {
 
 						const pcl::PointNormal& oVoxelNormal = vTempVolumeCopy[oCurrentPos];
 						const float& fCurrentWeight = oVoxelNormal.data_n[3];
@@ -191,7 +200,7 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedNormalBased
 	oConvexHullOPer.ComputeAllFaceParams(vVolumeToMeshing, vVoxelNormalPara);
 
 	//output
-	return PlanDistance(vVolumeToMeshing, vVoxelNormalPara, oVoxeler.m_oVoxelLength);
+	return PlanDistance(vVolumeToMeshing, vVoxelNormalPara, oVoxelSize);
 
 }
 

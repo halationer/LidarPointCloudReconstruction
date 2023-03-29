@@ -4,8 +4,7 @@
 
 
 HashVoxeler::HashVoxeler() : 
-	m_iFrameCount(0), m_iMaxRecentKeep(500), m_fLidarSpeed(0), m_fRadiusExpandFactor(1.25f),
-	m_iRecentTimeToGetRadius(30) {}
+	m_iFrameCount(0), m_iMaxRecentKeep(500), m_fLidarSpeed(0), m_fRadiusExpandFactor(1.25f), m_iRecentTimeToGetRadius(30) {}
 
 HashVoxeler::~HashVoxeler() {}
 

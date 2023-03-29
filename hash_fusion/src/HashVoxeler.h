@@ -37,7 +37,7 @@ public:
 // main component
 public:
 	// frame keep time in m_vRecentVolume
-	const int m_iMaxRecentKeep;
+	int m_iMaxRecentKeep;
 
 	// total frame received
 	int m_iFrameCount;

@@ -29,11 +29,12 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <!-- <arg name="odomintopic" default="/aft_mapped_to_init" /> -->
 
     <arg name="cloud_out_opic" default="/processed_clouds" />
-
     <arg name="polygon_out_opic" default="/surrounding_meshes" />
 
-    <arg name="out_cloud_tf_id" default="map"/>
+    <arg name="async_reconstruct" default="true"/>
+    <arg name="additional_points" default="false"/>
 
+    <arg name="out_cloud_tf_id" default="map"/>
     <arg name="polygon_tf_id" default="map"/>
 
     <arg name="sample_pc_frame_num"  default="1" />
@@ -46,21 +47,18 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="mesh_u_period" default="2.0"/> 
 
+    <!-- dynamic control -->
     <arg name="use_surfel_fusion" default="true"/>
+    <arg name="strategy_type" default="2"/>
+    <arg name="use_union_set" default="true"/>
+    <arg name="only_max_union_set" default="true"/>
 
-    <arg name="quick_surfel_fusion" default="true" />
-
-    <arg name="additional_points" default="false"/>
-
-    <arg name="async_reconstruct" default="true"/>
     
     <!-- meshing params -->
-    <arg name="keep_time" default="100" />
+    <arg name="keep_time" default="1200" />
     <arg name="conv_dim" default="3" />
     <arg name="conv_add_point_ref" default="4" />
     <arg name="conv_distance_ref" default="0.95" />
-
-    <arg name="strategy_type" default="2"/>
     
 
     <!-- frames_fusion node in frames_fusion pkg-->
@@ -109,8 +107,6 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
         <param name="async_reconstruct" type="bool" value="$(arg async_reconstruct)" />
 
-        <param name="quick_surfel_fusion" type="bool" value="$(arg quick_surfel_fusion)" />
-
         <!-- meshing params -->
         <param name="keep_time" type="int" value="$(arg keep_time)" />
 
@@ -119,6 +115,10 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <param name="conv_add_point_ref" type="int" value="$(arg conv_add_point_ref)" />
 
         <param name="conv_distance_ref" type="double" value="$(arg conv_distance_ref)" />
+        
+        <!-- dynamic judge params-->
+        <param name="use_union_set" type="bool" value="$(arg use_union_set)" />
+        <param name="only_max_union_set" type="bool" value="$(arg only_max_union_set)" />
 
     </node>
 
