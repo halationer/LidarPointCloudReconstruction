@@ -21,9 +21,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <!-- output evaluation files (point cloud and mesh )-->
     <arg name="sf_output_path" default=""/>
-    <arg name="mf_output_path" default=""/>
     <param name="sf_output_path" type="string" value="$(arg sf_output_path)" />
-    <param name="mf_output_path" type="string" value="$(arg mf_output_path)" />
+    <arg name="mf_output_path" default=""/>
 
     <!--Use simulated time to prevent the public time of the TF structure from being unable to match with other messages-->
     <param name="use_sim_time" value="true"/>
@@ -43,7 +42,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <include file="$(find simple_frame)/launch/reconstruction.launch"/>
 
     <!-- launch frame fusion-->
-    <include file="$(find hash_fusion)/launch/fusion.launch" />
+    <include file="$(find hash_fusion)/launch/fusion.launch" >
+        <arg name="mf_output_path" value="$(arg mf_output_path)"/>
+    </include>
 
     <!-- rosbag related: replay with rate = 1 speed up-->
     <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 $(arg rosbag) --topics /velodyne_points"/>
