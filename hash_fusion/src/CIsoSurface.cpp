@@ -317,6 +317,7 @@ template <class T> CIsoSurface<T>::CIsoSurface()
 	m_nVertices = 0;
 	m_ppt3dVertices = NULL;
 	m_piTriangleIndices = NULL;
+	m_piTriangleAttributes = NULL;
 	m_pvec3dNormals = NULL;
 	m_tIsoLevel = 0;
 	m_bValidSurface = false;
@@ -340,7 +341,7 @@ void CIsoSurface<T>::GenerateSurface(const std::unordered_map<HashPos, T, HashFu
 	m_ptScalarField = ptScalarField;
 
 	// Generate isosurface, hash version
-	for(auto && [oPos,_] : vVolume) {
+	for(auto && [oPos, oPoint] : vVolume) {
 		
 		// Calculate table lookup index from those
 		// vertices which are below the isolevel.
@@ -432,6 +433,10 @@ void CIsoSurface<T>::GenerateSurface(const std::unordered_map<HashPos, T, HashFu
 				triangle.edgeID[0] = GetEdgeID(x, y, z, m_triTable[tableIndex][i]);
 				triangle.edgeID[1] = GetEdgeID(x, y, z, m_triTable[tableIndex][i + 1]);
 				triangle.edgeID[2] = GetEdgeID(x, y, z, m_triTable[tableIndex][i + 2]);
+
+				// new for add weight display, in order to show color or other attributes
+				triangle.pointAttr = oPoint.data_c[1];
+
 				m_trivecTriangles.push_back(triangle);
 			}
 		}
@@ -463,6 +468,10 @@ template <class T> void CIsoSurface<T>::DeleteSurface()
 	if (m_piTriangleIndices != NULL) {
 		delete[] m_piTriangleIndices;
 		m_piTriangleIndices = NULL;
+	}
+	if(m_piTriangleAttributes != NULL) {
+		delete[] m_piTriangleAttributes;
+		m_piTriangleAttributes = NULL;
 	}
 	if (m_pvec3dNormals != NULL) {
 		delete[] m_pvec3dNormals;
@@ -644,10 +653,14 @@ template <class T> void CIsoSurface<T>::RenameVerticesAndTriangles()
 	vecIterator = m_trivecTriangles.begin();
 	m_nTriangles = m_trivecTriangles.size();
 	m_piTriangleIndices = new unsigned int[m_nTriangles*3];
+	// new for show dynamic
+	m_piTriangleAttributes = new unsigned int[m_nTriangles];
 	for (unsigned int i = 0; i < m_nTriangles; i++, vecIterator++) {
 		m_piTriangleIndices[i*3] = (*vecIterator).pointID[0];
 		m_piTriangleIndices[i*3+1] = (*vecIterator).pointID[1];
 		m_piTriangleIndices[i*3+2] = (*vecIterator).pointID[2];
+		// new for show dynamic
+		m_piTriangleAttributes[i] = (*vecIterator).pointAttr;
 	}
 
 	m_i2pt3idVertices.clear();
@@ -749,6 +762,10 @@ template <class T> void CIsoSurface<T>::OutputMesh(const pcl::PointXYZ & oOffset
 		oOneVertices.vertices.push_back(m_piTriangleIndices[i * 3]);
 		oOneVertices.vertices.push_back(m_piTriangleIndices[i * 3 + 1]);
 		oOneVertices.vertices.push_back(m_piTriangleIndices[i * 3 + 2]);
+
+		// new for show mesh color weight or other attribute value
+		oOneVertices.vertices.push_back(m_piTriangleAttributes[i]);
+
 		oCBModel.polygons.push_back(oOneVertices);
 	}
 

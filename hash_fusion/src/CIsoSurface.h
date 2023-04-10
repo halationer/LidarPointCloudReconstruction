@@ -41,6 +41,7 @@ typedef std::unordered_map<EDGEID, POINT3DID, HashEdgeFunc> ID2POINT3DID;
 
 struct TRIANGLE {
 	unsigned int pointID[3];
+	unsigned int pointAttr;
 	EDGEID edgeID[3];
 };
 
@@ -84,6 +85,8 @@ public:
 
 	// The indices of the vertices which make up the triangles.
 	unsigned int* m_piTriangleIndices;
+
+	unsigned int* m_piTriangleAttributes;
 
 	// The number of normals.
 	unsigned int m_nNormals;
