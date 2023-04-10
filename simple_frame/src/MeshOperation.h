@@ -32,7 +32,7 @@ public:
 	void LocalFaceNormalAndConfidence(const pcl::PointCloud<pcl::PointXYZI> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs, const Eigen::MatrixXf & oMatNormal, const pcl::PointXYZI oViewPoint, pcl::PointCloud<pcl::PointNormal> & vCombinedNormal);
 
 	//compute the local triangular face normal vector
-	void LocalFaceNormalAndConfidence(const pcl::PointCloud<pcl::PointXYZI> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs, const Eigen::MatrixXf & oMatNormal, const pcl::PointXYZI oViewPoint, const std::vector<Confidence> vFaceWeight, pcl::PointCloud<pcl::PointNormal> & vCombinedNormal);
+	void LocalFaceNormalAndDistanceConfidence(const pcl::PointCloud<pcl::PointXYZI> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs, const Eigen::MatrixXf & oMatNormal, const pcl::PointXYZI oViewPoint, const std::vector<bool> vFaceTrueStatus, pcl::PointCloud<pcl::PointNormal> & vCombinedNormal);
 
 	//compute the local triangular face normal vector
 	void LocalFaceNormal(const pcl::PointCloud<pcl::PointXYZI> & vVertices, const std::vector<pcl::Vertices> & vMeshVertexIdxs, const Eigen::MatrixXf & oMatNormal, pcl::PointCloud<pcl::PointNormal> & vCombinedNormal);

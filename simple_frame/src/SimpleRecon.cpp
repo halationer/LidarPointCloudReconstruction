@@ -833,7 +833,7 @@ void SimpleRecon::RemoveMeshFaces(const pcl::PointXYZI& oViewPoint, const pcl::P
     //propagate the normal vector to each vertex
     //linearly compute weighted neighboring normal vector
     //这里不仅按照面片平均了每个点的法向量，而且还计算了每个点关于法线的置信度值（记录在 data_n[3] 的位置上）
-    oMeshOper.LocalFaceNormalAndConfidence(in_cloud, in_polygons, oMatNormal, oViewPoint, vFaceWeight, out_cloud);
+    oMeshOper.LocalFaceNormalAndDistanceConfidence(in_cloud, in_polygons, oMatNormal, oViewPoint, vTrueFaceStatus, out_cloud);
 
     //Record the remaining triangles
     out_polygons.clear();

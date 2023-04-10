@@ -282,7 +282,7 @@ void MeshOperation::LocalFaceNormalAndConfidence(const pcl::PointCloud<pcl::Poin
 
 //compute the normal and confidence of the vertex of faces
 /*=======================================
-LocalFaceNormalAndConfidence -  Reload
+LocalFaceNormalAndDistanceConfidence
 Input:  vVertices - point clouds
         vMeshVertexIdxs - faces (point relationships)
 		oMatNormal - face normals
@@ -292,12 +292,12 @@ Output: vCombinedNormal - point with its local combined normal
 Function: compute the local normal for each point
 ========================================*/
 //Calculate the local triangular face normal vector
-void MeshOperation::LocalFaceNormalAndConfidence(
+void MeshOperation::LocalFaceNormalAndDistanceConfidence(
 	const pcl::PointCloud<pcl::PointXYZI> & vVertices, 
 	const std::vector<pcl::Vertices> & vMeshVertexIdxs, 
 	const Eigen::MatrixXf & oMatNormal, 
-	const pcl::PointXYZI oViewPoint, 
-	const std::vector<Confidence> vFaceWeight, 
+	const pcl::PointXYZI oViewPoint,
+	const std::vector<bool> vFaceTrueStatus,
 	pcl::PointCloud<pcl::PointNormal> & vCombinedNormal) {
 	
 	//the vector indicating the normal of point is computed or not
@@ -323,6 +323,8 @@ void MeshOperation::LocalFaceNormalAndConfidence(
 	//for each face
 	for (int i = 0; i != vMeshVertexIdxs.size(); ++i){
 		
+		if(vFaceTrueStatus[i] == false) continue;
+
 		//for each vertice
 		for (int j = 0; j != vMeshVertexIdxs[i].vertices.size(); ++j){
 			
@@ -345,7 +347,8 @@ void MeshOperation::LocalFaceNormalAndConfidence(
 	//for the point whose normal has not been calculated:
 	//Mode 1(*), compute ray from point to viewpoint as normals (note: consistently reversed)
 	//Mode 2, culling
-	for (int i = 0; i != vNormalCount.size(); ++i){
+	unsigned int uFinalSize = vNormalCount.size();
+	for (int i = 0; i != uFinalSize; ++i){
 		
 		//if the normal of this query point is computed
 		if (vNormalCount[i]){
@@ -358,14 +361,10 @@ void MeshOperation::LocalFaceNormalAndConfidence(
 		
 		//instead by rays if normal vector loss
 		}else{
-			//normal vector facing away from the viewpoint
-			vCombinedNormal.points[i].normal_x = - vVertices.points[i].x + oViewPoint.x;
-			vCombinedNormal.points[i].normal_y = - vVertices.points[i].y + oViewPoint.y;
-			vCombinedNormal.points[i].normal_z = - vVertices.points[i].z + oViewPoint.z;
-			
-			//get unit vector
-			VectorNormalization(vCombinedNormal.points[i].normal_x, vCombinedNormal.points[i].normal_y, vCombinedNormal.points[i].normal_z);
-
+			std::swap(vCombinedNormal.points[i], vCombinedNormal.points[--uFinalSize]);
+			std::swap(vNormalCount[i], vNormalCount[uFinalSize]);
+			--i;
+			continue;
 		}
 
 		// XXX: Confidence compute
@@ -373,6 +372,7 @@ void MeshOperation::LocalFaceNormalAndConfidence(
 		vCombinedNormal.points[i].data_n[3] = Confidence::GetDepthConfidence_Inverse(oToCenterVec.norm());
 
 	}//end for i
+	vCombinedNormal.erase(vCombinedNormal.begin()+uFinalSize, vCombinedNormal.end());
 }
 
 
