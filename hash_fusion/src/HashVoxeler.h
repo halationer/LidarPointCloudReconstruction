@@ -8,6 +8,7 @@
 #include<Eigen/Core>
 #include<vector>
 #include<shared_mutex>
+#include<memory>
 
 #include"tools/VolumeUpdateStrategy.h"
 #include"tools/UnionSet.h"
@@ -34,6 +35,8 @@ public:
 public:
 	int m_iRecentTimeToGetRadius;
 
+	int m_fExpandDistributionRef;
+
 // main component
 public:
 	// frame keep time in m_vRecentVolume
@@ -53,10 +56,11 @@ private:
 	mutable std::shared_mutex m_mUnionSetLock;
 
 	/*  data structure
+		point.data_c[0] - flow score
 		point.data_c[1] - conflict times
 		point.data_c[2] - time stamp
 		point.data_c[3] - normal_distribution_distance
-		point.data-n[3] - confidence */ 
+		point.data_n[3] - confidence */ 
     HashVoxeler::HashVolume m_vVolume;
 
 	// keep another volume that only save recent
@@ -70,7 +74,8 @@ private:
 
 	// point flow recorder
 	std::unordered_map<HashPos, pcl::PointNormal, HashFunc> m_vPointFlow;
-	bool IsNoneFlow(const HashPos& oPos);
+	inline bool IsNoneFlow(const HashPos& oPos);
+	inline float FlowScore(const HashPos& oPos);
 
 public:
 
@@ -89,14 +94,20 @@ public:
 	// get filtered volume
 	void GetRecentMaxConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
 	void GetRecentNoneFlowVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
+	void GetRecentHighDistributionVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
 
 	// build union set
 	void RebuildUnionSet();
 	void UpdateUnionConflict();
 
-	// set the settings of voxel
-	void SetResolution(pcl::PointXYZ & oLength);
-	void SetStrategy(enum vus eStrategy);
+	void ClearFlow();
+
+	// set the resolution of voxel
+	void SetResolution(pcl::PointXYZ & oLength) { m_oVoxelLength = oLength; }
+	// Set the strategy of fusion and remove dynamic points
+	void SetStrategy(enum vus eStrategy) { m_pUpdateStrategy = std::shared_ptr<VolumeUpdateStrategy>(CreateStrategy(eStrategy)); }
+	// Copy strategy from another
+	void GetStrategy(HashVoxeler& oVolume) { m_pUpdateStrategy = oVolume.m_pUpdateStrategy; }
 
 	// voxelize the points and fuse them
 	void VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vCloud);

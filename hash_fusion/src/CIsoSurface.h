@@ -12,6 +12,7 @@
 
 #include <map>
 #include <vector>
+#include <functional>
 #include <pcl/point_types.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/Vertices.h>
@@ -129,12 +130,14 @@ protected:
 
 	// The buffer holding the scalar field.
 	std::unordered_map<HashPos, T, HashFunc> m_ptScalarField;
-	
+
 	// The isosurface value.
 	T m_tIsoLevel;
 
 	// Indicates whether a valid surface is present.
 	bool m_bValidSurface;
 
+public:
+	std::function<uint32_t(const pcl::PointNormal&)> m_pGetAttrFunc;
 };
 #endif // CISOSURFACE_H

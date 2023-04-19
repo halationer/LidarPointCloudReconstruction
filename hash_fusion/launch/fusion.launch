@@ -48,11 +48,13 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="mesh_u_period" default="2.0"/> 
 
     <!-- dynamic control -->
-    <arg name="use_surfel_fusion" default="true"/>
-    <arg name="strategy_type" default="2"/>
-    <arg name="use_union_set" default="true"/>
-    <arg name="only_max_union_set" default="true"/>
+    <arg name="use_surfel_fusion"   default="true"/>
+    <arg name="strategy_type"       default="2"/>
+    <arg name="use_union_set"       default="true"/>
+    <arg name="only_max_union_set"  default="true"/>
 
+    <arg name="use_multi_resolution" default="false"/>
+    <arg name="expand_distribution_ref" default="0.99"/>
     
     <!-- meshing params -->
     <arg name="keep_time" default="1200" />
@@ -120,6 +122,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <param name="use_union_set" type="bool" value="$(arg use_union_set)" />
         <param name="only_max_union_set" type="bool" value="$(arg only_max_union_set)" />
 
+        <!-- multi_resolution -->
+        <param name="use_multi_resolution" type="bool" value="$(arg use_multi_resolution)"/>
+        <param name="expand_distribution_ref" type="double" value="$(arg expand_distribution_ref)"/>
     </node>
 
 

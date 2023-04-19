@@ -30,6 +30,7 @@ public:
 	//compute the signed distance based on surfel(point with normal)
 	std::unordered_map<HashPos, float, HashFunc> & NormalBasedGlance(HashVoxeler & oVoxeler);
 	std::unordered_map<HashPos, float, HashFunc> & ConvedGlance(HashVoxeler & oVoxeler);
+	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceNoneFlow(HashVoxeler & oVoxeler);
 	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceOnlyMaxUnion(HashVoxeler & oVoxeler);
 
 	//compute the signed distance based on corners to plan in a voxel

@@ -34,6 +34,7 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 	HashVoxeler::HashVolume vTempVolumeCopy;
 	oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
 	// oVoxeler.GetRecentNoneFlowVolume(vTempVolumeCopy, m_iKeepTime);
+	// oVoxeler.GetRecentHighDistributionVolume(vTempVolumeCopy, m_iKeepTime);
 	m_vVolumeCopy = vTempVolumeCopy;
 
 	// meshing
@@ -55,7 +56,13 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlance(Hash
 	
 	HashVoxeler::HashVolume vTempVolumeCopy;
 	oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
-	// oVoxeler.GetRecentNoneFlowVolume(vTempVolumeCopy, m_iKeepTime);
+	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
+}
+
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceNoneFlow(HashVoxeler & oVoxeler) {
+
+	HashVoxeler::HashVolume vTempVolumeCopy;
+	oVoxeler.GetRecentNoneFlowVolume(vTempVolumeCopy, m_iKeepTime);
 	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
 }
 
@@ -70,21 +77,35 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceCore(
 
 	m_vVolumeCopy = vTempVolumeCopy;
 
-	///* expand - not that good, only fill small holes, but runs too slow(if 3d expand)
+	// /* expand - not that good, only fill small holes, but runs too slow(if 3d expand)
 	for(auto && [oPos,oPoint] : vTempVolumeCopy) {
 
+		// judge normal main direction to speed up
 		Eigen::Vector3f vNormal(oPoint.normal_x, oPoint.normal_y, oPoint.normal_z);
+		vNormal = vNormal.cwiseAbs();
 		int index;
-		vNormal.minCoeff(&index);
+		vNormal.maxCoeff(&index);
 
-		for(int dx = -m_iConvHalfDim; dx <= m_iConvHalfDim; ++dx) {
+		int start_x = index == 0 ? 0 : -m_iConvHalfDim;
+		int start_y = index == 1 ? 0 : -m_iConvHalfDim;
+		int start_z = index == 2 ? 0 : -m_iConvHalfDim;
+		int end_x   = index == 0 ? 0 : m_iConvHalfDim;
+		int end_y   = index == 1 ? 0 : m_iConvHalfDim;
+		int end_z   = index == 2 ? 0 : m_iConvHalfDim;
+	 
+		for(int dx = start_x; dx <= end_x; ++dx) {
+		for(int dy = start_y; dy <= end_y; ++dy) {
+		for(int dz = start_z; dz <= end_z; ++dz) {
+		// for(int dx = -m_iConvHalfDim; dx <= m_iConvHalfDim; ++dx) {
+		// for(int dy = -m_iConvHalfDim; dy <= m_iConvHalfDim; ++dy) {
+		// for(int dz = -m_iConvHalfDim; dz <= m_iConvHalfDim; ++dz) {
 
-			const HashPos oCurrentPos(oPos.x + (index == 0 ? dx : 0), oPos.y + (index == 1 ? dx : 0), oPos.z + (index == 2 ? dx : 0));
+			const HashPos oCurrentPos(oPos.x + dx, oPos.y + dy, oPos.z + dz);
 			if(!vTempVolumeCopy.count(oCurrentPos)) {
 				vTempVolumeCopy[oCurrentPos] = pcl::PointNormal();
 				vTempVolumeCopy[oCurrentPos].data_c[2] = 0;
 			}
-		}
+		}}}
 	}
 	//*/
 
@@ -107,7 +128,7 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceCore(
 
 					const HashPos oCurrentPos(oPos.x + dx, oPos.y + dy, oPos.z + dz);
 
-					if(vTempVolumeCopy.count(oCurrentPos) && vTempVolumeCopy[oCurrentPos].data_c[2]) {
+					if(vTempVolumeCopy.count(oCurrentPos) && vTempVolumeCopy[oCurrentPos].data_c[2] /*not added point*/) {
 
 						const pcl::PointNormal& oVoxelNormal = vTempVolumeCopy[oCurrentPos];
 						const float& fCurrentWeight = oVoxelNormal.data_n[3];
@@ -148,9 +169,8 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceCore(
 			//经过观察发现 all_weight 和 normal_distribution_disance 之间的关系也能得出一些信息： 如果 all_weight 较小，normal_distribution_distance = 1 则说明该4x4的区域只有一个点，很有可能是噪点
 
 			// use min level to update the normal
+			const HashPos oCurrentPos(oPos.x, oPos.y, oPos.z);
 			if(normal_distribution_distance > m_fConvFusionDistanceRef1) {
-
-				const HashPos oCurrentPos(oPos.x, oPos.y, oPos.z);
 
 				// copy fused points to octree neighbors
 				if(point_count < 3) {
@@ -158,16 +178,33 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceCore(
 				}
 				else if(m_vVolumeCopy.count(oCurrentPos) || point_count >= m_iConvAddPointNumRef) {
 					
+					uint32_t voxel_token = m_vVolumeCopy.count(oCurrentPos) ? 0x3fffffff /*means the point is fused*/: __INT_MAX__ /* means the point is added*/;
+
 					pcl::PointNormal& oVoxelNormal = m_vVolumeCopy[oCurrentPos];
 					oVoxelNormal.x = oFusedNormal.x;
 					oVoxelNormal.y = oFusedNormal.y;
 					oVoxelNormal.z = oFusedNormal.z;
+					oVoxelNormal.data_c[1] = voxel_token;
 					oVoxelNormal.data_c[3] = normal_distribution_distance;
 					oVoxelNormal.normal_x = oFusedNormal.normal_x;
 					oVoxelNormal.normal_y = oFusedNormal.normal_y;
 					oVoxelNormal.normal_z = oFusedNormal.normal_z;
 					oVoxelNormal.data_n[3] = all_weight;
 				}
+			}
+			// add point whatever
+			else if(!m_vVolumeCopy.count(oCurrentPos) && point_count > 0) {
+					
+					pcl::PointNormal& oVoxelNormal = m_vVolumeCopy[oCurrentPos];
+					oVoxelNormal.x = oFusedNormal.x;
+					oVoxelNormal.y = oFusedNormal.y;
+					oVoxelNormal.z = oFusedNormal.z;
+					oVoxelNormal.data_c[1] = __INT_MAX__;
+					oVoxelNormal.data_c[3] = normal_distribution_distance;
+					oVoxelNormal.normal_x = oFusedNormal.normal_x;
+					oVoxelNormal.normal_y = oFusedNormal.normal_y;
+					oVoxelNormal.normal_z = oFusedNormal.normal_z;
+					oVoxelNormal.data_n[3] = all_weight;
 			}
 		}
 

@@ -16,6 +16,7 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PointStamped.h>
 #include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 
 //pcl related
 #include <pcl_ros/transforms.h>
@@ -74,8 +75,8 @@ public:
 
 //*************Initialization function*************
     //Constructor
-    FramesFusion(ros::NodeHandle & node,
-            ros::NodeHandle & nodeHandle);
+    FramesFusion(ros::NodeHandle & node, ros::NodeHandle & nodeHandle);
+    virtual void LazyLoading();
 
     //Destructor
     virtual ~FramesFusion();
@@ -93,7 +94,7 @@ public:
     void HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory);
 
     // Build surface models based on new points that received from ros
-    void SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFrameId);
+    virtual void SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFrameId);
     
 
 ////////////
@@ -141,7 +142,7 @@ public:
     //reload, output point cloud with given feature for test
     void OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures, bool bAllRecord = false);
 
-private:
+protected:
 
     //***file related***
     std::string m_sFileHead;
@@ -235,7 +236,8 @@ private:
     // more strict when filtering the points
     // void AddedSurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
     // viewpoint and current frame for surfel fusion - multi-thread
-    void SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
+    virtual void SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
+    virtual void UpdateOneFrame(pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud);
 
     bool m_bAsyncReconstruction;
 

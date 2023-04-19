@@ -1,4 +1,7 @@
 #include "FramesFusion.h"
+#include "MultiResolutionFusion.h"
+
+#include <memory>
 
 int main(int argc, char** argv){
 
@@ -6,7 +9,11 @@ int main(int argc, char** argv){
   ros::NodeHandle node;
   ros::NodeHandle privateNode("~");
  
-  FramesFusion oFramesFusion(node,privateNode);
+  bool bUseMultiResolution;
+  privateNode.param("use_multi_resolution", bUseMultiResolution, false);
+  std::unique_ptr<FramesFusion> pFramesFusion(bUseMultiResolution ? new MultiResolutionFusion(node,privateNode) : new FramesFusion(node,privateNode));
+
+  pFramesFusion->LazyLoading();
 
   ros::spin();
 

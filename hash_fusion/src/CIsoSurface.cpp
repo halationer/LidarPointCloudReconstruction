@@ -321,6 +321,10 @@ template <class T> CIsoSurface<T>::CIsoSurface()
 	m_pvec3dNormals = NULL;
 	m_tIsoLevel = 0;
 	m_bValidSurface = false;
+
+	m_pGetAttrFunc = [](const pcl::PointNormal& oPoint)->uint32_t {
+		return oPoint.data_c[1];
+	};
 }
 
 template <class T> CIsoSurface<T>::~CIsoSurface()
@@ -435,7 +439,7 @@ void CIsoSurface<T>::GenerateSurface(const std::unordered_map<HashPos, T, HashFu
 				triangle.edgeID[2] = GetEdgeID(x, y, z, m_triTable[tableIndex][i + 2]);
 
 				// new for add weight display, in order to show color or other attributes
-				triangle.pointAttr = oPoint.data_c[1];
+				triangle.pointAttr = m_pGetAttrFunc(oPoint);
 
 				m_trivecTriangles.push_back(triangle);
 			}

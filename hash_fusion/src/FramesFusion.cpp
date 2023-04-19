@@ -45,9 +45,13 @@ FramesFusion::FramesFusion(ros::NodeHandle & node,
 	m_oCloudPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sOutCloudTopic, 1, true);
 
   	//publish polygon constructed from one frame point cloud
-	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::Marker>(m_sOutMeshTopic, 1, true);
+	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::MarkerArray>(m_sOutMeshTopic, 1, true);
 }
 
+void FramesFusion::LazyLoading() {
+	
+    std::cout << "Load Fixed Resolution Fusion..." << std::endl;
+}
 
 /*************************************************
 Function: ~FramesFusion
@@ -319,27 +323,34 @@ void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vClo
 
 }
 
-void HSVToRGB(float H, float S, float V, uint8_t& R, uint8_t& G, uint8_t& B) {
+void HSVToRGB(float H, float S, float V, float& R, float& G, float& B) {
 
 	float C = V * S;
 	int FixFactor = int(H / 60) & 1;
 	float X = C * ((FixFactor ? -1 : 1) * (int(H) % 60) / 60.0 + FixFactor); // X 值的变化随H波动，锯齿状0-1之间周期变化
 	float m = V - C;
-	float R_, G_, B_;
 	switch(int(H) / 60)
 	{
-		case 1:		R_ = X;	G_ = C;	B_ = 0; break;	// 60  <= H < 120
-		case 2:		R_ = 0;	G_ = C;	B_ = X; break;	// 120 <= H < 180
-		case 3:		R_ = 0;	G_ = X;	B_ = C; break;	// 180 <= H < 240
-		case 4:		R_ = X;	G_ = 0;	B_ = C; break;	// 240 <= H < 300
-		case 5: 
-		case 6:		R_ = C;	G_ = 0;	B_ = X; break;	// 300 <= H < 360
-
-		default:	R_ = C;	G_ = X;	B_ = 0; 		// 0   <= H < 60 or outlier
+		case 1:		R = X;	G = C;	B = 0; break;	// 60  <= H < 120
+		case 2:		R = 0;	G = C;	B = X; break;	// 120 <= H < 180
+		case 3:		R = 0;	G = X;	B = C; break;	// 180 <= H < 240
+		case 4:		R = X;	G = 0;	B = C; break;	// 240 <= H < 300
+		case 5:
+		case 6:		R = C;	G = 0;	B = X; break;	// 300 <= H < 360
+		default:	R = C;	G = X;	B = 0; 		// 0   <= H < 60 or outlier
 	}
-	R = (R_ + m) * 255;
-	G = (G_ + m) * 255;
-	B = (B_ + m) * 255;
+	R += m;
+	G += m;
+	B += m;
+}
+
+void HSVToRGB(float H, float S, float V, uint8_t& R, uint8_t& G, uint8_t& B) {
+
+	float R_, G_, B_;
+	HSVToRGB(H, S, V, R_, G_, B_);
+	R = R_ * 255;
+	G = G_ * 255;
+	B = B_ * 255;
 }
 
 /*************************************************
@@ -400,6 +411,32 @@ void FramesFusion::PublishPointCloud(const pcl::PointCloud<T> & vCloud, const st
 template void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointNormal>&, const std::vector<float>&, const std::string);
 template void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ>&, const std::vector<float>&, const std::string);
 
+void InitMeshMsg(visualization_msgs::Marker& oMeshMsgs, string frame_id, int id, float r, float g, float b) {
+	
+	oMeshMsgs.header.frame_id = frame_id;
+	oMeshMsgs.header.stamp = ros::Time::now();
+	oMeshMsgs.type = visualization_msgs::Marker::TRIANGLE_LIST;
+	oMeshMsgs.action = visualization_msgs::Marker::ADD;
+	oMeshMsgs.id = id; 
+
+	oMeshMsgs.scale.x = 1.0;
+	oMeshMsgs.scale.y = 1.0;
+	oMeshMsgs.scale.z = 1.0;
+
+	oMeshMsgs.pose.position.x = 0.0;
+	oMeshMsgs.pose.position.y = 0.0;
+	oMeshMsgs.pose.position.z = 0.0;
+
+	oMeshMsgs.pose.orientation.x = 0.0;
+	oMeshMsgs.pose.orientation.y = 0.0;
+	oMeshMsgs.pose.orientation.z = 0.0;
+	oMeshMsgs.pose.orientation.w = 1.0;
+
+	oMeshMsgs.color.a = 1.0;
+	oMeshMsgs.color.r = r;
+	oMeshMsgs.color.g = g;
+	oMeshMsgs.color.b = b;
+}
 
 /*************************************************
 Function: PublishPointCloud
@@ -419,39 +456,28 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 	pcl::fromPCLPointCloud2(oMeshModel.cloud, vPublishCloud);
 
   	//new a visual message
-	visualization_msgs::Marker oMeshMsgs;
+	visualization_msgs::MarkerArray oMeshMsgList;
+	visualization_msgs::Marker oMeshMsgs, oMeshDynamic, oMeshAdded, oMeshFused;
 	
 	//define header of message
-	oMeshMsgs.header.frame_id = m_sOutMeshTFId;
-	oMeshMsgs.header.stamp = ros::Time::now();
-	oMeshMsgs.type = visualization_msgs::Marker::TRIANGLE_LIST;
-	oMeshMsgs.action = visualization_msgs::Marker::ADD;
+	InitMeshMsg(oMeshMsgs, 		m_sOutMeshTFId, 0, 1. , 0.95, 0.2);
+	InitMeshMsg(oMeshDynamic, 	m_sOutMeshTFId, 1, 1. , 0.1, 0.1);
+	// InitMeshMsg(oMeshAdded, 	m_sOutMeshTFId, 2, 1. , 0.9, 0.2);
+	// InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 0.9, 1. , 0.2);
 
-	oMeshMsgs.scale.x = 1.0;
-	oMeshMsgs.scale.y = 1.0;
-	oMeshMsgs.scale.z = 1.0;
+	// dynamic
+	// InitMeshMsg(oMeshAdded, 	m_sOutMeshTFId, 2, 1. , 0.95, 0.2);
+	// InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 1. , 0.95, 0.2);
 
-	oMeshMsgs.pose.position.x = 0.0;
-	oMeshMsgs.pose.position.y = 0.0;
-	oMeshMsgs.pose.position.z = 0.0;
-
-	oMeshMsgs.pose.orientation.x = 0.0;
-	oMeshMsgs.pose.orientation.y = 0.0;
-	oMeshMsgs.pose.orientation.z = 0.0;
-	oMeshMsgs.pose.orientation.w = 1.0;
-
-	std_msgs::ColorRGBA color;
-	color.a = 1.0;
-	color.r = 1.0;
-	color.g = 1.0;
-	color.b = 0.2;
-    oMeshMsgs.color = color;
+	// add
+	InitMeshMsg(oMeshAdded, 	m_sOutMeshTFId, 2, 0.4, 0.6, 1. );
+	InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 1. , 0.95, 0.2);
 
 	//for each face
 	for (int i = 0; i != oMeshModel.polygons.size(); ++i){
 
 		//for each face vertex id
-		for (int j = 0; j != oMeshModel.polygons[i].vertices.size(); ++j){
+		for (int j = 0; j != 3; ++j){
 
 			//vertex id in each sector
 			int iVertexIdx =  oMeshModel.polygons[i].vertices[j];
@@ -462,13 +488,30 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
         	oPTemp.y = vPublishCloud.points[iVertexIdx].y;
         	oPTemp.z = vPublishCloud.points[iVertexIdx].z;
 
-        	//color
-       		oMeshMsgs.points.push_back(oPTemp);
+			uint32_t mesh_type = oMeshModel.polygons[i].vertices.back();
+			if(mesh_type >= __INT_MAX__) {
+				oMeshAdded.points.push_back(oPTemp);
+			}
+			else if(mesh_type >= 0x3fffffff) {
+				oMeshFused.points.push_back(oPTemp);
+			}
+			else if(mesh_type < 1) {
+       			oMeshMsgs.points.push_back(oPTemp);
+			}
+			else {
+				oMeshDynamic.points.push_back(oPTemp);
+			}
+
 		}//end k
 
 	}//end j
 
-	m_oMeshPublisher.publish(oMeshMsgs);
+	oMeshMsgList.markers.push_back(oMeshMsgs);
+	oMeshMsgList.markers.push_back(oMeshDynamic);
+	oMeshMsgList.markers.push_back(oMeshAdded);
+	oMeshMsgList.markers.push_back(oMeshFused);
+
+	m_oMeshPublisher.publish(oMeshMsgList);
 }
 
  
@@ -880,8 +923,7 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 	struct timeval start;
 	gettimeofday(&start, NULL);
 
-	m_oVoxeler.VoxelizePointsAndFusion(*pFramePN);
-	m_vMapPCN += *pFramePN;
+	UpdateOneFrame(*pFramePN);
 
 	struct timeval end;
 	gettimeofday(&end,NULL);
@@ -913,7 +955,11 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 }
 
 
+void FramesFusion::UpdateOneFrame(pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud) {
 
+	m_oVoxeler.VoxelizePointsAndFusion(vFilteredMeasurementCloud);
+	m_vMapPCN += vFilteredMeasurementCloud;
+}
   
 
 /*=======================================
@@ -1235,6 +1281,9 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 	std::vector<std::vector<int>> depth_index(pitch_dim, std::vector<int>(yaw_dim));
 	std::vector<bool> vCurrentFuseIndex(vDepthMeasurementCloud.size(), false); //因为只记录一个点，哪些点被覆盖需要记录
 
+	// conf - 0.01 - 0.5
+	// double min_depth = __INT_MAX__; 
+	// int min_id = 0, max_id = 0;
 	double max_depth = 0;
 	for(int i = 0; i < vDepthMeasurementCloud.size(); ++i) {
 
@@ -1245,6 +1294,10 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 		double depth = oRefPoint.norm();
 		if(depth < 1e-5) continue;
 		max_depth = max_depth < depth ? depth : max_depth;
+
+		// min_depth = min_depth > depth ? depth : min_depth;
+		// if(min_depth == depth) min_id = i;
+		// if(max_depth == depth) max_id = i;
 
 		oRefPoint.normalize();
 		double yaw = std::atan2((double)oRefPoint.y(), (double)oRefPoint.x()) / M_PI * 180.0;
@@ -1288,7 +1341,9 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 		// */
 	}	
 	
-	
+	// std::cout << std::format_red << "min depth: " << min_depth << " | conf: " << vDepthMeasurementCloud[min_id].data_n[3] << "\t";
+	// std::cout << std::format_red << "max depth: " << max_depth << " | conf: " << vDepthMeasurementCloud[max_id].data_n[3] << std::format_white << std::endl;
+
 	// 将多帧重建结果点云拷贝到Buffer中，并筛选范围内的点
 	pcl::PointCloud<pcl::PointNormal> vVolumeCloud, vPointCloudBuffer;
 	m_oVoxeler.GetVolumeCloud(vVolumeCloud);
@@ -1351,7 +1406,9 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 			Eigen::Vector3f vp2 = p2 / p2.norm();
 			Eigen::Vector3f v12 = p2 - p1;
 
-			float r = abs( n2.dot(vp2) * support_factor );
+			// dynamic surfel radius, according to confidence
+			float r = abs(n2.dot(vp2)) * 2 * fNewConfidence;
+			// float r = abs(n2.dot(vp2)) * support_factor;
 			Eigen::Vector3f vr = v12.dot(vp2) * vp2 - v12;
 			float a = p2.norm() - v12.dot(vp2), b = p2.norm();
 

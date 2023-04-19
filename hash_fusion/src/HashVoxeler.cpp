@@ -152,17 +152,43 @@ Function: return the flow status of the voxel
 ========================================*/
 bool HashVoxeler::IsNoneFlow(const HashPos& oPos) {
 
-	if(m_vPointFlow.count(oPos) == 0) return true; 
+	return m_vVolume[oPos].data_c[0] < 0.3;
+}
+
+
+/*=======================================
+FlowScore
+Input: 	oPos - the pos of a voxel
+Output: bool - whether the voxel is flow static
+Function: return the flow status of the voxel
+========================================*/
+float HashVoxeler::FlowScore(const HashPos& oPos) {
+
+	if(m_vPointFlow.count(oPos) == 0) return 0.3;
 	pcl::PointNormal& oPoint = m_vVolume[oPos];
 	pcl::PointNormal& oPointFlow = m_vPointFlow[oPos];
 	Eigen::Vector3f vTranslate(oPointFlow.x, oPointFlow.y, oPointFlow.z);
 	Eigen::Vector3f vNormal(oPoint.normal_x, oPoint.normal_y, oPoint.normal_z);
-	// std::cout << abs(vTranslate.dot(vNormal)) << std::endl;
-	Eigen::Vector3f vNormalChange(oPointFlow.normal_x, oPointFlow.normal_y, oPointFlow.normal_z);
-	vTranslate /= oPointFlow.curvature;
-	vNormalChange /= oPointFlow.curvature;
-	if(abs(vTranslate.dot(vNormal)) < 0.3 && vNormalChange.norm() < 0.3) return true; 
-	return false;
+	return abs(vTranslate.dot(vNormal));
+}
+
+
+/*=======================================
+Clear
+Input: 	m_vVolume - voxel set of reconstruction
+Function: remove all flowing voxels 
+========================================*/
+void HashVoxeler::ClearFlow() {
+	
+	std::unique_lock<std::shared_mutex> volume_write_lock(m_mVolumeLock);
+	vector<HashPos> vToDeletePos;
+	for(auto && [oPos,_] : m_vRecentVolume)
+		if(!IsNoneFlow(oPos)) vToDeletePos.push_back(oPos);
+
+	for(auto && oPos : vToDeletePos) {
+		m_vRecentVolume.erase(oPos);
+		m_vVolume.erase(oPos);
+	}
 }
 
 
@@ -179,6 +205,16 @@ void HashVoxeler::GetRecentNoneFlowVolume(HashVoxeler::HashVolume & vVolumeCopy,
 	vVolumeCopy.clear();
 	for(auto && [oPos, oVoxel] : m_vRecentVolume)
 		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && IsNoneFlow(oPos))
+			vVolumeCopy[oPos] = oVoxel;
+}
+
+
+void HashVoxeler::GetRecentHighDistributionVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) {
+
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+	vVolumeCopy.clear();
+	for(auto && [oPos, oVoxel] : m_vRecentVolume)
+		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && oVoxel.data_c[3] >= m_fExpandDistributionRef)
 			vVolumeCopy[oPos] = oVoxel;
 }
 
@@ -371,32 +407,6 @@ void HashVoxeler::UpdateUnionConflict() {
 
 
 /*=======================================
-SetResolution
-Input: oLength - length of each dim of voxel (m)
-Output: m_oVoxelLength - member of the class, record the voxel length info
-Function: Set the resolution of the voxel in 3 dims
-========================================*/
-void HashVoxeler::SetResolution(pcl::PointXYZ & oLength){
-
-	m_oVoxelLength.x = oLength.x;
-	m_oVoxelLength.y = oLength.y;
-	m_oVoxelLength.z = oLength.z;
-}
-
-
-/*=======================================
-SetStrategy
-Input: eStrategy, the strategy of fusion and remove dynamic points
-Output: m_pUpdateStrategy - the pointer of the strategy
-Function: Set the strategy of fusion and remove dynamic points
-========================================*/
-void HashVoxeler::SetStrategy(enum vus eStrategy) {
-
-	m_pUpdateStrategy = std::shared_ptr<VolumeUpdateStrategy>(CreateStrategy(eStrategy));	
-}
-
-
-/*=======================================
 PointBelongVoxelPos
 Input: oPoint - the input point to be judged
 Output: oPos - which voxel pos does the point belong
@@ -447,20 +457,21 @@ void HashVoxeler::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vC
 
 		// comptue point flow
 		if(!bNewVoxel) {
-			pcl::PointNormal oZeroPoint;
-			pcl::PointNormal oFusedDirect = oVoxelFusion.NormalFusionWeighted(vIndexList, vCloud, oZeroPoint);
+			pcl::PointNormal oFusedDirect = oVoxelFusion.NormalFusionWeighted(vIndexList, vCloud, pcl::PointNormal());
+
+			// oFlow = (oFlow + oFusedDirect - oBasePoint) * 0.5;
 			pcl::PointNormal& oFlow = m_vPointFlow[oPos];
-			oFlow.x += oFusedDirect.x - oBasePoint.x;
-			oFlow.y += oFusedDirect.y - oBasePoint.y;
-			oFlow.z += oFusedDirect.z - oBasePoint.z;
-			oFlow.normal_x += oFusedDirect.normal_x - oBasePoint.normal_x;
-			oFlow.normal_y += oFusedDirect.normal_y - oBasePoint.normal_y;
-			oFlow.normal_z += oFusedDirect.normal_z - oBasePoint.normal_z;
-			++oFlow.curvature; //count
+			__m128 a = _mm_load_ps(oFusedDirect.data);
+			a = _mm_add_ps(a, _mm_load_ps(oFlow.data));
+			a = _mm_sub_ps(a, _mm_load_ps(oBasePoint.data));
+			a = _mm_mul_ps(a, _mm_set_ps(0.5f,0.5f,0.5f,0.5f));
+			_mm_store_ps(oFlow.data, a);
 		}
 
 		// fusion points
 		pcl::PointNormal oFusedPoint = oVoxelFusion.NormalFusionWeighted(vIndexList, vCloud, oBasePoint);
+		float& fFlowScore = oFusedPoint.data_c[0];
+		fFlowScore = FlowScore(oPos);
 		float& fConflictTime = oFusedPoint.data_c[1];
 		m_pUpdateStrategy->Support(fConflictTime);
 		float& fTimeStamp = oFusedPoint.data_c[2];
