@@ -187,10 +187,13 @@ pcl::PointNormal Fusion::NormalFusionWeighted(
 	pcl::PointNormal oOnePN = oBase;
 	float& normal_distribution_distance = oOnePN.data_c[3];
 	float& all_weight = oOnePN.data_n[3];
+	oOnePN.x *= all_weight;
+	oOnePN.y *= all_weight;
+	oOnePN.z *= all_weight;
 	oOnePN.normal_x *= all_weight;
 	oOnePN.normal_y *= all_weight;
 	oOnePN.normal_z *= all_weight;
-	float fNum = all_weight > 0 ? 1 : 0;
+	// float fNum = all_weight > 0 ? 1 : 0;
 
 	//linear increase
 	for (int i = 0; i != vPointIdx.size(); ++i){
@@ -198,9 +201,9 @@ pcl::PointNormal Fusion::NormalFusionWeighted(
 		int iVoxelPIdx = vPointIdx[i];
 		float point_weight = vCloudNormal.points[iVoxelPIdx].data_n[3];
 	
-		oOnePN.x = oOnePN.x + vCloudNormal.points[iVoxelPIdx].x;
-		oOnePN.y = oOnePN.y + vCloudNormal.points[iVoxelPIdx].y;
-		oOnePN.z = oOnePN.z + vCloudNormal.points[iVoxelPIdx].z;
+		oOnePN.x = oOnePN.x + point_weight * vCloudNormal.points[iVoxelPIdx].x;
+		oOnePN.y = oOnePN.y + point_weight * vCloudNormal.points[iVoxelPIdx].y;
+		oOnePN.z = oOnePN.z + point_weight * vCloudNormal.points[iVoxelPIdx].z;
 		oOnePN.normal_x = oOnePN.normal_x + point_weight * vCloudNormal.points[iVoxelPIdx].normal_x;
 		oOnePN.normal_y = oOnePN.normal_y + point_weight * vCloudNormal.points[iVoxelPIdx].normal_y;
 		oOnePN.normal_z = oOnePN.normal_z + point_weight * vCloudNormal.points[iVoxelPIdx].normal_z;
@@ -209,13 +212,13 @@ pcl::PointNormal Fusion::NormalFusionWeighted(
 
 	if(all_weight == 0.f) return oOnePN;
 	
-	fNum += vPointIdx.size();
+	// fNum += vPointIdx.size();
 
 	if (vPointIdx.size()){
 		//take the mean
-		oOnePN.x = oOnePN.x / fNum;
-		oOnePN.y = oOnePN.y / fNum;
-		oOnePN.z = oOnePN.z / fNum;
+		oOnePN.x = oOnePN.x / all_weight;
+		oOnePN.y = oOnePN.y / all_weight;
+		oOnePN.z = oOnePN.z / all_weight;
 		oOnePN.normal_x = oOnePN.normal_x / all_weight;
 		oOnePN.normal_y = oOnePN.normal_y / all_weight;
 		oOnePN.normal_z = oOnePN.normal_z / all_weight;
