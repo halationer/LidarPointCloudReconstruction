@@ -463,7 +463,7 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 	InitMeshMsg(oMeshMsgs, 		m_sOutMeshTFId, 0, 1. , 0.95, 0.2);
 	InitMeshMsg(oMeshDynamic, 	m_sOutMeshTFId, 1, 1. , 0.1, 0.1);
 	// InitMeshMsg(oMeshAdded, 	m_sOutMeshTFId, 2, 1. , 0.9, 0.2);
-	// InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 0.9, 1. , 0.2);
+	InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 0.9, 1. , 0.2);
 
 	// dynamic
 	// InitMeshMsg(oMeshAdded, 	m_sOutMeshTFId, 2, 1. , 0.95, 0.2);
@@ -471,7 +471,7 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 
 	// add
 	InitMeshMsg(oMeshAdded, 	m_sOutMeshTFId, 2, 0.4, 0.6, 1. );
-	InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 1. , 0.95, 0.2);
+	// InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 1. , 0.95, 0.2);
 
 	//for each face
 	for (int i = 0; i != oMeshModel.polygons.size(); ++i){
@@ -491,11 +491,13 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 			uint32_t mesh_type = oMeshModel.polygons[i].vertices.back();
 			if(mesh_type >= __INT_MAX__) {
 				oMeshAdded.points.push_back(oPTemp);
+				// oMeshMsgs.points.push_back(oPTemp);
 			}
 			else if(mesh_type >= 0x3fffffff) {
 				oMeshFused.points.push_back(oPTemp);
 			}
 			else if(mesh_type < 1) {
+			// else if(mesh_type >= 1) {
        			oMeshMsgs.points.push_back(oPTemp);
 			}
 			else {
@@ -886,6 +888,8 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 
 	if(m_bSurfelFusion) {
 
+		std::cout << "fusion start \t";
+
 		struct timeval start;
 		gettimeofday(&start, NULL);
 
@@ -1257,15 +1261,7 @@ void FramesFusion::OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, c
 }
 
 
-/** 基于反投影的点云融合
-   @param 	pcl::PointNormal 					oLidarPos - m_oCurrentViewPoint 雷达视点的位置
-   @param 	pcl::PointCloud<pcl::PointNormal> 	vDepthMeasurementCloud - vDepthMeasurementCloud 新一帧的点云
-   @param_	pcl::PointCloud<pcl::PointNormal> 	m_vMapPCN - 旧点云（源自于lidar测量）
-   @param_	pcl::PointCloud<pcl::PointNormal> 	m_vMapPCNAdded - 新点云（源自于单帧重建补点）
-*/
-void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud) {
-
-	std::cout << "fusion start \t";
+void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud, pcl::PointCloud<pcl::PointNormal>& vPointCloudBuffer) {
 
 	constexpr int pitch_dim_expand = 4;
 	constexpr int yaw_dim_expand = 4;
@@ -1345,7 +1341,7 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 	// std::cout << std::format_red << "max depth: " << max_depth << " | conf: " << vDepthMeasurementCloud[max_id].data_n[3] << std::format_white << std::endl;
 
 	// 将多帧重建结果点云拷贝到Buffer中，并筛选范围内的点
-	pcl::PointCloud<pcl::PointNormal> vVolumeCloud, vPointCloudBuffer;
+	pcl::PointCloud<pcl::PointNormal> vVolumeCloud;
 	m_oVoxeler.GetVolumeCloud(vVolumeCloud);
 	pcl::PointXYZ oBase(oLidarPos.x, oLidarPos.y, oLidarPos.z);
 	NearbyClouds(vVolumeCloud, oBase, vPointCloudBuffer, max_depth);
@@ -1394,6 +1390,7 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 			pcl::PointNormal& oOldPoint = vPointCloudBuffer.at(i);
 			// pcl::PointNormal& oOldPoint = i < lidar_size ? m_vMapPCN[vPointCloudBuffer[i].data_c[3]] : m_vMapPCNAdded[vPointCloudBuffer[i].data_c[3]];
 			float& fOldConfidence = oOldPoint.data_n[3];
+			float& fConfidenceRecord = oOldPoint.data_c[0];
 			pcl::PointNormal& oNewPoint = *pConflictPoint;
 			float& fNewConfidence = oNewPoint.data_n[3];
 
@@ -1417,6 +1414,7 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 				associated_feature[i] = 0.0f;
 
 				// 记录减少的置信度
+				fConfidenceRecord = fOldConfidence;
 				fOldConfidence = - 0.8 * fNewConfidence;
 				// if(fOldConfidence < 0.f) fOldConfidence = 0.f;
 			}
@@ -1426,6 +1424,22 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 			associated_feature[i] = -1.0f;
 		}
 	}	
+	
+	// output dynamic
+	PublishPointCloud(vPointCloudBuffer, associated_feature, "/debug_associated_point");
+}
+
+/** 基于反投影的点云融合
+   @param 	pcl::PointNormal 					oLidarPos - m_oCurrentViewPoint 雷达视点的位置
+   @param 	pcl::PointCloud<pcl::PointNormal> 	vDepthMeasurementCloud - vDepthMeasurementCloud 新一帧的点云
+   @param_	pcl::PointCloud<pcl::PointNormal> 	m_vMapPCN - 旧点云（源自于lidar测量）
+   @param_	pcl::PointCloud<pcl::PointNormal> 	m_vMapPCNAdded - 新点云（源自于单帧重建补点）
+*/
+void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud) {
+
+	pcl::PointCloud<pcl::PointNormal> vPointCloudBuffer;
+
+	SurfelFusionCore(oLidarPos, vDepthMeasurementCloud, vPointCloudBuffer);
 
 	// 更新volume
 	m_oVoxeler.UpdateConflictResult(vPointCloudBuffer);
@@ -1435,9 +1449,6 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 	// m_oVoxeler.GetMaxConnectCloud(vMaxConnected);
 	// std::vector<float> feature(vMaxConnected.size(), 0.8f);
 	// PublishPointCloud(vMaxConnected, feature, "/debug_max_connect");
-
-	// output dynamic
-	PublishPointCloud(vPointCloudBuffer, associated_feature, "/debug_associated_point");
 }
 
 pcl::PointCloud<pcl::PointNormal>::Ptr AllCloud(pcl::PointCloud<pcl::PointNormal>& cloud_vector) {

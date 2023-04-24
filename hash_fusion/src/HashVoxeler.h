@@ -18,7 +18,7 @@
 class HashVoxeler{
 
 // center component
-private:
+protected:
 	mutable std::shared_mutex m_mCenterLock;
 
 	// vehicle move status record
@@ -50,7 +50,7 @@ public:
 
 	typedef std::unordered_map<HashPos, pcl::PointNormal, HashFunc> HashVolume;
 
-private:
+protected:
 	// multi-thread lock
 	mutable std::shared_mutex m_mVolumeLock;
 	mutable std::shared_mutex m_mUnionSetLock;

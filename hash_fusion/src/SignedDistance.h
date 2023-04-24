@@ -43,7 +43,7 @@ public:
 	//
 	std::vector<pcl::Vertices> m_vGlanceFaceIdxs;
 
-private:
+protected:
 	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceCore(HashVoxeler::HashVolume& vTempVolumeCopy, const pcl::PointXYZ oVoxelSize);
 
 	int m_iKeepTime;

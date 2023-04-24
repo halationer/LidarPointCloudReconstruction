@@ -236,6 +236,7 @@ protected:
     // more strict when filtering the points
     // void AddedSurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
     // viewpoint and current frame for surfel fusion - multi-thread
+    void SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud, pcl::PointCloud<pcl::PointNormal>& vPointCloudBuffer);
     virtual void SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
     virtual void UpdateOneFrame(pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud);
 

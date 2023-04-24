@@ -83,14 +83,14 @@ class StrictStaticStrategy : public VolumeUpdateStrategy {
 
 private:
 
-    constexpr static int static_need_support = 3;
+    constexpr static int static_need_support = 33;
     constexpr static int max_conflict = -1;
 
 public:
 
     virtual bool Conflict(float& fUpdateParam) {
         if(fUpdateParam >= static_need_support) fUpdateParam = static_need_support - 1;
-        else if(fUpdateParam > 0) fUpdateParam = 0;
+        else if(fUpdateParam > 0) fUpdateParam = -1;
         else --fUpdateParam;
         return fUpdateParam < max_conflict;
     }
