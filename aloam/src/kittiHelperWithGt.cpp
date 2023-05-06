@@ -85,7 +85,7 @@ int main(int argc, char** argv)
     for(std::size_t i = 0; i < 3; ++i) {
         for(std::size_t j = 0; j < 4; ++j) {
             std::getline(vtc_stream, line, ' ');
-            calib_matrix(i, j) = stof(line);
+            calib_matrix(i, j) = stod(line);
         }
     }
     calib_matrix.row(3) = Eigen::RowVector4d(0, 0, 0, 1);

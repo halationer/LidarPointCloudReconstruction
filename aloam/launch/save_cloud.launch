@@ -1,9 +1,19 @@
 <launch>
-    <node name="saveCloud" pkg="aloam_velodyne" type="saveCloud" output="screen"> 
-        <param name="save_cloud_topic" type="string" value="/velodyne_cloud_registered" />
-        <param name="cloud_file_path" type="string" value="/KITTI/cloud/registered_cloud" />
 
-        <param name="save_odom_topic" type="string" value="/laser_odom_path" />
-        <param name="odom_file_path" type="string" value="/KITTI/cloud/position" />
+    <arg name="save_cloud_topic" default="/velodyne_cloud_registered"/>
+    <arg name="cloud_file_path" default="/KITTI/cloud/registered_cloud"/>
+    <arg name="save_odom_topic" default="/laser_odom_path"/>
+    <arg name="odom_file_path" default="/KITTI/cloud/position"/>
+    <arg name="rosbag"/>
+
+    <node name="saveCloud" pkg="aloam_velodyne" type="saveCloud" output="screen"> 
+        <param name="save_cloud_topic" type="string" value="$(arg save_cloud_topic)" />
+        <param name="cloud_file_path" type="string" value="$(arg cloud_file_path)" />
+
+        <param name="save_odom_topic" type="string" value="$(arg save_odom_topic)" />
+        <param name="odom_file_path" type="string" value="$(arg odom_file_path)" />
     </node>
+
+    <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 $(arg rosbag) --topics /velodyne_points"/>
+
 </launch>

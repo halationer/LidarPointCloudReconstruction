@@ -38,7 +38,7 @@ int main(int argc, char** argv)
         bag_out.open(output_bag_file, rosbag::bagmode::Write);
 
     std::string line;
-    std::size_t line_num = 500;
+    std::size_t line_num = 0;
 
     ros::Rate r(10.0 / publish_delay);
     while (std::getline(poses_file, line) && ros::ok())

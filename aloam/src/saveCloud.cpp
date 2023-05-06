@@ -4,11 +4,13 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <iomanip>
 #include <ros/ros.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
 
 #include <sensor_msgs/PointCloud2.h>
 #include <nav_msgs/Odometry.h>
@@ -36,14 +38,20 @@ void saveCloudAll(const sensor_msgs::PointCloud2& cloud_msg)
 
 void saveCloud(const sensor_msgs::PointCloud2& cloud_msg)
 {
-    pcl::PointCloud<pcl::PointXYZI> now_cloud;
+    pcl::PointCloud<pcl::PointXYZ> now_cloud;
     pcl::fromROSMsg(cloud_msg, now_cloud);
-    std::cout << "point_cloud: " << now_cloud.size() << std::endl;
+    std::cout << "point_cloud size: " << now_cloud.size() << " | properties: ";
+
+    for(auto&& field : cloud_msg.fields) {
+        std::cout << field.name << " ";
+    } std::cout << " | ";
 
     std::stringstream ss;
-    ss << save_cloud_path << cloud_number++ << ".pcd";
+    ss << save_cloud_path << std::setw(5) << std::setfill('0') << cloud_number++ << ".pcd";
+    // ss << save_cloud_path << std::setw(5) << std::setfill('0') << cloud_number++ << ".ply";
+    std::cout << "save cloud: " << ss.str() << std::endl;
     pcl::io::savePCDFileASCII (ss.str(), now_cloud);
-    std::cout << "save cloud: " << save_cloud_path << std::endl;
+    // pcl::io::savePLYFileBinary(ss.str(), now_cloud);
 }
 
 void saveOdometry(const nav_msgs::Path& path)
@@ -64,6 +72,9 @@ int main(int argc, char** argv)
     ros::NodeHandle n("~");
 
     n.getParam("cloud_file_path", save_cloud_path);
+    std::string s1 = "mkdir -p " + save_cloud_path;
+    system(s1.c_str());
+
     n.getParam("odom_file_path", save_odom_path);
 
     std::string save_cloud_topic;
