@@ -99,8 +99,29 @@ void HashVoxeler::GetRecentVolume(HashVoxeler::HashVolume & vVolumeCopy, const i
 	vVolumeCopy.clear();
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 	for(auto && [oPos, oVoxel] : m_vRecentVolume)
-		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]))
+		if(m_iFrameCount - oVoxel.data_c[2] <= (uint32_t)iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]))
 			vVolumeCopy[oPos] = oVoxel;
+}
+
+/*=======================================
+GetRecentConnectVolume
+Input: 	iRecentTime - recent time
+		iConnectMinSize - the volume copy will get voxels in the union set which size is larger than this number
+		m_vRecentVolume - surfel volume of max recent time
+		m_oUnionSet - the connectivity record union-find set
+Output: vVolumeCopy - the output volume result
+Function: get the volume of recent time and its voxels are in the largest set of m_oUnionSet
+========================================*/
+void HashVoxeler::GetRecentConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime, const int iConnectMinSize) {
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+	for(auto && [oPos, oVoxel] : m_vRecentVolume)
+		if(m_iFrameCount - oVoxel.data_c[2] <= (uint32_t)iRecentTime 
+			&& m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) 
+			&& m_oUnionSet.GetSetSize(oPos) > iConnectMinSize)
+				vVolumeCopy[oPos] = oVoxel;
 }
 
 
@@ -118,7 +139,7 @@ void HashVoxeler::GetRecentMaxConnectVolume(HashVoxeler::HashVolume & vVolumeCop
 	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 	for(auto && [oPos, oVoxel] : m_vRecentVolume)
-		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && m_oUnionSet.InMaxSet(oPos))
+		if(m_iFrameCount - oVoxel.data_c[2] <= (uint32_t)iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && m_oUnionSet.InMaxSet(oPos))
 			vVolumeCopy[oPos] = oVoxel;
 	// GetRecentVolume(vVolumeCopy, iRecentTime); 
 }
@@ -204,7 +225,7 @@ void HashVoxeler::GetRecentNoneFlowVolume(HashVoxeler::HashVolume & vVolumeCopy,
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 	vVolumeCopy.clear();
 	for(auto && [oPos, oVoxel] : m_vRecentVolume)
-		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && IsNoneFlow(oPos))
+		if(m_iFrameCount - oVoxel.data_c[2] <= (uint32_t)iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && IsNoneFlow(oPos))
 			vVolumeCopy[oPos] = oVoxel;
 }
 
@@ -214,7 +235,7 @@ void HashVoxeler::GetRecentHighDistributionVolume(HashVoxeler::HashVolume & vVol
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 	vVolumeCopy.clear();
 	for(auto && [oPos, oVoxel] : m_vRecentVolume)
-		if(m_iFrameCount - oVoxel.data_c[2] <= iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && oVoxel.data_c[3] >= m_fExpandDistributionRef)
+		if(m_iFrameCount - oVoxel.data_c[2] <= (uint32_t)iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && oVoxel.data_c[3] >= m_fExpandDistributionRef)
 			vVolumeCopy[oPos] = oVoxel;
 }
 

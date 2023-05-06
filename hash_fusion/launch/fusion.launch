@@ -51,7 +51,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="use_surfel_fusion"   default="true"/>
     <arg name="strategy_type"       default="2"/>
     <arg name="use_union_set"       default="true"/>
-    <arg name="only_max_union_set"  default="true"/>
+    <arg name="only_max_union_set"  default="false"/>
 
     <!-- fusion mode:
         0 - normal fusion 
@@ -62,7 +62,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="expand_distribution_ref" default="0.99"/>
     
     <!-- meshing params -->
-    <arg name="keep_time" default="1200" />
+    <arg name="keep_time" default="-1" />
     <arg name="conv_dim" default="3" />
     <arg name="conv_add_point_ref" default="4" />
     <arg name="conv_distance_ref" default="0.95" />

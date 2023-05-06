@@ -258,7 +258,7 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	nodeHandle.param("conv_add_point_ref", m_iConvAddPointNumRef, 5); 
 	nodeHandle.param("conv_distance_ref", m_fConvFusionDistanceRef1, 0.95f);
 	// m_pSdf = new SignedDistance(m_iKeepTime, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
-	m_oVoxeler.m_iMaxRecentKeep = max(500, m_iKeepTime);
+	m_oVoxeler.m_iMaxRecentKeep = max(500u, (uint32_t)m_iKeepTime);
 
 	return true;
 
@@ -499,6 +499,8 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 	//for each face
 	for (int i = 0; i != oMeshModel.polygons.size(); ++i){
 
+		uint32_t mesh_type = oMeshModel.polygons[i].vertices.back();
+		
 		//for each face vertex id
 		for (int j = 0; j != 3; ++j){
 
@@ -511,10 +513,9 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
         	oPTemp.y = vPublishCloud.points[iVertexIdx].y;
         	oPTemp.z = vPublishCloud.points[iVertexIdx].z;
 
-			uint32_t mesh_type = oMeshModel.polygons[i].vertices.back();
 			if(mesh_type >= __INT_MAX__) {
-				// oMeshAdded.points.push_back(oPTemp);
-				oMeshMsgs.points.push_back(oPTemp);
+				oMeshAdded.points.push_back(oPTemp);
+				// oMeshMsgs.points.push_back(oPTemp);
 			}
 			else if(mesh_type >= 0x3fffffff) {
 				oMeshFused.points.push_back(oPTemp);
@@ -858,7 +859,15 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 	SignedDistance oSDer(m_iKeepTime, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
 	//compute signed distance based on centroids and its normals within voxels
 	std::unordered_map<HashPos, float, HashFunc> vSignedDis;
-	vSignedDis = m_bUseUnionSetConnection && m_bOnlyMaxUnionSet ? oSDer.ConvedGlanceOnlyMaxUnion(m_oVoxeler) : oSDer.ConvedGlance(m_oVoxeler);
+	if(!m_bUseUnionSetConnection) {
+		vSignedDis = oSDer.ConvedGlance(m_oVoxeler);
+	}
+	else if(m_bOnlyMaxUnionSet) {
+		vSignedDis = oSDer.ConvedGlanceOnlyMaxUnion(m_oVoxeler);
+	}
+	else {
+		vSignedDis = oSDer.ConvedGlanceLargeUnion(m_oVoxeler);
+	}
 
 
 	//marching cuber
@@ -996,6 +1005,18 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 
 
 void FramesFusion::UpdateOneFrame(const pcl::PointNormal& oViewPoint, pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud) {
+
+	///* limit the distance
+	int n = vFilteredMeasurementCloud.size();
+	for(int i = 0; i < n; ++i) {
+		auto & oPoint = vFilteredMeasurementCloud[i];
+		Eigen::Vector3f vDistance(oViewPoint.x - oPoint.x, oViewPoint.y - oPoint.y, oViewPoint.z - oPoint.z);
+		if(vDistance.norm() > 30.0f) {
+			swap(vFilteredMeasurementCloud[i--], vFilteredMeasurementCloud[--n]);
+		}
+	}
+	vFilteredMeasurementCloud.erase(vFilteredMeasurementCloud.begin()+n, vFilteredMeasurementCloud.end());
+	//*/
 
 	m_oVoxeler.VoxelizePointsAndFusion(vFilteredMeasurementCloud);
 	m_vMapPCN += vFilteredMeasurementCloud;

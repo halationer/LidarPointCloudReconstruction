@@ -66,6 +66,13 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceNoneF
 	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
 }
 
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceLargeUnion(HashVoxeler & oVoxeler) {
+
+	HashVoxeler::HashVolume vTempVolumeCopy;
+	oVoxeler.GetRecentConnectVolume(vTempVolumeCopy, m_iKeepTime, 200);
+	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
+}
+
 std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceOnlyMaxUnion(HashVoxeler & oVoxeler) {
 	
 	HashVoxeler::HashVolume vTempVolumeCopy;

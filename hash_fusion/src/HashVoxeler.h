@@ -41,7 +41,7 @@ public:
 // main component
 public:
 	// frame keep time in m_vRecentVolume
-	int m_iMaxRecentKeep;
+	uint32_t m_iMaxRecentKeep;
 
 	// total frame received
 	int m_iFrameCount;
@@ -93,6 +93,7 @@ public:
 	void GetLocalVolume(HashVoxeler::HashVolume & vVolumeCopy, const Eigen::Vector3f vCenter, const float fRadius) const;
 
 	// get filtered volume
+	void GetRecentConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime, const int iConnectMinSize);
 	void GetRecentMaxConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
 	void GetRecentNoneFlowVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
 	void GetRecentHighDistributionVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
