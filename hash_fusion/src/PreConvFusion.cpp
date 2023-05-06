@@ -294,9 +294,9 @@ void PreConvFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointClou
     // m_oPreConvVoxeler.UpdateConflictResult(vPointCloudBuffer);
 }
 
-void PreConvFusion::UpdateOneFrame(pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud) {
+void PreConvFusion::UpdateOneFrame(const pcl::PointNormal& oViewPoint, pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud) {
 
-    Super::UpdateOneFrame(vFilteredMeasurementCloud);
+    Super::UpdateOneFrame(oViewPoint, vFilteredMeasurementCloud);
 
     m_oPreConvVoxeler.VoxelizePointsAndFusion(vFilteredMeasurementCloud);
 }

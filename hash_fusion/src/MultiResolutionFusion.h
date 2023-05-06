@@ -31,7 +31,7 @@ protected:
 
     void SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud) override;
 
-    void UpdateOneFrame(pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud) override;
+    void UpdateOneFrame(const pcl::PointNormal& oViewPoint, pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud) override;
 
     /** father data
         @param m_vMapPCN    pcl::PointCloud<pcl::PointNormal> - final saved cloud

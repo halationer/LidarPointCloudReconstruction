@@ -9,6 +9,7 @@
 #include<vector>
 #include<shared_mutex>
 #include<memory>
+#include <visualization_msgs/MarkerArray.h>
 
 #include"tools/VolumeUpdateStrategy.h"
 #include"tools/UnionSet.h"
@@ -98,6 +99,7 @@ public:
 
 	// build union set
 	void RebuildUnionSet();
+	void DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet);
 	void UpdateUnionConflict();
 
 	void ClearFlow();

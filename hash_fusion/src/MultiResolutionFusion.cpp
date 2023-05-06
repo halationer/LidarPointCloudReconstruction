@@ -73,9 +73,9 @@ void MultiResolutionFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::P
     Super::SurfelFusionQuick(oLidarPos, vDepthMeasurementCloud);
 }
 
-void MultiResolutionFusion::UpdateOneFrame(pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud) {
+void MultiResolutionFusion::UpdateOneFrame(const pcl::PointNormal& oViewPoint, pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud) {
 
-    Super::UpdateOneFrame(vFilteredMeasurementCloud);
+    Super::UpdateOneFrame(oViewPoint, vFilteredMeasurementCloud);
 
     m_oDownResolutionVoxeler.VoxelizePointsAndFusion(vFilteredMeasurementCloud);
 }

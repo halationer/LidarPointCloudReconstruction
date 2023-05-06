@@ -86,7 +86,7 @@ FramesFusion::~FramesFusion() {
     std::cout << "********************************************************************************" << std::endl;
 
 	//output point clouds with computed normals to the files when the node logs out
-	if(m_bOutputFiles && false) {
+	if(m_bOutputFiles) {
 		
 		//define ouput ply file name
 		std::stringstream sOutPCNormalFileName;
@@ -95,7 +95,7 @@ FramesFusion::~FramesFusion() {
 		std::cout << "Please do not force closing the programe, the process is writing output PLY file." << std::endl;
 		std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
 		std::cout << std::format_purple << "The output file is " << sOutPCNormalFileName.str() << std::format_white << std::endl;
-		
+
 		if(m_bUseAdditionalPoints) {
 		
 			m_vMapPCN += m_vMapPCNAdded;
@@ -104,8 +104,30 @@ FramesFusion::~FramesFusion() {
 		
 		auto vAllPoints = AllCloud(m_vMapPCN);
 
+		// constexpr int union_set_time = 20;
+		// for(int i = 0; i < union_set_time; ++i) {
+		// 	if(m_bUseUnionSetConnection) {
+		// 		++m_oVoxeler.m_iFrameCount;
+		// 		m_oVoxeler.RebuildUnionSet();
+		// 		m_oVoxeler.UpdateUnionConflict();
+		// 	}
+		// }
+
+		HashVoxeler::HashVolume vVolumeCopy;
+		// m_oVoxeler.GetRecentMaxConnectVolume(vVolumeCopy, m_iKeepTime);
+		m_oVoxeler.GetStaticVolume(vVolumeCopy);
+
+
 		pcl::PointCloud<pcl::PointXYZINormal> pc;
-		for(auto point : *vAllPoints) {
+		for(int i = 0; i < vAllPoints->size(); ++i) {
+
+			std::cout << "All ready process points: " << i+1 << "/" << vAllPoints->size() << "\r";
+
+			pcl::PointNormal& point = (*vAllPoints)[i];
+			HashPos pos;
+			m_oVoxeler.PointBelongVoxelPos(point, pos);
+			if(!vVolumeCopy.count(pos)) continue;
+
 			pcl::PointXYZINormal new_point;
 			new_point.x = point.x;
 			new_point.y = point.y;
@@ -122,7 +144,8 @@ FramesFusion::~FramesFusion() {
 
 			pc.push_back(new_point);
 		}
-		pcl::io::savePLYFileASCII(sOutPCNormalFileName.str(), pc);
+		std::cout << "\nSaving file ..." << std::endl;
+		pcl::io::savePLYFileBinary(sOutPCNormalFileName.str(), pc);
 
 		/** 
 			if the point cloud has too many points, ros may not wait it to save.
@@ -463,7 +486,7 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 	InitMeshMsg(oMeshMsgs, 		m_sOutMeshTFId, 0, 1. , 0.95, 0.2);
 	InitMeshMsg(oMeshDynamic, 	m_sOutMeshTFId, 1, 1. , 0.1, 0.1);
 	// InitMeshMsg(oMeshAdded, 	m_sOutMeshTFId, 2, 1. , 0.9, 0.2);
-	InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 0.9, 1. , 0.2);
+	// InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 0.9, 1. , 0.2);
 
 	// dynamic
 	// InitMeshMsg(oMeshAdded, 	m_sOutMeshTFId, 2, 1. , 0.95, 0.2);
@@ -471,7 +494,7 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 
 	// add
 	InitMeshMsg(oMeshAdded, 	m_sOutMeshTFId, 2, 0.4, 0.6, 1. );
-	// InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 1. , 0.95, 0.2);
+	InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 1. , 0.95, 0.2);
 
 	//for each face
 	for (int i = 0; i != oMeshModel.polygons.size(); ++i){
@@ -490,8 +513,8 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 
 			uint32_t mesh_type = oMeshModel.polygons[i].vertices.back();
 			if(mesh_type >= __INT_MAX__) {
-				oMeshAdded.points.push_back(oPTemp);
-				// oMeshMsgs.points.push_back(oPTemp);
+				// oMeshAdded.points.push_back(oPTemp);
+				oMeshMsgs.points.push_back(oPTemp);
 			}
 			else if(mesh_type >= 0x3fffffff) {
 				oMeshFused.points.push_back(oPTemp);
@@ -819,6 +842,16 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 	if(m_bUseUnionSetConnection) {
 		m_oVoxeler.RebuildUnionSet();
 		m_oVoxeler.UpdateUnionConflict();
+
+		// output unionset result
+		visualization_msgs::MarkerArray union_set_marker;
+		m_oVoxeler.DrawUnionSet(union_set_marker);
+		std::string sTopicName = "/union_set";
+		if(m_vDebugPublishers.count(sTopicName) == 0)
+		{
+			m_vDebugPublishers[sTopicName] = m_oNodeHandle.advertise<visualization_msgs::MarkerArray>(sTopicName, 1, true);
+		}
+		m_vDebugPublishers[sTopicName].publish(union_set_marker);
 	}
 
 	//using signed distance
@@ -843,7 +876,10 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 
 		std::stringstream sOutputPath;
 		sOutputPath << m_sFileHead << std::setw(4) << std::setfill('0') << iFrameId << "_mesh.ply";
-		pcl::io::savePLYFileBinary(sOutputPath.str(), oResultMesh);
+		auto oCopyMesh = oResultMesh;
+		for(auto & polygon : oCopyMesh.polygons)
+			polygon.vertices.pop_back();
+		pcl::io::savePLYFileBinary(sOutputPath.str(), oCopyMesh);
 	}
 	//*/
 }
@@ -927,7 +963,7 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 	struct timeval start;
 	gettimeofday(&start, NULL);
 
-	UpdateOneFrame(*pFramePN);
+	UpdateOneFrame(oViewPoint, *pFramePN);
 
 	struct timeval end;
 	gettimeofday(&end,NULL);
@@ -959,7 +995,7 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 }
 
 
-void FramesFusion::UpdateOneFrame(pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud) {
+void FramesFusion::UpdateOneFrame(const pcl::PointNormal& oViewPoint, pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud) {
 
 	m_oVoxeler.VoxelizePointsAndFusion(vFilteredMeasurementCloud);
 	m_vMapPCN += vFilteredMeasurementCloud;

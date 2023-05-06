@@ -9,6 +9,7 @@ Panels:
         - /SLAM1/Odometry1
         - /FramesFusion1
         - /FramesFusion1/CubeMeshArray1
+        - /FramesFusion1/UnionSet1
       Splitter Ratio: 0.5
     Tree Height: 848
   - Class: rviz/Selection
@@ -29,7 +30,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: outputPoints
+    SyncSource: ""
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -525,6 +526,14 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: true
           Value: false
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /union_set
+          Name: UnionSet
+          Namespaces:
+            "": true
+          Queue Size: 1
+          Value: true
       Enabled: true
       Name: FramesFusion
     - Class: rviz/Group
@@ -567,7 +576,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 65.38066864013672
+      Distance: 58.74911880493164
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -582,10 +591,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.44020891189575195
+      Pitch: 0.36520880460739136
       Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 5.960476398468018
+      Yaw: 0.0723065659403801
     Saved: ~
 Window Geometry:
   Displays:

@@ -371,6 +371,87 @@ void HashVoxeler::RebuildUnionSet() {
 	}
 }
 
+void HashVoxeler::DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet) {
+
+	constexpr int remove_set_size_ref = 200;
+	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
+	auto vVoxelSets = m_oUnionSet.GetSets();
+
+	srand(6552);
+	int index = 10;
+
+	for(auto && [oPos, oPosList] : vVoxelSets) {
+
+		// if(oPosList.size() < remove_set_size_ref && !m_oUnionSet.InMaxSet(oPos)) {
+		if(oPosList.size() >= remove_set_size_ref) {
+
+			visualization_msgs::Marker oCurrentSet;
+			oCurrentSet.header.frame_id = "map";
+			oCurrentSet.header.stamp = ros::Time::now();
+			oCurrentSet.type = visualization_msgs::Marker::CUBE_LIST;
+			oCurrentSet.action = visualization_msgs::Marker::ADD;
+			oCurrentSet.id = index++; 
+
+			oCurrentSet.scale.x = m_oVoxelLength.x;
+			oCurrentSet.scale.y = m_oVoxelLength.y;
+			oCurrentSet.scale.z = m_oVoxelLength.z;
+
+			oCurrentSet.pose.position.x = 0.0;
+			oCurrentSet.pose.position.y = 0.0;
+			oCurrentSet.pose.position.z = 0.0;
+
+			oCurrentSet.pose.orientation.x = 0.0;
+			oCurrentSet.pose.orientation.y = 0.0;
+			oCurrentSet.pose.orientation.z = 0.0;
+			oCurrentSet.pose.orientation.w = 1.0;
+
+			oCurrentSet.color.a = 0.8;
+			oCurrentSet.color.r = random() / (float)RAND_MAX;
+			oCurrentSet.color.g = random() / (float)RAND_MAX;
+			oCurrentSet.color.b = random() / (float)RAND_MAX;
+
+			for(auto && oPosInSet : oPosList) {
+
+				auto o3DPos = HashPosTo3DPos(oPosInSet);
+				geometry_msgs::Point point;
+				point.x = o3DPos.x + m_oVoxelLength.x / 2;
+				point.y = o3DPos.y + m_oVoxelLength.y / 2;
+				point.z = o3DPos.z + m_oVoxelLength.z / 2;
+				oCurrentSet.points.push_back(point);
+			}
+
+			oOutputUnionSet.markers.push_back(oCurrentSet);
+		}
+	}
+
+	while(index < 1000) {
+
+		visualization_msgs::Marker oCurrentSet;
+		oCurrentSet.header.frame_id = "map";
+		oCurrentSet.header.stamp = ros::Time::now();
+		oCurrentSet.type = visualization_msgs::Marker::CUBE_LIST;
+		oCurrentSet.action = visualization_msgs::Marker::ADD;
+		oCurrentSet.id = index++; 
+
+		oCurrentSet.scale.x = m_oVoxelLength.x;
+		oCurrentSet.scale.y = m_oVoxelLength.y;
+		oCurrentSet.scale.z = m_oVoxelLength.z;
+
+		oCurrentSet.pose.position.x = 0.0;
+		oCurrentSet.pose.position.y = 0.0;
+		oCurrentSet.pose.position.z = 0.0;
+
+		oCurrentSet.pose.orientation.x = 0.0;
+		oCurrentSet.pose.orientation.y = 0.0;
+		oCurrentSet.pose.orientation.z = 0.0;
+		oCurrentSet.pose.orientation.w = 1.0;
+		
+		oCurrentSet.color.a = 0.8;
+		
+		oOutputUnionSet.markers.push_back(oCurrentSet);
+	}
+}
+
 
 /*=======================================
 UpdateUnionConflict
@@ -393,12 +474,28 @@ void HashVoxeler::UpdateUnionConflict() {
 				float& fTimeStamp = m_vVolume[oPosInSet].data_c[2];
 				if(m_iFrameCount - fTimeStamp > remove_voxel_time_ref) {
 					float& fConflictTime = m_vVolume[oPosInSet].data_c[1];
-					m_pUpdateStrategy->Conflict(fConflictTime);
+					bool bToDelete = m_pUpdateStrategy->Conflict(fConflictTime);
+					// if(bToDelete) {
+					// 	m_vVolume.erase(oPosInSet);
+					// 	// delete recent voxel
+					// 	if(m_vRecentVolume.count(oPosInSet)) {
+					// 		m_vRecentVolume.erase(oPosInSet);
+					// 	}
+					// } 
+					// else {
+					// 	float& fConfidence = m_vVolume[oPosInSet].data_n[3];
+					// 	fConfidence *= 0.5;
+					// 	if(fConfidence < 0) fConfidence = 0;
+					// 	// sync recent voxel
+					// 	if(m_vRecentVolume.count(oPosInSet)) {
+					// 		m_vRecentVolume[oPosInSet] = m_vVolume[oPosInSet];
+					// 	}
+					// }
 				}
-				
+					
 				// sync recent voxel
-				if(m_vRecentVolume.count(oPos)) {
-					m_vRecentVolume[oPos] = m_vVolume[oPos];
+				if(m_vRecentVolume.count(oPosInSet)) {
+					m_vRecentVolume[oPosInSet] = m_vVolume[oPosInSet];
 				}
 			}
 		}
@@ -526,7 +623,7 @@ void HashVoxeler::UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> &
 				float& fConfidence = m_vVolume[oPos].data_n[3];
 				fConfidence -= fDeconfidence;
 				if(fConfidence < 0) fConfidence = 0;
-				// delete recent voxel
+				// sync recent voxel
 				if(m_vRecentVolume.count(oPos)) {
 					m_vRecentVolume[oPos] = m_vVolume[oPos];
 				}
