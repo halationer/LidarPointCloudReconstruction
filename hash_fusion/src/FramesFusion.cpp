@@ -104,18 +104,15 @@ FramesFusion::~FramesFusion() {
 		
 		auto vAllPoints = AllCloud(m_vMapPCN);
 
-		// constexpr int union_set_time = 20;
-		// for(int i = 0; i < union_set_time; ++i) {
-		// 	if(m_bUseUnionSetConnection) {
-		// 		++m_oVoxeler.m_iFrameCount;
-		// 		m_oVoxeler.RebuildUnionSet();
-		// 		m_oVoxeler.UpdateUnionConflict();
-		// 	}
-		// }
+		if(m_bUseUnionSetConnection) {
+			m_oVoxeler.m_iFrameCount += 20;
+			m_oVoxeler.RebuildUnionSet(m_fStrictDotRef, m_fSoftDotRef);
+			m_oVoxeler.UpdateUnionConflict(m_iRemoveSizeRef, m_fRemoveTimeRef);
+		}
 
 		HashVoxeler::HashVolume vVolumeCopy;
-		// m_oVoxeler.GetRecentMaxConnectVolume(vVolumeCopy, m_iKeepTime);
-		m_oVoxeler.GetStaticVolume(vVolumeCopy);
+		m_oVoxeler.GetRecentConnectVolume(vVolumeCopy, m_iKeepTime, m_iRemoveSizeRef);
+		// m_oVoxeler.GetStaticVolume(vVolumeCopy);
 
 
 		pcl::PointCloud<pcl::PointXYZINormal> pc;
@@ -243,6 +240,11 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	nodeHandle.param("async_reconstruct", m_bAsyncReconstruction, true);
 	nodeHandle.param("use_union_set", m_bUseUnionSetConnection, true);
 	nodeHandle.param("only_max_union_set", m_bOnlyMaxUnionSet, true);
+	nodeHandle.param("recon_range", m_fReconstructRange, 30.0f);
+	nodeHandle.param("strict_dot_ref", m_fStrictDotRef, 0.95f);
+	nodeHandle.param("soft_dot_ref", m_fSoftDotRef, 0.3f);
+	nodeHandle.param("remove_size_ref", m_iRemoveSizeRef, 200);
+	nodeHandle.param("remove_time_ref", m_fRemoveTimeRef, 10.0f);
 
 	//count processed point cloud frame
 	m_iPCFrameCount = 0;
@@ -485,8 +487,8 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 	//define header of message
 	InitMeshMsg(oMeshMsgs, 		m_sOutMeshTFId, 0, 1. , 0.95, 0.2);
 	InitMeshMsg(oMeshDynamic, 	m_sOutMeshTFId, 1, 1. , 0.1, 0.1);
+	// InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 1. , 0.95, 0.2);
 	// InitMeshMsg(oMeshAdded, 	m_sOutMeshTFId, 2, 1. , 0.9, 0.2);
-	// InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 0.9, 1. , 0.2);
 
 	// dynamic
 	// InitMeshMsg(oMeshAdded, 	m_sOutMeshTFId, 2, 1. , 0.95, 0.2);
@@ -494,7 +496,9 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 
 	// add
 	InitMeshMsg(oMeshAdded, 	m_sOutMeshTFId, 2, 0.4, 0.6, 1. );
-	InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 1. , 0.95, 0.2);
+
+	// fused
+	InitMeshMsg(oMeshFused,		m_sOutMeshTFId, 3, 0.9, 1. , 0.2);
 
 	//for each face
 	for (int i = 0; i != oMeshModel.polygons.size(); ++i){
@@ -841,8 +845,8 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 	//******make mesh********
 	//check connection
 	if(m_bUseUnionSetConnection) {
-		m_oVoxeler.RebuildUnionSet();
-		m_oVoxeler.UpdateUnionConflict();
+		m_oVoxeler.RebuildUnionSet(m_fStrictDotRef, m_fSoftDotRef);
+		m_oVoxeler.UpdateUnionConflict(m_iRemoveSizeRef, m_fRemoveTimeRef);
 
 		// output unionset result
 		visualization_msgs::MarkerArray union_set_marker;
@@ -859,15 +863,22 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 	SignedDistance oSDer(m_iKeepTime, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
 	//compute signed distance based on centroids and its normals within voxels
 	std::unordered_map<HashPos, float, HashFunc> vSignedDis;
+	visualization_msgs::MarkerArray static_expand_marker;
+	std::string sTopicName = "/static_expand";
 	if(!m_bUseUnionSetConnection) {
-		vSignedDis = oSDer.ConvedGlance(m_oVoxeler);
+		vSignedDis = oSDer.ConvedGlance(m_oVoxeler, &static_expand_marker);
 	}
 	else if(m_bOnlyMaxUnionSet) {
-		vSignedDis = oSDer.ConvedGlanceOnlyMaxUnion(m_oVoxeler);
+		vSignedDis = oSDer.ConvedGlanceOnlyMaxUnion(m_oVoxeler, &static_expand_marker);
 	}
 	else {
-		vSignedDis = oSDer.ConvedGlanceLargeUnion(m_oVoxeler);
+		vSignedDis = oSDer.ConvedGlanceLargeUnion(m_oVoxeler, m_iRemoveSizeRef, &static_expand_marker);
 	}
+	if(m_vDebugPublishers.count(sTopicName) == 0)
+	{
+		m_vDebugPublishers[sTopicName] = m_oNodeHandle.advertise<visualization_msgs::MarkerArray>(sTopicName, 1, true);
+	}
+	m_vDebugPublishers[sTopicName].publish(static_expand_marker);
 
 
 	//marching cuber
@@ -1011,7 +1022,7 @@ void FramesFusion::UpdateOneFrame(const pcl::PointNormal& oViewPoint, pcl::Point
 	for(int i = 0; i < n; ++i) {
 		auto & oPoint = vFilteredMeasurementCloud[i];
 		Eigen::Vector3f vDistance(oViewPoint.x - oPoint.x, oViewPoint.y - oPoint.y, oViewPoint.z - oPoint.z);
-		if(vDistance.norm() > 30.0f) {
+		if(vDistance.norm() > m_fReconstructRange) {
 			swap(vFilteredMeasurementCloud[i--], vFilteredMeasurementCloud[--n]);
 		}
 	}
@@ -1433,7 +1444,7 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 			pcl::PointNormal& oAssociatedPoint = vDepthMeasurementCloud.points[depth_index[row][col]];
 			double dAssociatedDepth = depth_image[row][col];
 			// 判断complict关系
-			if(abs(depth - dAssociatedDepth) > support_factor && depth < dAssociatedDepth) { // 旧点的depth < 新点的depth
+			if(abs(depth - dAssociatedDepth) > support_factor && depth < dAssociatedDepth /*&& abs(depth - dAssociatedDepth) < 5*/) { // 旧点的depth < 新点的depth
 				
 				++complict_count;
 				pConflictPoint = &oAssociatedPoint;

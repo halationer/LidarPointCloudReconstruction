@@ -10,6 +10,7 @@ Panels:
         - /FramesFusion1
         - /FramesFusion1/CubeMeshArray1
         - /FramesFusion1/UnionSet1
+        - /FramesFusion1/StaticExpand1
       Splitter Ratio: 0.5
     Tree Height: 848
   - Class: rviz/Selection
@@ -527,12 +528,20 @@ Visualization Manager:
           Use rainbow: true
           Value: false
         - Class: rviz/MarkerArray
-          Enabled: false
+          Enabled: true
           Marker Topic: /union_set
           Name: UnionSet
           Namespaces:
-            {}
+            "": true
           Queue Size: 1
+          Value: true
+        - Class: rviz/MarkerArray
+          Enabled: false
+          Marker Topic: /static_expand
+          Name: StaticExpand
+          Namespaces:
+            {}
+          Queue Size: 100
           Value: false
       Enabled: true
       Name: FramesFusion

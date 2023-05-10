@@ -101,9 +101,9 @@ public:
 	void DrawVolume(const HashVolume & vVolume, visualization_msgs::MarkerArray & oOutputVolume);
 
 	// build union set
-	void RebuildUnionSet();
+	void RebuildUnionSet(const float fStrictDotRef, const float fSoftDotRef);
 	void DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet);
-	void UpdateUnionConflict();
+	void UpdateUnionConflict(const int iRemoveSetSizeRef, const float fRemoveTimeRef);
 
 	void ClearFlow();
 

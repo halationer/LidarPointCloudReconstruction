@@ -268,10 +268,15 @@ protected:
     // use union set to judge connection
     bool m_bUseUnionSetConnection;
     bool m_bOnlyMaxUnionSet;
-
+    float m_fStrictDotRef;
+    float m_fSoftDotRef;
+    int m_iRemoveSizeRef;
+    float m_fRemoveTimeRef;
+    
     // // sdf
     // SignedDistance* m_pSdf;
     // std::mutex m_mSdfMutex;
+    float m_fReconstructRange;
 };
 
 #endif

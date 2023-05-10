@@ -245,8 +245,8 @@ void PreConvFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFra
     // Super::SlideModeling(oResultMesh, iFrameId);
     
 	if(m_bUseUnionSetConnection) {
-		m_oVoxeler.RebuildUnionSet();
-		m_oVoxeler.UpdateUnionConflict();
+		m_oVoxeler.RebuildUnionSet(m_fStrictDotRef, m_fSoftDotRef);
+		m_oVoxeler.UpdateUnionConflict(m_iRemoveSizeRef, m_fRemoveTimeRef);
 	}
     
 	//******make mesh********

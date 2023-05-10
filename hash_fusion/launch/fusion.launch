@@ -50,8 +50,13 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <!-- dynamic control -->
     <arg name="use_surfel_fusion"   default="true"/>
     <arg name="strategy_type"       default="2"/>
+    <!-- union set -->
     <arg name="use_union_set"       default="true"/>
     <arg name="only_max_union_set"  default="false"/>
+    <arg name="strict_dot_ref"      default="0.95"/>
+    <arg name="soft_dot_ref"        default="0.3"/>
+    <arg name="remove_size_ref"     default="100"/>
+    <arg name="remove_time_ref"     default="10.0"/>
 
     <!-- fusion mode:
         0 - normal fusion 
@@ -66,6 +71,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="conv_dim" default="3" />
     <arg name="conv_add_point_ref" default="4" />
     <arg name="conv_distance_ref" default="0.95" />
+
+    <arg name="recon_range" default="80.0" />
     
 
     <!-- frames_fusion node in frames_fusion pkg-->
@@ -122,10 +129,15 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <param name="conv_add_point_ref" type="int" value="$(arg conv_add_point_ref)" />
 
         <param name="conv_distance_ref" type="double" value="$(arg conv_distance_ref)" />
+        <param name="recon_range" type="double" value="$(arg recon_range)" />
         
         <!-- dynamic judge params-->
         <param name="use_union_set" type="bool" value="$(arg use_union_set)" />
         <param name="only_max_union_set" type="bool" value="$(arg only_max_union_set)" />
+        <param name="strict_dot_ref" type="double" value="$(arg strict_dot_ref)" />
+        <param name="soft_dot_ref" type="double" value="$(arg soft_dot_ref)" />
+        <param name="remove_size_ref" type="int" value="$(arg remove_size_ref)" />
+        <param name="remove_time_ref" type="double" value="$(arg remove_time_ref)" />
 
         <!-- multi_resolution -->
         <param name="fusion_mode" type="int" value="$(arg fusion_mode)"/>

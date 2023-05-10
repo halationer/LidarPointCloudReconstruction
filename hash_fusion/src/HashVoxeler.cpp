@@ -246,7 +246,7 @@ Input: m_vRecentVolume - the surfel volume of max recent time
 Output: m_oUnionSet - use recent volume to build union set
 Function: rebuild union set according to recent surfel volume
 ========================================*/
-void HashVoxeler::RebuildUnionSet() {
+void HashVoxeler::RebuildUnionSet(const float fStrictDotRef, const float fSoftDotRef) {
 
 	// copy avoid of block
 	HashVoxeler::HashVolume vVolumeCopy;
@@ -306,8 +306,7 @@ void HashVoxeler::RebuildUnionSet() {
 		//*/
 		
 		// /* 面片连通性 Ax + By + Cz + D = 0 (+法向限制）
-		constexpr float strict_normal_dot_ref = 0.95f;
-		float normal_dot_ref = m_pUpdateStrategy->IsSoftDynamic(oPoint.data_c[1]) ? strict_normal_dot_ref : 0.3f;
+		float normal_dot_ref = m_pUpdateStrategy->IsSoftDynamic(oPoint.data_c[1]) ? fStrictDotRef : fSoftDotRef;
 		Eigen::Vector3f vNormal(oPoint.normal_x, oPoint.normal_y, oPoint.normal_z);
 		float A = oPoint.normal_x, B = oPoint.normal_y, C = oPoint.normal_z;
 		float neg_D = A * oPoint.x + B * oPoint.y + C * oPoint.z;
@@ -343,7 +342,7 @@ void HashVoxeler::RebuildUnionSet() {
 				cross_z1 /= m_oVoxelLength.z;
 				bool cross_pos_dx = CROSS_VALID(cross_y3) || CROSS_VALID(cross_y2) || CROSS_VALID(cross_z1);
 				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
-				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? strict_normal_dot_ref : normal_dot_ref;
+				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? fStrictDotRef : normal_dot_ref;
 				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
 				if(cross_pos_dx && normal_dot) m_oUnionSet.Union(oPos, oNearPos);
 			}
@@ -363,7 +362,7 @@ void HashVoxeler::RebuildUnionSet() {
 				cross_x1 /= m_oVoxelLength.x;
 				bool cross_pos_dy = CROSS_VALID(cross_z3) || CROSS_VALID(cross_z2) || CROSS_VALID(cross_x1);
 				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
-				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? strict_normal_dot_ref : normal_dot_ref;
+				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? fStrictDotRef : normal_dot_ref;
 				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
 				if(cross_pos_dy && normal_dot) m_oUnionSet.Union(oPos, oNearPos);
 			}
@@ -383,7 +382,7 @@ void HashVoxeler::RebuildUnionSet() {
 				cross_x3 /= m_oVoxelLength.x;
 				bool cross_pos_dz = CROSS_VALID(cross_y1) || CROSS_VALID(cross_y2) || CROSS_VALID(cross_x3);
 				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
-				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? strict_normal_dot_ref : normal_dot_ref;
+				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? fStrictDotRef : normal_dot_ref;
 				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
 				if(cross_pos_dz && normal_dot) m_oUnionSet.Union(oPos, oNearPos);
 			}
@@ -524,20 +523,17 @@ Input: m_oUnionSet - the union set saved in volume
 Output: m_vVolume - update the volume according to the union set
 Function: if the size of the connected set of a voxel is below a const int, then remove the voxel
 ========================================*/
-void HashVoxeler::UpdateUnionConflict() {
-
-	constexpr int remove_set_size_ref = 200;
-	constexpr float remove_voxel_time_ref = 10.0f;
+void HashVoxeler::UpdateUnionConflict(const int iRemoveSetSizeRef, const float fRemoveTimeRef) {
 
 	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
 	auto vVoxelSets = m_oUnionSet.GetSets();
 
 	std::unique_lock<std::shared_mutex> volume_write_lock(m_mVolumeLock);
 	for(auto && [oPos, oPosList] : vVoxelSets) {
-		if(oPosList.size() < remove_set_size_ref && !m_oUnionSet.InMaxSet(oPos)) {
+		if(oPosList.size() < iRemoveSetSizeRef && !m_oUnionSet.InMaxSet(oPos)) {
 			for(auto && oPosInSet : oPosList) {
 				float& fTimeStamp = m_vVolume[oPosInSet].data_c[2];
-				if(m_iFrameCount - fTimeStamp > remove_voxel_time_ref) {
+				if(m_iFrameCount - fTimeStamp > fRemoveTimeRef) {
 					float& fConflictTime = m_vVolume[oPosInSet].data_c[1];
 					bool bToDelete = m_pUpdateStrategy->Conflict(fConflictTime);
 					// if(bToDelete) {

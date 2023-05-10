@@ -26,7 +26,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="mf_output_path" default=""/>
 
     <!--Use simulated time to prevent the public time of the TF structure from being unable to match with other messages-->
-    <!-- <param name="use_sim_time" value="true"/> -->
+    <param name="use_sim_time" value="true"/>
 
     <!-- use eval node -->
     <include file="$(find aloam_velodyne)/launch/eval_velodyne.launch" >
