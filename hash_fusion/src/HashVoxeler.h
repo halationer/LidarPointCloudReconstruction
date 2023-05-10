@@ -98,6 +98,8 @@ public:
 	void GetRecentNoneFlowVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
 	void GetRecentHighDistributionVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
 
+	void DrawVolume(const HashVolume & vVolume, visualization_msgs::MarkerArray & oOutputVolume);
+
 	// build union set
 	void RebuildUnionSet();
 	void DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet);

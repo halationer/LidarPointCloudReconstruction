@@ -29,10 +29,10 @@ public:
 
 	//compute the signed distance based on surfel(point with normal)
 	std::unordered_map<HashPos, float, HashFunc> & NormalBasedGlance(HashVoxeler & oVoxeler);
-	std::unordered_map<HashPos, float, HashFunc> & ConvedGlance(HashVoxeler & oVoxeler);
-	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceNoneFlow(HashVoxeler & oVoxeler);
-	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceLargeUnion(HashVoxeler & oVoxeler);
-	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceOnlyMaxUnion(HashVoxeler & oVoxeler);
+	std::unordered_map<HashPos, float, HashFunc> & ConvedGlance(HashVoxeler & oVoxeler, visualization_msgs::MarkerArray* oDebugMarker = nullptr);
+	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceNoneFlow(HashVoxeler & oVoxeler, visualization_msgs::MarkerArray* oDebugMarker = nullptr);
+	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceLargeUnion(HashVoxeler & oVoxeler, visualization_msgs::MarkerArray* oDebugMarker = nullptr);
+	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceOnlyMaxUnion(HashVoxeler & oVoxeler, visualization_msgs::MarkerArray* oDebugMarker = nullptr);
 
 	//compute the signed distance based on corners to plan in a voxel
 	std::unordered_map<HashPos, float, HashFunc> & PlanDistance(const HashVoxeler::HashVolume & vVolume, const std::unordered_map<HashPos, FacePara, HashFunc> & vNormalPara, const pcl::PointXYZ oVoxelSize);
@@ -45,6 +45,7 @@ public:
 	std::vector<pcl::Vertices> m_vGlanceFaceIdxs;
 
 protected:
+	void CopyAndExpandVolume(HashVoxeler::HashVolume& vVolume);
 	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceCore(HashVoxeler::HashVolume& vTempVolumeCopy, const pcl::PointXYZ oVoxelSize);
 
 	int m_iKeepTime;

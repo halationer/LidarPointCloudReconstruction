@@ -52,40 +52,60 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::NormalBasedGlance
 	return PlanDistance(vVolumeToMeshing, vVoxelNormalPara, oVoxeler.m_oVoxelLength);
 }
 
-std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlance(HashVoxeler & oVoxeler) {
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlance(HashVoxeler & oVoxeler, visualization_msgs::MarkerArray* oDebugMarker) {
 	
 	HashVoxeler::HashVolume vTempVolumeCopy;
 	oVoxeler.GetRecentVolume(vTempVolumeCopy, m_iKeepTime);
+	CopyAndExpandVolume(vTempVolumeCopy);
+
+	if(oDebugMarker != nullptr) 
+		oVoxeler.DrawVolume(vTempVolumeCopy, *oDebugMarker);
+
 	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
 }
 
-std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceNoneFlow(HashVoxeler & oVoxeler) {
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceNoneFlow(HashVoxeler & oVoxeler, visualization_msgs::MarkerArray* oDebugMarker) {
 
 	HashVoxeler::HashVolume vTempVolumeCopy;
 	oVoxeler.GetRecentNoneFlowVolume(vTempVolumeCopy, m_iKeepTime);
+	CopyAndExpandVolume(vTempVolumeCopy);
+
+	if(oDebugMarker != nullptr) 
+		oVoxeler.DrawVolume(vTempVolumeCopy, *oDebugMarker);
+
 	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
 }
 
-std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceLargeUnion(HashVoxeler & oVoxeler) {
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceLargeUnion(HashVoxeler & oVoxeler, visualization_msgs::MarkerArray* oDebugMarker) {
 
 	HashVoxeler::HashVolume vTempVolumeCopy;
 	oVoxeler.GetRecentConnectVolume(vTempVolumeCopy, m_iKeepTime, 200);
+	CopyAndExpandVolume(vTempVolumeCopy);
+
+	if(oDebugMarker != nullptr) 
+		oVoxeler.DrawVolume(vTempVolumeCopy, *oDebugMarker);
+
 	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
 }
 
-std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceOnlyMaxUnion(HashVoxeler & oVoxeler) {
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceOnlyMaxUnion(HashVoxeler & oVoxeler, visualization_msgs::MarkerArray* oDebugMarker) {
 	
 	HashVoxeler::HashVolume vTempVolumeCopy;
 	oVoxeler.GetRecentMaxConnectVolume(vTempVolumeCopy, m_iKeepTime);
+	CopyAndExpandVolume(vTempVolumeCopy);
+
+	if(oDebugMarker != nullptr) 
+		oVoxeler.DrawVolume(vTempVolumeCopy, *oDebugMarker);
+
 	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
 }
 
-std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceCore(HashVoxeler::HashVolume& vTempVolumeCopy, const pcl::PointXYZ oVoxelSize) {
+void SignedDistance::CopyAndExpandVolume(HashVoxeler::HashVolume& vVolume) {
 
-	m_vVolumeCopy = vTempVolumeCopy;
+	m_vVolumeCopy = vVolume;
 
 	// /* expand - not that good, only fill small holes, but runs too slow(if 3d expand)
-	for(auto && [oPos,oPoint] : vTempVolumeCopy) {
+	for(auto && [oPos,oPoint] : vVolume) {
 
 		// judge normal main direction to speed up
 		Eigen::Vector3f vNormal(oPoint.normal_x, oPoint.normal_y, oPoint.normal_z);
@@ -108,13 +128,16 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceCore(
 		// for(int dz = -m_iConvHalfDim; dz <= m_iConvHalfDim; ++dz) {
 
 			const HashPos oCurrentPos(oPos.x + dx, oPos.y + dy, oPos.z + dz);
-			if(!vTempVolumeCopy.count(oCurrentPos)) {
-				vTempVolumeCopy[oCurrentPos] = pcl::PointNormal();
-				vTempVolumeCopy[oCurrentPos].data_c[2] = 0;
+			if(!vVolume.count(oCurrentPos)) {
+				vVolume[oCurrentPos] = pcl::PointNormal();
+				vVolume[oCurrentPos].data_c[2] = 0;
 			}
 		}}}
 	}
 	//*/
+}
+
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceCore(HashVoxeler::HashVolume& vTempVolumeCopy, const pcl::PointXYZ oVoxelSize) {
 
 	// /*
 	clock_t start_time, conv_time;

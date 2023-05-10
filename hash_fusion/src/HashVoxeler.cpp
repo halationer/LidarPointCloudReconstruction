@@ -335,13 +335,13 @@ void HashVoxeler::RebuildUnionSet() {
 				float A = oNearPoint.normal_x, B = oNearPoint.normal_y, C = oNearPoint.normal_z;
 				float neg_D = A * oNearPoint.x + B * oNearPoint.y + C * oNearPoint.z;
 				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
-				int cross_y1 = B ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - C * oPosPoint.z) / B - oPosPoint.y : -1;
+				int cross_y3 = B ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - C * oPosPoint.z) / B - oPosPoint.y : -1;
 				int cross_y2 = B ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - C * (oPosPoint.z + m_oVoxelLength.z)) / B - oPosPoint.y : -1;
 				int cross_z1 = C ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - B * oPosPoint.y) / C - oPosPoint.z : -1;
-				cross_y1 /= m_oVoxelLength.y;
+				cross_y3 /= m_oVoxelLength.y;
 				cross_y2 /= m_oVoxelLength.y;
 				cross_z1 /= m_oVoxelLength.z;
-				bool cross_pos_dx = CROSS_VALID(cross_y1) || CROSS_VALID(cross_y2) || CROSS_VALID(cross_z1);
+				bool cross_pos_dx = CROSS_VALID(cross_y3) || CROSS_VALID(cross_y2) || CROSS_VALID(cross_z1);
 				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
 				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? strict_normal_dot_ref : normal_dot_ref;
 				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
@@ -355,13 +355,13 @@ void HashVoxeler::RebuildUnionSet() {
 				float A = oNearPoint.normal_x, B = oNearPoint.normal_y, C = oNearPoint.normal_z;
 				float neg_D = A * oNearPoint.x + B * oNearPoint.y + C * oNearPoint.z;
 				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
-				int cross_z1 = C ? (neg_D - A * oPosPoint.x - B * (oPosPoint.y + m_oVoxelLength.y)) / C - oPosPoint.z : -1;
+				int cross_z3 = C ? (neg_D - A * oPosPoint.x - B * (oPosPoint.y + m_oVoxelLength.y)) / C - oPosPoint.z : -1;
 				int cross_z2 = C ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - B * (oPosPoint.y + m_oVoxelLength.y)) / C - oPosPoint.z : -1;
 				int cross_x1 = A ? (neg_D - B * (oPosPoint.y + m_oVoxelLength.y) - C * oPosPoint.z) / A - oPosPoint.x : -1;
-				cross_z1 /= m_oVoxelLength.z;
+				cross_z3 /= m_oVoxelLength.z;
 				cross_z2 /= m_oVoxelLength.z;
 				cross_x1 /= m_oVoxelLength.x;
-				bool cross_pos_dy = CROSS_VALID(cross_z1) || CROSS_VALID(cross_z2) || CROSS_VALID(cross_x1);
+				bool cross_pos_dy = CROSS_VALID(cross_z3) || CROSS_VALID(cross_z2) || CROSS_VALID(cross_x1);
 				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
 				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? strict_normal_dot_ref : normal_dot_ref;
 				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
@@ -377,11 +377,11 @@ void HashVoxeler::RebuildUnionSet() {
 				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
 				int cross_y1 = B ? (neg_D - A * oPosPoint.x - C * (oPosPoint.z + m_oVoxelLength.z)) / B - oPosPoint.y : -1;
 				int cross_y2 = B ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - C * (oPosPoint.z + m_oVoxelLength.z)) / B - oPosPoint.y : -1;
-				int cross_x1 = A ? (neg_D - B * oPosPoint.y - C * (oPosPoint.z + m_oVoxelLength.z)) / A - oPosPoint.x : -1;
+				int cross_x3 = A ? (neg_D - B * oPosPoint.y - C * (oPosPoint.z + m_oVoxelLength.z)) / A - oPosPoint.x : -1;
 				cross_y1 /= m_oVoxelLength.y;
 				cross_y2 /= m_oVoxelLength.y;
-				cross_x1 /= m_oVoxelLength.x;
-				bool cross_pos_dz = CROSS_VALID(cross_y1) || CROSS_VALID(cross_y2) || CROSS_VALID(cross_x1);
+				cross_x3 /= m_oVoxelLength.x;
+				bool cross_pos_dz = CROSS_VALID(cross_y1) || CROSS_VALID(cross_y2) || CROSS_VALID(cross_x3);
 				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
 				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? strict_normal_dot_ref : normal_dot_ref;
 				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
@@ -392,9 +392,53 @@ void HashVoxeler::RebuildUnionSet() {
 	}
 }
 
+
+void HashVoxeler::DrawVolume(const HashVolume & vVolume, visualization_msgs::MarkerArray & oOutputVolume) {
+
+	constexpr int index = 1e4;
+
+	visualization_msgs::Marker oVolumeMarker;
+	oVolumeMarker.header.frame_id = "map";
+	oVolumeMarker.header.stamp = ros::Time::now();
+	oVolumeMarker.type = visualization_msgs::Marker::CUBE_LIST;
+	oVolumeMarker.action = visualization_msgs::Marker::ADD;
+	oVolumeMarker.id = index; 
+
+	oVolumeMarker.scale.x = m_oVoxelLength.x;
+	oVolumeMarker.scale.y = m_oVoxelLength.y;
+	oVolumeMarker.scale.z = m_oVoxelLength.z;
+
+	oVolumeMarker.pose.position.x = 0.0;
+	oVolumeMarker.pose.position.y = 0.0;
+	oVolumeMarker.pose.position.z = 0.0;
+
+	oVolumeMarker.pose.orientation.x = 0.0;
+	oVolumeMarker.pose.orientation.y = 0.0;
+	oVolumeMarker.pose.orientation.z = 0.0;
+	oVolumeMarker.pose.orientation.w = 1.0;
+
+	oVolumeMarker.color.a = 1.0;
+	oVolumeMarker.color.r = random() / (float)RAND_MAX;
+	oVolumeMarker.color.g = random() / (float)RAND_MAX;
+	oVolumeMarker.color.b = random() / (float)RAND_MAX;
+
+	for(auto && [oPos, _] : vVolume) {
+
+		auto o3DPos = HashPosTo3DPos(oPos);
+		geometry_msgs::Point point;
+		point.x = o3DPos.x + m_oVoxelLength.x / 2;
+		point.y = o3DPos.y + m_oVoxelLength.y / 2;
+		point.z = o3DPos.z + m_oVoxelLength.z / 2;
+		oVolumeMarker.points.push_back(point);
+	}
+
+	oOutputVolume.markers.push_back(oVolumeMarker);
+}
+
+
 void HashVoxeler::DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet) {
 
-	constexpr int remove_set_size_ref = 200;
+	constexpr int remove_set_size_ref = 10;
 	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
 	auto vVoxelSets = m_oUnionSet.GetSets();
 
@@ -426,7 +470,7 @@ void HashVoxeler::DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet)
 			oCurrentSet.pose.orientation.z = 0.0;
 			oCurrentSet.pose.orientation.w = 1.0;
 
-			oCurrentSet.color.a = 0.8;
+			oCurrentSet.color.a = 1.0;
 			oCurrentSet.color.r = random() / (float)RAND_MAX;
 			oCurrentSet.color.g = random() / (float)RAND_MAX;
 			oCurrentSet.color.b = random() / (float)RAND_MAX;
