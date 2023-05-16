@@ -57,6 +57,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="soft_dot_ref"        default="0.3"/>
     <arg name="remove_size_ref"     default="100"/>
     <arg name="remove_time_ref"     default="10.0"/>
+    <arg name="confidence_level_length" default="16"/>
 
     <!-- fusion mode:
         0 - normal fusion 
@@ -69,10 +70,12 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <!-- meshing params -->
     <arg name="keep_time" default="-1" />
     <arg name="conv_dim" default="3" />
-    <arg name="conv_add_point_ref" default="4" />
+    <arg name="conv_add_point_ref" default="3" />
     <arg name="conv_distance_ref" default="0.95" />
 
-    <arg name="recon_range" default="80.0" />
+    <arg name="dynamic_debug" default="false" />
+    <arg name="keep_voxel" default="true" />
+    <arg name="recon_range" default="30.0" />
     
 
     <!-- frames_fusion node in frames_fusion pkg-->
@@ -130,6 +133,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
         <param name="conv_distance_ref" type="double" value="$(arg conv_distance_ref)" />
         <param name="recon_range" type="double" value="$(arg recon_range)" />
+        <param name="dynamic_debug" type="bool" value="$(arg dynamic_debug)" />
+        <param name="keep_voxel" type="bool" value="$(arg keep_voxel)" />
         
         <!-- dynamic judge params-->
         <param name="use_union_set" type="bool" value="$(arg use_union_set)" />
@@ -138,6 +143,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <param name="soft_dot_ref" type="double" value="$(arg soft_dot_ref)" />
         <param name="remove_size_ref" type="int" value="$(arg remove_size_ref)" />
         <param name="remove_time_ref" type="double" value="$(arg remove_time_ref)" />
+        <param name="confidence_level_length" type="int" value="$(arg confidence_level_length)" />
 
         <!-- multi_resolution -->
         <param name="fusion_mode" type="int" value="$(arg fusion_mode)"/>

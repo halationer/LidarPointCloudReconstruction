@@ -272,7 +272,11 @@ protected:
     float m_fSoftDotRef;
     int m_iRemoveSizeRef;
     float m_fRemoveTimeRef;
-    
+
+    bool m_bDynamicDebug;
+    bool m_bKeepVoxel;
+    int m_iConfidenceLevelLength;
+
     // // sdf
     // SignedDistance* m_pSdf;
     // std::mutex m_mSdfMutex;

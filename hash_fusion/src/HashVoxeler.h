@@ -86,13 +86,18 @@ public:
 	~HashVoxeler();
 
 	// get volume
+	
+	void GetAllVolume(HashVoxeler::HashVolume & vVolumeCopy) const;
 	void GetStaticVolume(HashVoxeler::HashVolume & vVolumeCopy) const;
 	void GetStrictStaticVolume(HashVoxeler::HashVolume & vVolumeCopy) const;
 	void GetVolumeCloud(pcl::PointCloud<pcl::PointNormal> & vVolumeCloud) const;
 	void GetRecentVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) const;
+	void GetRecentAllVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) const;
 	void GetLocalVolume(HashVoxeler::HashVolume & vVolumeCopy, const Eigen::Vector3f vCenter, const float fRadius) const;
 
 	// get filtered volume
+
+	void GetAllConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iConnectMinSize);
 	void GetRecentConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime, const int iConnectMinSize);
 	void GetRecentMaxConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
 	void GetRecentNoneFlowVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
@@ -101,7 +106,9 @@ public:
 	void DrawVolume(const HashVolume & vVolume, visualization_msgs::MarkerArray & oOutputVolume);
 
 	// build union set
-	void RebuildUnionSet(const float fStrictDotRef, const float fSoftDotRef);
+	void RebuildUnionSetAll(const float fStrictDotRef, const float fSoftDotRef, const int fConfidenceLevelLength);
+	void RebuildUnionSet(const float fStrictDotRef, const float fSoftDotRef, const int fConfidenceLevelLength);
+	void RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, const float fStrictDotRef, const float fSoftDotRef, const int fConfidenceLevelLength);
 	void DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet);
 	void UpdateUnionConflict(const int iRemoveSetSizeRef, const float fRemoveTimeRef);
 
@@ -118,11 +125,14 @@ public:
 	void VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vCloud);
 
 	// decrease the confidence of dynamic point and record conflict
-	void UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & vVolumeCloud);
+	void UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & vVolumeCloud, const bool bKeepVoxel = false);
 
 	// transfer the position
 	template<class PointType>
 	void PointBelongVoxelPos(const PointType & oPoint, HashPos & oPos);
+
+	template<class PointType>
+	static HashPos GetVoxelPos(const PointType & oPoint, const pcl::PointXYZ & oVoxelLength);
 
 	// calcualte corner poses
 	static void GetCornerPoses(const HashPos & oVoxelPos, std::vector<HashPos> & vCornerPoses);

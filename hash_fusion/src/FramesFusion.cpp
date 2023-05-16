@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <exception>
+#include <unordered_set>
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -104,16 +105,21 @@ FramesFusion::~FramesFusion() {
 		
 		auto vAllPoints = AllCloud(m_vMapPCN);
 
+		// TODO： output fix
+
 		if(m_bUseUnionSetConnection) {
 			m_oVoxeler.m_iFrameCount += 20;
-			m_oVoxeler.RebuildUnionSet(m_fStrictDotRef, m_fSoftDotRef);
+			m_oVoxeler.RebuildUnionSetAll(m_fStrictDotRef, m_fSoftDotRef, m_iConfidenceLevelLength);
 			m_oVoxeler.UpdateUnionConflict(m_iRemoveSizeRef, m_fRemoveTimeRef);
 		}
 
 		HashVoxeler::HashVolume vVolumeCopy;
-		m_oVoxeler.GetRecentConnectVolume(vVolumeCopy, m_iKeepTime, m_iRemoveSizeRef);
-		// m_oVoxeler.GetStaticVolume(vVolumeCopy);
+		// m_oVoxeler.GetRecentConnectVolume(vVolumeCopy, m_iKeepTime, m_iRemoveSizeRef);
+		// m_oVoxeler.GetAllVolume(vVolumeCopy);
 
+		SignedDistance oSDF(-1, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
+		oSDF.ConvedGlanceAllUnion(m_oVoxeler, m_iRemoveSizeRef);
+		vVolumeCopy = oSDF.m_vVolumeCopy;
 
 		pcl::PointCloud<pcl::PointXYZINormal> pc;
 		for(int i = 0; i < vAllPoints->size(); ++i) {
@@ -125,6 +131,26 @@ FramesFusion::~FramesFusion() {
 			m_oVoxeler.PointBelongVoxelPos(point, pos);
 			if(!vVolumeCopy.count(pos)) continue;
 
+			float distance_ref, normal_ref;
+			Eigen::Vector3f oCorner = vVolumeCopy[pos].getVector3fMap();
+			Eigen::Vector3f oNormal = vVolumeCopy[pos].getNormalVector3fMap();
+			Eigen::Vector3f vPoint = point.getVector3fMap();
+			Eigen::Vector3f vNormal = point.getNormalVector3fMap();
+			if(vVolumeCopy[pos].data_c[3] > m_fConvFusionDistanceRef1) {
+				distance_ref = m_oVoxeler.m_oVoxelLength.getVector3fMap().norm() * 0.1;
+				normal_ref = 0.8;
+			}
+			else {
+				distance_ref = m_oVoxeler.m_oVoxelLength.getVector3fMap().norm() * 0.3;
+				normal_ref = 0;
+			}
+
+			if(abs(oNormal.dot(oCorner - vPoint)) > distance_ref || vNormal.dot(oNormal) < normal_ref) {
+				static int filter_count = 0;
+				std::cout << "filtered: " << ++filter_count << std::endl; 
+				continue;
+			}
+
 			pcl::PointXYZINormal new_point;
 			new_point.x = point.x;
 			new_point.y = point.y;
@@ -134,10 +160,10 @@ FramesFusion::~FramesFusion() {
 			new_point.normal_z = point.normal_z;
 			
 			// point confidence (impacted by depth & support & conflict)
-			new_point.intensity = point.data_n[3]; 
+			new_point.intensity = min(vVolumeCopy[pos].data_n[3], 100.0f); 
 			
 			// maybe use to save gauss distance, but now don't make scence
-			// new_point.curvature = point.data_c[3];
+			new_point.curvature = vVolumeCopy[pos].data_c[2];
 
 			pc.push_back(new_point);
 		}
@@ -245,6 +271,7 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	nodeHandle.param("soft_dot_ref", m_fSoftDotRef, 0.3f);
 	nodeHandle.param("remove_size_ref", m_iRemoveSizeRef, 200);
 	nodeHandle.param("remove_time_ref", m_fRemoveTimeRef, 10.0f);
+	nodeHandle.param("confidence_level_length", m_iConfidenceLevelLength, 8);
 
 	//count processed point cloud frame
 	m_iPCFrameCount = 0;
@@ -259,6 +286,8 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	nodeHandle.param("conv_dim", m_iConvDim, 3);
 	nodeHandle.param("conv_add_point_ref", m_iConvAddPointNumRef, 5); 
 	nodeHandle.param("conv_distance_ref", m_fConvFusionDistanceRef1, 0.95f);
+	nodeHandle.param("dynamic_debug", m_bDynamicDebug, false);
+	nodeHandle.param("keep_voxel", m_bKeepVoxel, false);
 	// m_pSdf = new SignedDistance(m_iKeepTime, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
 	m_oVoxeler.m_iMaxRecentKeep = max(500u, (uint32_t)m_iKeepTime);
 
@@ -441,7 +470,7 @@ void InitMeshMsg(visualization_msgs::Marker& oMeshMsgs, string frame_id, int id,
 	oMeshMsgs.header.frame_id = frame_id;
 	oMeshMsgs.header.stamp = ros::Time::now();
 	oMeshMsgs.type = visualization_msgs::Marker::TRIANGLE_LIST;
-	oMeshMsgs.action = visualization_msgs::Marker::ADD;
+	oMeshMsgs.action = visualization_msgs::Marker::MODIFY;
 	oMeshMsgs.id = id; 
 
 	oMeshMsgs.scale.x = 1.0;
@@ -769,7 +798,7 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 
 	//******voxelization********
 	//using signed distance
-	SignedDistance oSDer;
+	SignedDistance oSDer(m_iKeepTime, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
 
 	//compute signed distance based on centroids and its normals within voxels
 	std::unordered_map<HashPos, float, HashFunc> vSignedDis = oSDer.ConvedGlance(m_oVoxeler);
@@ -845,7 +874,7 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 	//******make mesh********
 	//check connection
 	if(m_bUseUnionSetConnection) {
-		m_oVoxeler.RebuildUnionSet(m_fStrictDotRef, m_fSoftDotRef);
+		m_oVoxeler.RebuildUnionSet(m_fStrictDotRef, m_fSoftDotRef, m_iConfidenceLevelLength);
 		m_oVoxeler.UpdateUnionConflict(m_iRemoveSizeRef, m_fRemoveTimeRef);
 
 		// output unionset result
@@ -865,7 +894,10 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 	std::unordered_map<HashPos, float, HashFunc> vSignedDis;
 	visualization_msgs::MarkerArray static_expand_marker;
 	std::string sTopicName = "/static_expand";
-	if(!m_bUseUnionSetConnection) {
+	if(m_bDynamicDebug) {
+		vSignedDis = oSDer.DebugGlance(m_oVoxeler);
+	}
+	else if(!m_bUseUnionSetConnection) {
 		vSignedDis = oSDer.ConvedGlance(m_oVoxeler, &static_expand_marker);
 	}
 	else if(m_bOnlyMaxUnionSet) {
@@ -894,12 +926,26 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 	///* output result mesh
 	if(m_bOutputFiles) {
 
+		pcl::PolygonMesh oStaticMesh, oDynamicMesh;
+		oStaticMesh.cloud = oResultMesh.cloud;
+		oDynamicMesh.cloud = oResultMesh.cloud;
+
 		std::stringstream sOutputPath;
 		sOutputPath << m_sFileHead << std::setw(4) << std::setfill('0') << iFrameId << "_mesh.ply";
 		auto oCopyMesh = oResultMesh;
-		for(auto & polygon : oCopyMesh.polygons)
+		for(auto & polygon : oCopyMesh.polygons) {
+			uint32_t token = polygon.vertices.back();
 			polygon.vertices.pop_back();
+			if(token < 2) oStaticMesh.polygons.push_back(polygon);
+			else oDynamicMesh.polygons.push_back(polygon);
+		}
+			
 		pcl::io::savePLYFileBinary(sOutputPath.str(), oCopyMesh);
+
+		if(m_bDynamicDebug) {
+			pcl::io::savePLYFileBinary(sOutputPath.str() + ".static.ply", oStaticMesh);
+			pcl::io::savePLYFileBinary(sOutputPath.str() + ".dyamic.ply", oDynamicMesh);
+		}
 	}
 	//*/
 }
@@ -992,21 +1038,16 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 
 
 	// output point cloud with (depth & view) confidence
-	// TODO: 或许可以使用多线程发布数据？
-	if(m_bSurfelFusion && false) {
+	if(m_bSurfelFusion) {
 		
 		pcl::PointCloud<pcl::PointNormal> temp;
-		temp += m_vMapPCN;
-		temp += m_vMapPCNAdded;
+		m_oVoxeler.GetVolumeCloud(temp);
 		vector<float> confidence(temp.size());
-		constexpr float confidence_scalar = 0.3f;
-		for(int i = 0; i < m_vMapPCN.size(); ++i) {
-			confidence[i] = m_vMapPCN.at(i).data_n[3] * confidence_scalar;
+		constexpr float confidence_scalar = 0.8f;
+		for(int i = 0; i < confidence.size(); ++i) {
+			confidence[i] = int(temp.at(i).data_n[3]) / m_iConfidenceLevelLength * 0.2;
 			if(confidence[i] > confidence_scalar) confidence[i] = confidence_scalar;
-		}
-		for(int i = 0; i < m_vMapPCNAdded.size(); ++i) {
-			confidence[i + m_vMapPCN.size()] = m_vMapPCNAdded.at(i).data_n[3] * confidence_scalar;
-			if(confidence[i + m_vMapPCN.size()] > confidence_scalar) confidence[i + m_vMapPCN.size()] = confidence_scalar;
+			if(temp[i].data_c[1] > 1 || temp[i].data_n[3] == .0f) confidence[i] = -1;
 		}
 		PublishPointCloud(temp, confidence, "/all_cloud_confidence");
 	}
@@ -1343,7 +1384,10 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 	//计算点云每个点的角度，将其置于相机像素中 4ms - 8ms
 	std::vector<std::vector<double>> depth_image(pitch_dim, std::vector<double>(yaw_dim));
 	std::vector<std::vector<int>> depth_index(pitch_dim, std::vector<int>(yaw_dim));
-	std::vector<bool> vCurrentFuseIndex(vDepthMeasurementCloud.size(), false); //因为只记录一个点，哪些点被覆盖需要记录
+	// std::vector<bool> vCurrentFuseIndex(vDepthMeasurementCloud.size(), false); //因为只记录一个点，哪些点被覆盖需要记录
+
+	// 记录测量点从属的voxel
+	std::unordered_set<HashPos, HashFunc> pos_record;
 
 	// conf - 0.01 - 0.5
 	// double min_depth = __INT_MAX__; 
@@ -1351,8 +1395,15 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 	double max_depth = 0;
 	for(int i = 0; i < vDepthMeasurementCloud.size(); ++i) {
 
+
 		const pcl::PointNormal& oCurrentPoint = vDepthMeasurementCloud.at(i);
 		Eigen::Vector3f oRefPoint(oCurrentPoint.x - oLidarPos.x, oCurrentPoint.y - oLidarPos.y, oCurrentPoint.z - oLidarPos.z);
+
+		// 记录测量点从属的voxel
+		HashPos oPos;
+		m_oVoxeler.PointBelongVoxelPos(oCurrentPoint, oPos);
+		pos_record.emplace(oPos);
+
 
 		// 计算投影位置和深度
 		double depth = oRefPoint.norm();
@@ -1371,10 +1422,11 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 		double row = (pitch + 90) * pitch_dim_expand;
 		double col = (yaw   + 180) * yaw_dim_expand;
 		if(int(row) < 0 || int(row) >= pitch_dim || int(col) < 0 || int(col) >= yaw_dim) continue;
-		if(depth_image[int(row)][int(col)] > 0)
-			vCurrentFuseIndex[depth_index[int(row)][int(col)]] = true;
-		depth_image[int(row)][int(col)] = depth;
-		depth_index[int(row)][int(col)] = i;
+		if(depth_image[int(row)][int(col)] > 0 && depth < depth_image[int(row)][int(col)] || depth_image[int(row)][int(col)] == 0) {
+			// vCurrentFuseIndex[depth_index[int(row)][int(col)]] = true;
+			depth_image[int(row)][int(col)] = depth;
+			depth_index[int(row)][int(col)] = i;
+		}
 
 		// 根据surfel在subpixel的位置，添加到邻近的像素中去
 		double local_row = row - int(row);
@@ -1387,20 +1439,23 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 			int temp_col = col + 1;
 			if(temp_col >= yaw_dim) temp_col = 0;
 
-			if(depth_image[int(row)][temp_col] > 0)
-				vCurrentFuseIndex[depth_index[int(row)][temp_col]] = true;
-			depth_image[int(row)][temp_col] = depth;
-			depth_index[int(row)][temp_col] = i;
+			if(depth_image[int(row)][temp_col] > 0 && depth < depth_image[int(row)][temp_col] || depth_image[int(row)][temp_col] == 0) {
+
+				// vCurrentFuseIndex[depth_index[int(row)][temp_col]] = true;
+				depth_image[int(row)][temp_col] = depth;
+				depth_index[int(row)][temp_col] = i;
+			}
 		}
 		else if(local_col < 0.4) {
 			// 左
 			int temp_col = col - 1;
 			if(temp_col < 0) temp_col = yaw_dim - 1;
 
-			if(depth_image[int(row)][temp_col] > 0)
-				vCurrentFuseIndex[depth_index[int(row)][temp_col]] = true;
-			depth_image[int(row)][temp_col] = depth;
-			depth_index[int(row)][temp_col] = i;
+			if(depth_image[int(row)][temp_col] > 0 && depth < depth_image[int(row)][temp_col] || depth_image[int(row)][temp_col] == 0) {
+				// vCurrentFuseIndex[depth_index[int(row)][temp_col]] = true;
+				depth_image[int(row)][temp_col] = depth;
+				depth_index[int(row)][temp_col] = i;
+			}
 		}
 		// */
 	}	
@@ -1463,6 +1518,7 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 			float& fNewConfidence = oNewPoint.data_n[3];
 
 			Eigen::Vector3f p1(oOldPoint.x - oLidarPos.x, oOldPoint.y - oLidarPos.y, oOldPoint.z - oLidarPos.z);
+			Eigen::Vector3f n1(oOldPoint.normal_x, oOldPoint.normal_y, oOldPoint.normal_z);
 			Eigen::Vector3f p2(oNewPoint.x - oLidarPos.x, oNewPoint.y - oLidarPos.y, oNewPoint.z - oLidarPos.z);
 			Eigen::Vector3f n2(oNewPoint.normal_x, oNewPoint.normal_y, oNewPoint.normal_z);
 			// 给测量点加一个bais，减少错误判断
@@ -1477,8 +1533,15 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 			Eigen::Vector3f vr = v12.dot(vp2) * vp2 - v12;
 			float a = p2.norm() - v12.dot(vp2), b = p2.norm();
 
-			if(vr.norm() < r * a / b && v12.dot(n2) < 0) {
+			HashPos oPos;
+			m_oVoxeler.PointBelongVoxelPos(oCurrentPoint, oPos);
 
+			if( pos_record.count(oPos) ) { // 避免自穿透现象
+				associated_feature[i] = -1.0f;
+			}
+			else if( vr.norm() < r * a / b && v12.dot(n2) < 0 //保守剔除（在斜圆锥内部）
+			|| n1.dot(v12) < -0.2 && n1.dot(Eigen::Vector3f(0,0,1)) < 0.2 && depth < 30 //针对自遮挡加强剔除(法向与视线方向相近 && 法向不朝上 && 距离足够近)
+			) { 
 				associated_feature[i] = 0.0f;
 
 				// 记录减少的置信度
@@ -1486,7 +1549,7 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 				fOldConfidence = - 0.8 * fNewConfidence;
 				// if(fOldConfidence < 0.f) fOldConfidence = 0.f;
 			}
-			else associated_feature[i] = -1.f;
+			else associated_feature[i] = -1.0f;
 		}
 		else {
 			associated_feature[i] = -1.0f;
@@ -1510,7 +1573,7 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 	SurfelFusionCore(oLidarPos, vDepthMeasurementCloud, vPointCloudBuffer);
 
 	// 更新volume
-	m_oVoxeler.UpdateConflictResult(vPointCloudBuffer);
+	m_oVoxeler.UpdateConflictResult(vPointCloudBuffer, m_bDynamicDebug || m_bKeepVoxel);
 
 	// output connect
 	// pcl::PointCloud<pcl::PointNormal> vMaxConnected;

@@ -473,6 +473,14 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		// publish time
 		PublishPointCloud(vDisplayAdditionalPoints, m_oAdditionalPointPublisher);
 
+		///* output normaled pc
+		if(m_bOutputFiles) {
+			std::stringstream sOutputPath;
+			sOutputPath << m_sFileHead << std::setw(4) << std::setfill('0') << m_iReconstructFrameNum << "_npc.ply";
+			pcl::io::savePLYFileBinary(sOutputPath.str(), *pFramePNormal);
+		}
+		//*/
+
 		// 添加中心视点，方便多帧进程识别
 		pcl::PointNormal oViewPoint;
 		oViewPoint.x = oCurrentViewP.x;

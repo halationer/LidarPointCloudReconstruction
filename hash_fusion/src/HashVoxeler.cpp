@@ -41,6 +41,20 @@ void HashVoxeler::UpdateLidarCenter(Eigen::Vector3f& oLidarCenter) {
 
 
 /*=======================================
+GetAllVolume
+Input: 	m_vVolume - the whole volume
+Output: vVolumeCopy - the output volume result
+Function: get the whole volume
+========================================*/
+void HashVoxeler::GetAllVolume(HashVoxeler::HashVolume & vVolumeCopy) const {
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+	vVolumeCopy = m_vVolume;
+}
+
+
+/*=======================================
 GetStaticVolume
 Input: 	m_vVolume - the whole volume
 Output: vVolumeCopy - the output volume result
@@ -92,7 +106,7 @@ GetRecentVolume
 Input: 	iRecentTime - recent time
 		m_vRecentVolume - surfel volume of max recent time
 Output: vVolumeCopy - the output volume result
-Function: get the volume of recent time
+Function: get the volume of recent time (only static voxels)
 ========================================*/
 void HashVoxeler::GetRecentVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) const {
 
@@ -101,6 +115,41 @@ void HashVoxeler::GetRecentVolume(HashVoxeler::HashVolume & vVolumeCopy, const i
 	for(auto && [oPos, oVoxel] : m_vRecentVolume)
 		if(m_iFrameCount - oVoxel.data_c[2] <= (uint32_t)iRecentTime && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]))
 			vVolumeCopy[oPos] = oVoxel;
+}
+
+
+/*=======================================
+GetRecentAllVolume
+Input: 	iRecentTime - recent time
+		m_vRecentVolume - surfel volume of max recent time
+Output: vVolumeCopy - the output volume result
+Function: get the volume of recent time
+========================================*/
+void HashVoxeler::GetRecentAllVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) const {
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+	for(auto && [oPos, oVoxel] : m_vRecentVolume)
+		if(m_iFrameCount - oVoxel.data_c[2] <= (uint32_t)iRecentTime)
+			vVolumeCopy[oPos] = oVoxel;
+}
+
+/*=======================================
+GetAllConnectVolume - Only for small scene or final output
+Input: 	iConnectMinSize - the volume copy will get voxels in the union set which size is larger than this number
+		m_vRecentVolume - surfel volume of max recent time
+		m_oUnionSet - the connectivity record union-find set
+Output: vVolumeCopy - the output volume result
+Function: get the voxels in the largest set of m_oUnionSet
+========================================*/
+void HashVoxeler::GetAllConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iConnectMinSize) {
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+	for(auto && [oPos, oVoxel] : m_vRecentVolume)
+		if(m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && m_oUnionSet.GetSetSize(oPos) > iConnectMinSize)
+				vVolumeCopy[oPos] = oVoxel;
 }
 
 /*=======================================
@@ -131,7 +180,7 @@ Input: 	iRecentTime - recent time
 		m_vRecentVolume - surfel volume of max recent time
 		m_oUnionSet - the connectivity record union-find set
 Output: vVolumeCopy - the output volume result
-Function: get the volume of recent time and its voxels are in the largest set of m_oUnionSet
+Function: get the volume of recent time and its voxels are in the largest set of m_oUnionSet - should rebuild the union set before call this func 
 ========================================*/
 void HashVoxeler::GetRecentMaxConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) {
 
@@ -159,7 +208,7 @@ void HashVoxeler::GetLocalVolume(HashVoxeler::HashVolume & vVolumeCopy, const Ei
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 	for(auto && [oPos, oVoxel] : m_vVolume) {
 		Eigen::Vector3f vCurrent(oPos.x, oPos.y, oPos.z);
-		if((vCurrent - vCenter).norm() <= fRadius)
+		if((vCurrent - vCenter).norm() <= fRadius && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]))
 			vVolumeCopy[oPos] = oVoxel;
 	}
 }
@@ -230,6 +279,13 @@ void HashVoxeler::GetRecentNoneFlowVolume(HashVoxeler::HashVolume & vVolumeCopy,
 }
 
 
+/*=======================================
+GetRecentHighDistributionVolume
+Input: 	iRecentTime - recent time
+		m_vRecentVolume - surfel volume of max recent time
+Output: vVolumeCopy - the output volume result
+Function: get the volume of recent time and its voxels contains points with different normals (not similar normals) 
+========================================*/
 void HashVoxeler::GetRecentHighDistributionVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime) {
 
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
@@ -241,12 +297,38 @@ void HashVoxeler::GetRecentHighDistributionVolume(HashVoxeler::HashVolume & vVol
 
 
 /*=======================================
-RebuildUnionSet
-Input: m_vRecentVolume - the surfel volume of max recent time
+RebuildUnionSetAll - only for small scene or final output
+Input: m_vVolume - the surfel volume
+	   fStrictDotRef - the dot value to judge the normal similarity - when the voxel is pass throughed last time
+	   fSoftDotRef - the dot value to judge the normal similarity - when the voxel is static
+	   fConfidenceLevelLength - the confidence have four level, let cll = this param, then 0, 1*cll, 2*cll, 3*cll, 4*cll
 Output: m_oUnionSet - use recent volume to build union set
 Function: rebuild union set according to recent surfel volume
 ========================================*/
-void HashVoxeler::RebuildUnionSet(const float fStrictDotRef, const float fSoftDotRef) {
+void HashVoxeler::RebuildUnionSetAll(const float fStrictDotRef, const float fSoftDotRef, const int fConfidenceLevelLength) {
+
+	HashVoxeler::HashVolume vVolumeCopy;
+	GetStaticVolume(vVolumeCopy);
+	RebuildUnionSetCore(vVolumeCopy, fStrictDotRef, fSoftDotRef, fConfidenceLevelLength);
+}
+
+
+/*=======================================
+RebuildUnionSet
+Input: m_vRecentVolume - the surfel volume of max recent time
+	   fStrictDotRef - the dot value to judge the normal similarity - when the voxel is pass throughed last time
+	   fSoftDotRef - the dot value to judge the normal similarity - when the voxel is static
+	   fConfidenceLevelLength - the confidence have four level, let cll = this param, then 0, 1*cll, 2*cll, 3*cll, 4*cll
+Output: m_oUnionSet - use recent volume to build union set
+Function: rebuild union set according to recent surfel volume
+========================================*/
+void HashVoxeler::RebuildUnionSet(const float fStrictDotRef, const float fSoftDotRef, const int fConfidenceLevelLength) {
+
+	// a. N1=N2             - 连通
+	// b. 两个高置信 & t1=t2 - 连通
+	// c. N1!=N2 & t1!=t2   - 不连通
+	// d. 置信度不同 & N1!=N2 - 不连通
+	// e. 两个低置信 & N1!=N2 - 不连通
 
 	// copy avoid of block
 	HashVoxeler::HashVolume vVolumeCopy;
@@ -266,6 +348,21 @@ void HashVoxeler::RebuildUnionSet(const float fStrictDotRef, const float fSoftDo
 	}
 	fRadius *= GetRadiusExpand();
 	GetLocalVolume(vVolumeCopy, vCenter, fRadius);
+
+	RebuildUnionSetCore(vVolumeCopy, fStrictDotRef, fSoftDotRef, fConfidenceLevelLength);
+}
+
+
+/*=======================================
+RebuildUnionSetCore
+Input: vVolumeCopy - the surfel volume of max recent time
+	   fStrictDotRef - the dot value to judge the normal similarity - when the voxel is pass throughed last time
+	   fSoftDotRef - the dot value to judge the normal similarity - when the voxel is static
+	   fConfidenceLevelLength - the confidence have four level, let cll = this param, then 0, 1*cll, 2*cll, 3*cll, 4*cll
+Output: m_oUnionSet - use recent volume to build union set
+Function: rebuild union set according to recent surfel volume
+========================================*/
+void HashVoxeler::RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, const float fStrictDotRef, const float fSoftDotRef, const int fConfidenceLevelLength) {
 
 	std::unique_lock<std::shared_mutex> union_write_lock(m_mUnionSetLock);
 	m_oUnionSet.Clear();
@@ -304,6 +401,13 @@ void HashVoxeler::RebuildUnionSet(const float fStrictDotRef, const float fSoftDo
 			}
 		}
 		//*/
+
+		// 置信度分级 0 - 4
+		int confidence = int(oPoint.data_n[3]) / fConfidenceLevelLength;
+		if(confidence > 4) confidence = 4; // 4 is the max conf level
+		// 时间戳
+		int time_stamp = oPoint.data_c[2];
+		constexpr int time_diff_ref = 30;
 		
 		// /* 面片连通性 Ax + By + Cz + D = 0 (+法向限制）
 		float normal_dot_ref = m_pUpdateStrategy->IsSoftDynamic(oPoint.data_c[1]) ? fStrictDotRef : fSoftDotRef;
@@ -324,13 +428,20 @@ void HashVoxeler::RebuildUnionSet(const float fStrictDotRef, const float fSoftDo
 		cross_y1 /= m_oVoxelLength.y;
 		cross_z1 /= m_oVoxelLength.z;
 		#define CROSS_VALID(x) ((x)>=0 && (x)<=1)
-		bool cross_neg_dx = CROSS_VALID(cross_y0) || CROSS_VALID(cross_z0) || CROSS_VALID(cross_y1);
-		bool cross_neg_dy = CROSS_VALID(cross_x0) || CROSS_VALID(cross_z0) || CROSS_VALID(cross_z1);
-		bool cross_neg_dz = CROSS_VALID(cross_x0) || CROSS_VALID(cross_y0) || CROSS_VALID(cross_x1);
+		bool cross_neg_dx = CROSS_VALID(cross_y0) || CROSS_VALID(cross_z0) || CROSS_VALID(cross_y1) || confidence == 4;
+		bool cross_neg_dy = CROSS_VALID(cross_x0) || CROSS_VALID(cross_z0) || CROSS_VALID(cross_z1) || confidence == 4;
+		bool cross_neg_dz = CROSS_VALID(cross_x0) || CROSS_VALID(cross_y0) || CROSS_VALID(cross_x1) || confidence == 4;
 		if(cross_neg_dx) {
 			HashPos oNearPos(oPos.x - 1, oPos.y, oPos.z);
 			if(vVolumeCopy.count(oNearPos)) {
 				pcl::PointNormal& oNearPoint = vVolumeCopy[oNearPos];
+
+				int current_confidence = int(oNearPoint.data_n[3]) / fConfidenceLevelLength;
+				if(current_confidence > 4) current_confidence = 4;
+				int current_time_stamp = oNearPoint.data_c[2];
+				// 物体若置信度相似，且更新时间相似，说明是连在一起的
+				bool confidence_connect = current_confidence == 4 && confidence == 4 && abs(current_time_stamp - time_stamp) < time_diff_ref;
+
 				float A = oNearPoint.normal_x, B = oNearPoint.normal_y, C = oNearPoint.normal_z;
 				float neg_D = A * oNearPoint.x + B * oNearPoint.y + C * oNearPoint.z;
 				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
@@ -344,13 +455,20 @@ void HashVoxeler::RebuildUnionSet(const float fStrictDotRef, const float fSoftDo
 				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
 				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? fStrictDotRef : normal_dot_ref;
 				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
-				if(cross_pos_dx && normal_dot) m_oUnionSet.Union(oPos, oNearPos);
+
+				if(cross_pos_dx && normal_dot || confidence_connect) m_oUnionSet.Union(oPos, oNearPos);
 			}
 		}
 		if(cross_neg_dy) {
 			HashPos oNearPos(oPos.x, oPos.y - 1, oPos.z);
 			if(vVolumeCopy.count(oNearPos)) {
 				pcl::PointNormal& oNearPoint = vVolumeCopy[oNearPos];
+
+				int current_confidence = int(oNearPoint.data_n[3]) / fConfidenceLevelLength;
+				if(current_confidence > 4) current_confidence = 4;
+				int current_time_stamp = oNearPoint.data_c[2];
+				bool confidence_connect = current_confidence == 4 && confidence == 4 && abs(current_time_stamp - time_stamp) < time_diff_ref;
+
 				float A = oNearPoint.normal_x, B = oNearPoint.normal_y, C = oNearPoint.normal_z;
 				float neg_D = A * oNearPoint.x + B * oNearPoint.y + C * oNearPoint.z;
 				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
@@ -364,13 +482,20 @@ void HashVoxeler::RebuildUnionSet(const float fStrictDotRef, const float fSoftDo
 				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
 				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? fStrictDotRef : normal_dot_ref;
 				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
-				if(cross_pos_dy && normal_dot) m_oUnionSet.Union(oPos, oNearPos);
+
+				if(cross_pos_dy && normal_dot || confidence_connect) m_oUnionSet.Union(oPos, oNearPos);
 			}
 		}
 		if(cross_neg_dz) {
 			HashPos oNearPos(oPos.x, oPos.y, oPos.z - 1);
 			if(vVolumeCopy.count(oNearPos)) {
 				pcl::PointNormal& oNearPoint = vVolumeCopy[oNearPos];
+
+				int current_confidence = int(oNearPoint.data_n[3]) / fConfidenceLevelLength;
+				if(current_confidence > 4) current_confidence = 4;
+				int current_time_stamp = oNearPoint.data_c[2];
+				bool confidence_connect = current_confidence == 4 && confidence == 4 && abs(current_time_stamp - time_stamp) < time_diff_ref;
+
 				float A = oNearPoint.normal_x, B = oNearPoint.normal_y, C = oNearPoint.normal_z;
 				float neg_D = A * oNearPoint.x + B * oNearPoint.y + C * oNearPoint.z;
 				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
@@ -384,7 +509,8 @@ void HashVoxeler::RebuildUnionSet(const float fStrictDotRef, const float fSoftDo
 				Eigen::Vector3f vNearNormal(vVolumeCopy[oNearPos].normal_x, vVolumeCopy[oNearPos].normal_y, vVolumeCopy[oNearPos].normal_z);
 				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? fStrictDotRef : normal_dot_ref;
 				bool normal_dot = vNearNormal.dot(vNormal) > current_dot_ref;
-				if(cross_pos_dz && normal_dot) m_oUnionSet.Union(oPos, oNearPos);
+
+				if(cross_pos_dz && normal_dot || confidence_connect) m_oUnionSet.Union(oPos, oNearPos);
 			}
 		}
 		//*/
@@ -400,7 +526,7 @@ void HashVoxeler::DrawVolume(const HashVolume & vVolume, visualization_msgs::Mar
 	oVolumeMarker.header.frame_id = "map";
 	oVolumeMarker.header.stamp = ros::Time::now();
 	oVolumeMarker.type = visualization_msgs::Marker::CUBE_LIST;
-	oVolumeMarker.action = visualization_msgs::Marker::ADD;
+	oVolumeMarker.action = visualization_msgs::Marker::MODIFY;
 	oVolumeMarker.id = index; 
 
 	oVolumeMarker.scale.x = m_oVoxelLength.x;
@@ -453,7 +579,7 @@ void HashVoxeler::DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet)
 			oCurrentSet.header.frame_id = "map";
 			oCurrentSet.header.stamp = ros::Time::now();
 			oCurrentSet.type = visualization_msgs::Marker::CUBE_LIST;
-			oCurrentSet.action = visualization_msgs::Marker::ADD;
+			oCurrentSet.action = visualization_msgs::Marker::MODIFY;
 			oCurrentSet.id = index++; 
 
 			oCurrentSet.scale.x = m_oVoxelLength.x;
@@ -494,7 +620,7 @@ void HashVoxeler::DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet)
 		oCurrentSet.header.frame_id = "map";
 		oCurrentSet.header.stamp = ros::Time::now();
 		oCurrentSet.type = visualization_msgs::Marker::CUBE_LIST;
-		oCurrentSet.action = visualization_msgs::Marker::ADD;
+		oCurrentSet.action = visualization_msgs::Marker::MODIFY;
 		oCurrentSet.id = index++; 
 
 		oCurrentSet.scale.x = m_oVoxelLength.x;
@@ -582,6 +708,25 @@ template void HashVoxeler::PointBelongVoxelPos(const pcl::PointNormal & oPoint, 
 
 
 /*=======================================
+GetVoxelPos
+Input: oPoint - the input point to be judged
+		oVoxelLength - length of voxel edge
+Output: oPos - which voxel pos does the point belong
+Function: calculate the voxel pos the point belongs
+========================================*/
+template<class PointType>
+HashPos HashVoxeler::GetVoxelPos(const PointType & oPoint, const pcl::PointXYZ & oVoxelLength) {
+
+	HashPos oPos;
+	oPos.x = floor(oPoint.x / oVoxelLength.x);
+	oPos.y = floor(oPoint.y / oVoxelLength.y);
+	oPos.z = floor(oPoint.z / oVoxelLength.z);
+	return oPos;
+}
+template HashPos HashVoxeler::GetVoxelPos(const pcl::PointNormal & oPoint, const pcl::PointXYZ & oVoxelLength);
+
+
+/*=======================================
 VoxelizePoints
 Input: vCloud - the input point cloud
 Output: m_vVolume - the volume result of all points
@@ -658,7 +803,7 @@ Input: vVolumeCloud - the conflict result that calculated by the 'surfel fusion'
 Output: m_vVolume - update the volume
 Function: decrease the confidence of dynamic point and record conflict
 ========================================*/
-void HashVoxeler::UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & vVolumeCloud) {
+void HashVoxeler::UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & vVolumeCloud, const bool bKeepVoxel) {
 
 	std::unique_lock<std::shared_mutex> volume_write_lock(m_mVolumeLock);
 
@@ -673,7 +818,7 @@ void HashVoxeler::UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> &
 			float& fConflictTime = m_vVolume[oPos].data_c[1];
 			bool bToDelete = m_pUpdateStrategy->Conflict(fConflictTime);
 
-			if(bToDelete) {
+			if(bToDelete && !bKeepVoxel) {
 				m_vVolume.erase(oPos);
 				// delete recent voxel
 				if(m_vRecentVolume.count(oPos)) {

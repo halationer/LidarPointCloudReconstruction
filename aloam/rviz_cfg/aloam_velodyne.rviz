@@ -296,7 +296,7 @@ Visualization Manager:
           Marker Topic: /surrounding_meshes
           Name: CubeMeshArray
           Namespaces:
-            "": true
+            {}
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -455,7 +455,7 @@ Visualization Manager:
           Color: 255; 255; 255
           Color Transformer: RGB8
           Decay Time: 0
-          Enabled: false
+          Enabled: true
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
@@ -464,13 +464,13 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.009999999776482582
+          Size (m): 0.10000000149011612
           Style: Flat Squares
           Topic: /all_cloud_confidence
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
-          Value: false
+          Value: true
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -528,13 +528,13 @@ Visualization Manager:
           Use rainbow: true
           Value: false
         - Class: rviz/MarkerArray
-          Enabled: true
+          Enabled: false
           Marker Topic: /union_set
           Name: UnionSet
           Namespaces:
-            "": true
+            {}
           Queue Size: 1
-          Value: true
+          Value: false
         - Class: rviz/MarkerArray
           Enabled: false
           Marker Topic: /static_expand
@@ -585,25 +585,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 58.74911880493164
+      Distance: 55.69484329223633
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -6.481467247009277
-        Y: 9.144018173217773
-        Z: -4.638269274437334e-6
+        X: -7.874408721923828
+        Y: -3.122556686401367
+        Z: -2.7028796466765925e-5
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.36520880460739136
+      Pitch: 0.5702089071273804
       Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 0.0723065659403801
+      Yaw: 0.6673206090927124
     Saved: ~
 Window Geometry:
   Displays:
