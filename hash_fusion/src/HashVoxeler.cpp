@@ -305,7 +305,7 @@ Input: m_vVolume - the surfel volume
 Output: m_oUnionSet - use recent volume to build union set
 Function: rebuild union set according to recent surfel volume
 ========================================*/
-void HashVoxeler::RebuildUnionSetAll(const float fStrictDotRef, const float fSoftDotRef, const int fConfidenceLevelLength) {
+void HashVoxeler::RebuildUnionSetAll(const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength) {
 
 	HashVoxeler::HashVolume vVolumeCopy;
 	GetStaticVolume(vVolumeCopy);
@@ -322,7 +322,7 @@ Input: m_vRecentVolume - the surfel volume of max recent time
 Output: m_oUnionSet - use recent volume to build union set
 Function: rebuild union set according to recent surfel volume
 ========================================*/
-void HashVoxeler::RebuildUnionSet(const float fStrictDotRef, const float fSoftDotRef, const int fConfidenceLevelLength) {
+void HashVoxeler::RebuildUnionSet(const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength) {
 
 	// a. N1=N2             - 连通
 	// b. 两个高置信 & t1=t2 - 连通
@@ -362,7 +362,7 @@ Input: vVolumeCopy - the surfel volume of max recent time
 Output: m_oUnionSet - use recent volume to build union set
 Function: rebuild union set according to recent surfel volume
 ========================================*/
-void HashVoxeler::RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, const float fStrictDotRef, const float fSoftDotRef, const int fConfidenceLevelLength) {
+void HashVoxeler::RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength) {
 
 	std::unique_lock<std::shared_mutex> union_write_lock(m_mUnionSetLock);
 	m_oUnionSet.Clear();
@@ -403,7 +403,7 @@ void HashVoxeler::RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, con
 		//*/
 
 		// 置信度分级 0 - 4
-		int confidence = int(oPoint.data_n[3]) / fConfidenceLevelLength;
+		int confidence = oPoint.data_n[3] / fConfidenceLevelLength;
 		if(confidence > 4) confidence = 4; // 4 is the max conf level
 		// 时间戳
 		int time_stamp = oPoint.data_c[2];
@@ -436,7 +436,7 @@ void HashVoxeler::RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, con
 			if(vVolumeCopy.count(oNearPos)) {
 				pcl::PointNormal& oNearPoint = vVolumeCopy[oNearPos];
 
-				int current_confidence = int(oNearPoint.data_n[3]) / fConfidenceLevelLength;
+				int current_confidence = oNearPoint.data_n[3] / fConfidenceLevelLength;
 				if(current_confidence > 4) current_confidence = 4;
 				int current_time_stamp = oNearPoint.data_c[2];
 				// 物体若置信度相似，且更新时间相似，说明是连在一起的
@@ -464,7 +464,7 @@ void HashVoxeler::RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, con
 			if(vVolumeCopy.count(oNearPos)) {
 				pcl::PointNormal& oNearPoint = vVolumeCopy[oNearPos];
 
-				int current_confidence = int(oNearPoint.data_n[3]) / fConfidenceLevelLength;
+				int current_confidence = oNearPoint.data_n[3] / fConfidenceLevelLength;
 				if(current_confidence > 4) current_confidence = 4;
 				int current_time_stamp = oNearPoint.data_c[2];
 				bool confidence_connect = current_confidence == 4 && confidence == 4 && abs(current_time_stamp - time_stamp) < time_diff_ref;
@@ -491,7 +491,7 @@ void HashVoxeler::RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, con
 			if(vVolumeCopy.count(oNearPos)) {
 				pcl::PointNormal& oNearPoint = vVolumeCopy[oNearPos];
 
-				int current_confidence = int(oNearPoint.data_n[3]) / fConfidenceLevelLength;
+				int current_confidence = oNearPoint.data_n[3] / fConfidenceLevelLength;
 				if(current_confidence > 4) current_confidence = 4;
 				int current_time_stamp = oNearPoint.data_c[2];
 				bool confidence_connect = current_confidence == 4 && confidence == 4 && abs(current_time_stamp - time_stamp) < time_diff_ref;

@@ -106,9 +106,9 @@ public:
 	void DrawVolume(const HashVolume & vVolume, visualization_msgs::MarkerArray & oOutputVolume);
 
 	// build union set
-	void RebuildUnionSetAll(const float fStrictDotRef, const float fSoftDotRef, const int fConfidenceLevelLength);
-	void RebuildUnionSet(const float fStrictDotRef, const float fSoftDotRef, const int fConfidenceLevelLength);
-	void RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, const float fStrictDotRef, const float fSoftDotRef, const int fConfidenceLevelLength);
+	void RebuildUnionSetAll(const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength);
+	void RebuildUnionSet(const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength);
+	void RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength);
 	void DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet);
 	void UpdateUnionConflict(const int iRemoveSetSizeRef, const float fRemoveTimeRef);
 
