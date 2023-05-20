@@ -458,20 +458,34 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		// for(int i=0;i!=pFramePNormal->points.size();++i)
 		// 	m_vMapPCN.points.push_back(pFramePNormal->points[i]);
 		
+		// 添加中心视点，方便多帧进程识别
+		pcl::PointNormal oViewPoint;
+		oViewPoint.x = oCurrentViewP.x;
+		oViewPoint.y = oCurrentViewP.y;
+		oViewPoint.z = oCurrentViewP.z;
+		oViewPoint.curvature = -1;      //识别码
+		pFramePNormal->push_back(oViewPoint);
 
-		//************additional points**************
-        pcl::PointCloud<pcl::PointNormal> vAdditionalPoints;
-        pcl::PointCloud<pcl::PointXYZI> vDisplayAdditionalPoints;
-		for(int i = 0; i < m_oExplicitBuilder.m_vAllSectorClouds.size(); ++i) {
-			MeshSample::GetAdditionalPointCloud(
-				*(m_oExplicitBuilder.m_vAllSectorClouds[i]) , m_oExplicitBuilder.m_vAllSectorFaces[i], 
-				m_oExplicitBuilder.m_vFaceWeight[i], m_oExplicitBuilder.m_vMatNormal[i],
-				vAdditionalPoints, vDisplayAdditionalPoints
-			);
-		}
+		// publish
+		PublishMeshs();	//发布 m_oExplicitBuilder 中建立的 mesh
+		PublishPointCloud(*pFramePNormal);
 
-		// publish time
-		PublishPointCloud(vDisplayAdditionalPoints, m_oAdditionalPointPublisher);
+
+		///************additional points**************
+        // pcl::PointCloud<pcl::PointNormal> vAdditionalPoints;
+        // pcl::PointCloud<pcl::PointXYZI> vDisplayAdditionalPoints;
+		// for(int i = 0; i < m_oExplicitBuilder.m_vAllSectorClouds.size(); ++i) {
+		// 	MeshSample::GetAdditionalPointCloud(
+		// 		*(m_oExplicitBuilder.m_vAllSectorClouds[i]) , m_oExplicitBuilder.m_vAllSectorFaces[i], 
+		// 		m_oExplicitBuilder.m_vFaceWeight[i], m_oExplicitBuilder.m_vMatNormal[i],
+		// 		vAdditionalPoints, vDisplayAdditionalPoints
+		// 	);
+		// }
+		// PublishPointCloud(vDisplayAdditionalPoints, m_oAdditionalPointPublisher);
+		// vAdditionalPoints.push_back(oViewPoint);
+        // vAdditionalPoints.is_dense = false;
+        // PublishPointCloud(vAdditionalPoints, m_oCloudPublisher);
+		//*/
 
 		///* output normaled pc
 		if(m_bOutputFiles) {
@@ -480,21 +494,7 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 			pcl::io::savePLYFileBinary(sOutputPath.str(), *pFramePNormal);
 		}
 		//*/
-
-		// 添加中心视点，方便多帧进程识别
-		pcl::PointNormal oViewPoint;
-		oViewPoint.x = oCurrentViewP.x;
-		oViewPoint.y = oCurrentViewP.y;
-		oViewPoint.z = oCurrentViewP.z;
-		oViewPoint.curvature = -1;      //识别码
-		pFramePNormal->push_back(oViewPoint);
-		vAdditionalPoints.push_back(oViewPoint);
-
-		// *pFramePNormal += vAdditionalPoints;
-        vAdditionalPoints.is_dense = false;
-        PublishPointCloud(vAdditionalPoints, m_oCloudPublisher);
-
-		PublishMeshs();	//发布 m_oExplicitBuilder 中建立的 mesh
+		
 		
 		///* output mesh file:
 		if(m_bOutputFiles) {
@@ -532,16 +532,6 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 			tOutputThread.detach();
 		}
 		
-		//*/
-
-		PublishPointCloud(*pFramePNormal);
-
-		/*output the points and normals
-		{
-			std::stringstream ss;
-			ss << "../Dense_ROS/save/FramePNormal_" << m_iPCFrameCount << ".ply";
-			pcl::io::savePLYFileASCII(ss.str(), *pFramePNormal);
-		}
 		//*/
 
 		//clear this frame result
