@@ -33,6 +33,7 @@
 #include "HashVoxeler.h"
 #include "tools/CloudVector.h"
 #include "tools/OutputUtils.h"
+#include "tools/DebugManager.h"
 
 // Trajectory state data. 
 struct RosTimePoint{
@@ -94,7 +95,7 @@ public:
     void HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory);
 
     // Build surface models based on new points that received from ros
-    virtual void SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFrameId);
+    virtual void SlideModeling(pcl::PolygonMesh & oResultMesh, const Eigen::Vector3f& vCenter, const int iFrameId);
     
 
 ////////////
@@ -274,13 +275,17 @@ protected:
     float m_fRemoveTimeRef;
 
     bool m_bDynamicDebug;
+    bool m_bCenterBasedRecon;
     bool m_bKeepVoxel;
-    int m_iConfidenceLevelLength;
+    float m_fConfidenceLevelLength;
 
     // // sdf
     // SignedDistance* m_pSdf;
     // std::mutex m_mSdfMutex;
     float m_fReconstructRange;
+
+    TimeDebugger fuse_timer;
+    TimeDebuggerThread reconstruct_timer;
 };
 
 #endif

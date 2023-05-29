@@ -34,9 +34,13 @@ public:
 	std::unordered_map<HashPos, float, HashFunc> & ConvedGlance(HashVoxeler & oVoxeler, visualization_msgs::MarkerArray* oDebugMarker = nullptr);
 	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceNoneFlow(HashVoxeler & oVoxeler, visualization_msgs::MarkerArray* oDebugMarker = nullptr);
 	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceLargeUnion(HashVoxeler & oVoxeler, const int iRemoveSizeRef, visualization_msgs::MarkerArray* oDebugMarker = nullptr);
-	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceAllUnion(HashVoxeler & oVoxeler, const int iRemoveSizeRef);
 	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceOnlyMaxUnion(HashVoxeler & oVoxeler, visualization_msgs::MarkerArray* oDebugMarker = nullptr);
+	std::unordered_map<HashPos, float, HashFunc> & CenterBasedGlance(HashVoxeler & oVoxeler, const Eigen::Vector3f vCenter, const float fRadius, const int iRemoveSizeRef, visualization_msgs::MarkerArray* oDebugMarker = nullptr);
 
+	// output glance
+	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceAll(HashVoxeler & oVoxeler);
+	std::unordered_map<HashPos, float, HashFunc> & ConvedGlanceAllUnion(HashVoxeler & oVoxeler, const int iRemoveSizeRef);
+	
 	//compute the signed distance based on corners to plan in a voxel
 	std::unordered_map<HashPos, float, HashFunc> & PlanDistance(const HashVoxeler::HashVolume & vVolume, const std::unordered_map<HashPos, FacePara, HashFunc> & vNormalPara, const pcl::PointXYZ oVoxelSize);
 

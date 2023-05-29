@@ -28,6 +28,7 @@
 #include "ExplicitRec.h"
 #include "CircularVector.h"
 #include "MeshSample.h"
+#include "tools/DebugManager.h"
 
 // Trajectory state data. 
 struct RosTimePoint{
@@ -132,9 +133,6 @@ class FrameRecon{
   //ouput file
   std::ofstream m_oOutPCFile;
 
-  //output point cloud with normal
-  std::stringstream m_sOutPCNormalFileName; 
-
   //***for input odom topic***
   //the m_oOdomSuber subscirber is to hearinput  odometry topic
   ros::Subscriber m_oOdomSuber;
@@ -218,6 +216,8 @@ class FrameRecon{
   ros::NodeHandle& nodeHandle;
   
   bool m_bOutputFiles;
+
+  TimeDebugger timer;
 };
 
 std::ostream& operator<<(std::ostream& out, const sensor_msgs::PointCloud2::_header_type& header);

@@ -226,21 +226,24 @@ pcl::PointNormal Fusion::NormalFusionWeighted(
 	}
 
 	// spread back to the cloud normal
-	for (int i = 0; i != vPointIdx.size(); ++i){
+	// for (int i = 0; i != vPointIdx.size(); ++i){
 
-		int iVoxelPIdx = vPointIdx[i];
-		float point_weight = vCloudNormal.points[iVoxelPIdx].data_n[3];
-		vCloudNormal.points[iVoxelPIdx].normal_x = all_weight * oOnePN.normal_x + point_weight * vCloudNormal.points[iVoxelPIdx].normal_x;
-		vCloudNormal.points[iVoxelPIdx].normal_y = all_weight * oOnePN.normal_y + point_weight * vCloudNormal.points[iVoxelPIdx].normal_y;
-		vCloudNormal.points[iVoxelPIdx].normal_z = all_weight * oOnePN.normal_z + point_weight * vCloudNormal.points[iVoxelPIdx].normal_z;
+	// 	int iVoxelPIdx = vPointIdx[i];
+	// 	float point_weight = vCloudNormal.points[iVoxelPIdx].data_n[3];
+	// 	vCloudNormal.points[iVoxelPIdx].normal_x = all_weight * oOnePN.normal_x + point_weight * vCloudNormal.points[iVoxelPIdx].normal_x;
+	// 	vCloudNormal.points[iVoxelPIdx].normal_y = all_weight * oOnePN.normal_y + point_weight * vCloudNormal.points[iVoxelPIdx].normal_y;
+	// 	vCloudNormal.points[iVoxelPIdx].normal_z = all_weight * oOnePN.normal_z + point_weight * vCloudNormal.points[iVoxelPIdx].normal_z;
 
-		vCloudNormal.points[iVoxelPIdx].normal_x /= (all_weight + point_weight);
-		vCloudNormal.points[iVoxelPIdx].normal_y /= (all_weight + point_weight);
-		vCloudNormal.points[iVoxelPIdx].normal_z /= (all_weight + point_weight);
+	// 	vCloudNormal.points[iVoxelPIdx].normal_x /= (all_weight + point_weight);
+	// 	vCloudNormal.points[iVoxelPIdx].normal_y /= (all_weight + point_weight);
+	// 	vCloudNormal.points[iVoxelPIdx].normal_z /= (all_weight + point_weight);
 
-		MeshOperation m;
-		m.VectorNormalization(vCloudNormal.points[iVoxelPIdx].normal_x, vCloudNormal.points[iVoxelPIdx].normal_y, vCloudNormal.points[iVoxelPIdx].normal_z);
-	}
+	// 	MeshOperation m;
+	// 	m.VectorNormalization(vCloudNormal.points[iVoxelPIdx].normal_x, vCloudNormal.points[iVoxelPIdx].normal_y, vCloudNormal.points[iVoxelPIdx].normal_z);
+	// }
+
+	// constexpr float max_weight = 5.0f;
+	// all_weight = all_weight > max_weight ? max_weight : all_weight;
 
 	return oOnePN;
 }

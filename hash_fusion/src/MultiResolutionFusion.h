@@ -27,7 +27,7 @@ protected:
 
     bool ReadLaunchParams(ros::NodeHandle & nodeHandle);
 
-    void SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFrameId) override;
+    void SlideModeling(pcl::PolygonMesh & oResultMesh, const Eigen::Vector3f& vCenter, const int iFrameId) override;
 
     void SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud) override;
 

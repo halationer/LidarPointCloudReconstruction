@@ -215,6 +215,26 @@ void HashVoxeler::GetLocalVolume(HashVoxeler::HashVolume & vVolumeCopy, const Ei
 
 
 /*=======================================
+GetLocalConnectVolume
+Input: 	vCenter - the center point of an area
+		fRadius - the radius of an area
+		m_vVolume - the whole surfel volume
+Output: vVolumeCopy - the output volume result
+Function: get the voxels in the area
+========================================*/
+void HashVoxeler::GetLocalConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const Eigen::Vector3f vCenter, const float fRadius, const int iConnectMinSize) {
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+	for(auto && [oPos, oVoxel] : m_vVolume) {
+		Eigen::Vector3f vCurrent(oPos.x, oPos.y, oPos.z);
+		if((vCurrent - vCenter).norm() <= fRadius && m_pUpdateStrategy->IsStatic(oVoxel.data_c[1]) && m_oUnionSet.GetSetSize(oPos) > iConnectMinSize)
+			vVolumeCopy[oPos] = oVoxel;
+	}
+}
+
+
+/*=======================================
 IsNoneFlow
 Input: 	oPos - the pos of a voxel
 Output: bool - whether the voxel is flow static

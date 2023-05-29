@@ -89,6 +89,17 @@ FramesFusion::~FramesFusion() {
 	//output point clouds with computed normals to the files when the node logs out
 	if(m_bOutputFiles) {
 		
+		//output times
+		std::stringstream sFuseEvalFileName;
+		sFuseEvalFileName << m_sFileHead << "FuseTime.csv";
+		std::cout << "The output eval file is " << sFuseEvalFileName.str() << std::endl;
+		fuse_timer.OutputDebug(sFuseEvalFileName.str());
+
+		std::stringstream sReconEvalFileName;
+		sReconEvalFileName << m_sFileHead << "ReconstructTime.csv";
+		std::cout << "The output eval file is " << sReconEvalFileName.str() << std::endl;
+		reconstruct_timer.OutputDebug(sReconEvalFileName.str());
+
 		//define ouput ply file name
 		std::stringstream sOutPCNormalFileName;
 		sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply";
@@ -108,8 +119,7 @@ FramesFusion::~FramesFusion() {
 		// TODO： output fix
 
 		if(m_bUseUnionSetConnection) {
-			m_oVoxeler.m_iFrameCount += 20;
-			m_oVoxeler.RebuildUnionSetAll(m_fStrictDotRef, m_fSoftDotRef, m_iConfidenceLevelLength);
+			m_oVoxeler.RebuildUnionSetAll(m_fStrictDotRef, m_fSoftDotRef, m_fConfidenceLevelLength);
 			m_oVoxeler.UpdateUnionConflict(m_iRemoveSizeRef, m_fRemoveTimeRef);
 		}
 
@@ -118,25 +128,74 @@ FramesFusion::~FramesFusion() {
 		// m_oVoxeler.GetAllVolume(vVolumeCopy);
 
 		SignedDistance oSDF(-1, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
-		oSDF.ConvedGlanceAllUnion(m_oVoxeler, m_iRemoveSizeRef);
+		std::unordered_map<HashPos, float, HashFunc> vSignedDis;
+		if(m_bUseUnionSetConnection) vSignedDis = oSDF.ConvedGlanceAllUnion(m_oVoxeler, m_iRemoveSizeRef);
+		else vSignedDis = oSDF.ConvedGlance(m_oVoxeler);
 		vVolumeCopy = oSDF.m_vVolumeCopy;
 
-		pcl::PointCloud<pcl::PointXYZINormal> pc;
+		// output mesh static
+		{
+			pcl::PolygonMesh oResultMesh;
+			CIsoSurface<float> oMarchingCuber;
+			oMarchingCuber.GenerateSurface(vSignedDis, oSDF.m_vVolumeCopy, 0, m_oVoxeler.m_oVoxelLength.x, m_oVoxeler.m_oVoxelLength.y, m_oVoxeler.m_oVoxelLength.z);
+			pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
+			pcl::PointXYZ oOffset(0, 0, 0);
+			oMarchingCuber.OutputMesh(oOffset, oResultMesh, pMCResultCloud);
+			for(auto & polygon : oResultMesh.polygons) {
+				polygon.vertices.pop_back();
+			}
+			std::stringstream sOutputPath;
+			sOutputPath << m_sFileHead << "final_mesh.ply";
+			pcl::io::savePLYFileBinary(sOutputPath.str(), oResultMesh);
+		}
+		// output mesh dynamic
+		{
+			SignedDistance oSDF(-1, m_iConvDim, 0, m_fConvFusionDistanceRef1);
+			auto vSignedDis = oSDF.ConvedGlanceAll(m_oVoxeler);
+			
+			pcl::PolygonMesh oResultMesh;
+			CIsoSurface<float> oMarchingCuber;
+			oMarchingCuber.GenerateSurface(vSignedDis, oSDF.m_vVolumeCopy, 0, m_oVoxeler.m_oVoxelLength.x, m_oVoxeler.m_oVoxelLength.y, m_oVoxeler.m_oVoxelLength.z);
+			pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
+			pcl::PointXYZ oOffset(0, 0, 0);
+			oMarchingCuber.OutputMesh(oOffset, oResultMesh, pMCResultCloud);
+			for(auto & polygon : oResultMesh.polygons) {
+				polygon.vertices.pop_back();
+			}
+			std::stringstream sOutputPath;
+			sOutputPath << m_sFileHead << "final_mesh_worm.ply";
+			pcl::io::savePLYFileBinary(sOutputPath.str(), oResultMesh);
+		}
+
+		// output pc
+		pcl::PointCloud<pcl::PointNormal> pc; 
+		pcl::PointCloud<pcl::PointXYZINormal> static_pc;
+		pcl::PointCloud<pcl::PointNormal> dynamic_pc;
 		for(int i = 0; i < vAllPoints->size(); ++i) {
+
+			// if the point cloud is too large, open this to random sample
+			// if(rand() % 8 > 3) continue;
 
 			std::cout << "All ready process points: " << i+1 << "/" << vAllPoints->size() << "\r";
 
 			pcl::PointNormal& point = (*vAllPoints)[i];
+			pc.push_back(point);
+
 			HashPos pos;
 			m_oVoxeler.PointBelongVoxelPos(point, pos);
-			if(!vVolumeCopy.count(pos)) continue;
+			if(!vVolumeCopy.count(pos)) {
+				dynamic_pc.push_back(point);
+				continue;
+			}
 
+			// filter inner points
 			float distance_ref, normal_ref;
 			Eigen::Vector3f oCorner = vVolumeCopy[pos].getVector3fMap();
 			Eigen::Vector3f oNormal = vVolumeCopy[pos].getNormalVector3fMap();
 			Eigen::Vector3f vPoint = point.getVector3fMap();
 			Eigen::Vector3f vNormal = point.getNormalVector3fMap();
-			if(vVolumeCopy[pos].data_c[3] > m_fConvFusionDistanceRef1) {
+			float & token = vVolumeCopy[pos].data_c[1];
+			if(vVolumeCopy[pos].data_c[3] > m_fConvFusionDistanceRef1 || token >= __INT_MAX__) {
 				distance_ref = m_oVoxeler.m_oVoxelLength.getVector3fMap().norm() * 0.1;
 				normal_ref = 0.8;
 			}
@@ -146,11 +205,12 @@ FramesFusion::~FramesFusion() {
 			}
 
 			if(abs(oNormal.dot(oCorner - vPoint)) > distance_ref || vNormal.dot(oNormal) < normal_ref) {
-				static int filter_count = 0;
-				std::cout << "filtered: " << ++filter_count << std::endl; 
+				// if(vNormal.dot(oNormal) < normal_ref)
+				// 	dynamic_pc.push_back(point);
 				continue;
 			}
 
+			// put point in final result
 			pcl::PointXYZINormal new_point;
 			new_point.x = point.x;
 			new_point.y = point.y;
@@ -165,10 +225,12 @@ FramesFusion::~FramesFusion() {
 			// maybe use to save gauss distance, but now don't make scence
 			new_point.curvature = vVolumeCopy[pos].data_c[2];
 
-			pc.push_back(new_point);
+			static_pc.push_back(new_point);
 		}
 		std::cout << "\nSaving file ..." << std::endl;
 		pcl::io::savePLYFileBinary(sOutPCNormalFileName.str(), pc);
+		pcl::io::savePLYFileBinary(sOutPCNormalFileName.str()+".static.ply", static_pc);
+		pcl::io::savePLYFileBinary(sOutPCNormalFileName.str()+".dynamic.ply", dynamic_pc);
 
 		/** 
 			if the point cloud has too many points, ros may not wait it to save.
@@ -235,7 +297,7 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
 	//nearbt lengths
 	nodeHandle.param("voxel_total_size", m_fNearLengths, 20.0f);
-	m_fNearLengths = m_fNearLengths/2.0f;
+	m_fNearLengths = m_fNearLengths / 2.0f;
 
 	//point cloud sampling number
 	nodeHandle.param("sample_pcframe_num", m_iFrameSmpNum, 1);
@@ -271,7 +333,8 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	nodeHandle.param("soft_dot_ref", m_fSoftDotRef, 0.3f);
 	nodeHandle.param("remove_size_ref", m_iRemoveSizeRef, 200);
 	nodeHandle.param("remove_time_ref", m_fRemoveTimeRef, 10.0f);
-	nodeHandle.param("confidence_level_length", m_iConfidenceLevelLength, 8);
+	nodeHandle.param("confidence_level_length", m_fConfidenceLevelLength, 8.0f);
+	nodeHandle.param("center_based_recon", m_bCenterBasedRecon, false);
 
 	//count processed point cloud frame
 	m_iPCFrameCount = 0;
@@ -865,17 +928,22 @@ Input:	m_vNewPoints - new points that received from ros
 Output: oResultMesh - result mesh of the surface model
 		m_vMapPCN - the fused points is added to m_vMapPCN
 *************************************************/
-void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFrameId) {
+void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const Eigen::Vector3f& vCenter, const int iFrameId) {
 	
+	TimeDebuggerProxy timer(iFrameId, &reconstruct_timer);
+
 	//clear mesh
 	//oResultMesh.cloud.clear();
 	oResultMesh.polygons.clear();
 
+	timer.DebugTime("1_clear_mesh");
+
 	//******make mesh********
 	//check connection
 	if(m_bUseUnionSetConnection) {
-		m_oVoxeler.RebuildUnionSet(m_fStrictDotRef, m_fSoftDotRef, m_iConfidenceLevelLength);
+		m_oVoxeler.RebuildUnionSet(m_fStrictDotRef, m_fSoftDotRef, m_fConfidenceLevelLength);
 		m_oVoxeler.UpdateUnionConflict(m_iRemoveSizeRef, m_fRemoveTimeRef);
+		timer.DebugTime("2_main_connect");
 
 		// output unionset result
 		visualization_msgs::MarkerArray union_set_marker;
@@ -886,6 +954,7 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 			m_vDebugPublishers[sTopicName] = m_oNodeHandle.advertise<visualization_msgs::MarkerArray>(sTopicName, 1, true);
 		}
 		m_vDebugPublishers[sTopicName].publish(union_set_marker);
+		timer.DebugTime("3_publish_connect");
 	}
 
 	//using signed distance
@@ -896,6 +965,9 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 	std::string sTopicName = "/static_expand";
 	if(m_bDynamicDebug) {
 		vSignedDis = oSDer.DebugGlance(m_oVoxeler);
+	}
+	else if(m_bCenterBasedRecon) {
+		vSignedDis = oSDer.CenterBasedGlance(m_oVoxeler, vCenter, m_fNearLengths, m_iRemoveSizeRef, &static_expand_marker);
 	}
 	else if(!m_bUseUnionSetConnection) {
 		vSignedDis = oSDer.ConvedGlance(m_oVoxeler, &static_expand_marker);
@@ -911,7 +983,7 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 		m_vDebugPublishers[sTopicName] = m_oNodeHandle.advertise<visualization_msgs::MarkerArray>(sTopicName, 1, true);
 	}
 	m_vDebugPublishers[sTopicName].publish(static_expand_marker);
-
+	timer.DebugTime("4_main_conv");
 
 	//marching cuber
 	CIsoSurface<float> oMarchingCuber;
@@ -923,6 +995,8 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 	pcl::PointXYZ oOffset(0, 0, 0);
 	oMarchingCuber.OutputMesh(oOffset, oResultMesh, pMCResultCloud);
 	
+	timer.DebugTime("5_marching_cubes");
+
 	///* output result mesh
 	if(m_bOutputFiles) {
 
@@ -946,8 +1020,10 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFram
 			pcl::io::savePLYFileBinary(sOutputPath.str() + ".static.ply", oStaticMesh);
 			pcl::io::savePLYFileBinary(sOutputPath.str() + ".dyamic.ply", oDynamicMesh);
 		}
+		timer.DebugTime("6_output_file");
 	}
 	//*/
+	timer.GetCurrentLineTime();
 }
 
 /*************************************************
@@ -965,11 +1041,13 @@ Others: none
 *************************************************/
 void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 {
+	fuse_timer.NewLine();
 
 	//a point clouds in PCL type
 	pcl::PointCloud<pcl::PointNormal>::Ptr pFramePN(new pcl::PointCloud<pcl::PointNormal>);
 	//message from ROS type to PCL type
 	pcl::fromROSMsg(vLaserData, *pFramePN);
+
 
 	// Surfel Cloud Fusion. Done.
 	// 提取中心点
@@ -982,6 +1060,8 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 		pFramePN->erase(pFramePN->end()-1);
 	}
 
+	fuse_timer.DebugTime("1_transfer_pc");
+
 	// 标识码，单帧输出两种点云：真实点云(true) | 猜测填充点云(false), 目前不对猜测点云有任何处理
 	if(pFramePN->is_dense == false) return;
 
@@ -992,14 +1072,9 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 
 		std::cout << "fusion start \t";
 
-		struct timeval start;
-		gettimeofday(&start, NULL);
-
 		SurfelFusionQuick(oViewPoint, *pFramePN);
 
-		struct timeval end;
-		gettimeofday(&end,NULL);
-		double frames_fusion_time = (end.tv_sec - start.tv_sec) * 1000.0 +(end.tv_usec - start.tv_usec) * 0.001;
+		double frames_fusion_time = fuse_timer.DebugTime("2_main_fusion");
 		
 		std::cout << std::format_purple 
 			<< "The No. " << m_iFusionFrameNum 
@@ -1026,14 +1101,8 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 	// PublishPointCloud(*pProcessedCloud, temp_feature, "/temp_near_cloud");
 
 	//merge one frame data
-	struct timeval start;
-	gettimeofday(&start, NULL);
-
 	UpdateOneFrame(oViewPoint, *pFramePN);
-
-	struct timeval end;
-	gettimeofday(&end,NULL);
-	double voxelize_time = (end.tv_sec - start.tv_sec) * 1000.0 +(end.tv_usec - start.tv_usec) * 0.001;
+	double voxelize_time = fuse_timer.DebugTime("3_main_voxelize");
 	std::cout << std::format_blue << ";\tvoxelize_time: " << voxelize_time << "ms" << std::format_white << std::endl;
 
 
@@ -1045,12 +1114,15 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 		vector<float> confidence(temp.size());
 		constexpr float confidence_scalar = 0.8f;
 		for(int i = 0; i < confidence.size(); ++i) {
-			confidence[i] = int(temp.at(i).data_n[3]) / m_iConfidenceLevelLength * 0.2;
+			confidence[i] = int(temp.at(i).data_n[3] / m_fConfidenceLevelLength) * 0.2;
 			if(confidence[i] > confidence_scalar) confidence[i] = confidence_scalar;
 			if(temp[i].data_c[1] > 1 || temp[i].data_n[3] == .0f) confidence[i] = -1;
 		}
 		PublishPointCloud(temp, confidence, "/all_cloud_confidence");
+		fuse_timer.DebugTime("4_debug_publish");
 	}
+
+	fuse_timer.GetCurrentLineTime();
 
 	return;
 }
@@ -1179,7 +1251,7 @@ void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 	// if(!m_bSurfelFusion && m_bUseAdditionalPoints) 
 	// 	SurroundModelingWithPointProcessing(oOdomPoint.oLocation, oNearbyMeshes, m_iReconstructFrameNum);
 	// else 
-	SlideModeling(oNearbyMeshes, m_iReconstructFrameNum);
+	SlideModeling(oNearbyMeshes, oLidarPos, m_iReconstructFrameNum);
 	clock_t frames_fusion_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
 
 	++m_iReconstructFrameNum;
@@ -1225,7 +1297,7 @@ void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory
 	//get the newest information
 	int now_frame_num = m_iReconstructFrameNum++;
 
-	auto ModelingFunction = [&, now_frame_num]() {
+	auto ModelingFunction = [&, now_frame_num, oLidarPos]() {
 
 		std::cout << std::format_purple << "No. " << now_frame_num << " reconstruct start" << std::format_white << std::endl;
 
@@ -1238,7 +1310,7 @@ void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory
 		// if(!m_bSurfelFusion && m_bUseAdditionalPoints) 
 		// 	SurroundModelingWithPointProcessing(oOdomPoint.oLocation, oResultMeshes, now_frame_num);
 		// else 
-		SlideModeling(oResultMeshes, now_frame_num);
+		SlideModeling(oResultMeshes, oLidarPos, now_frame_num);
 
 		struct timeval end;
 		gettimeofday(&end,NULL);

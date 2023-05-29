@@ -115,10 +115,30 @@ std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceAllUn
 	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
 }
 
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceAll(HashVoxeler & oVoxeler) {
+
+	HashVoxeler::HashVolume vTempVolumeCopy;
+	oVoxeler.GetAllVolume(vTempVolumeCopy);
+	m_vVolumeCopy = vTempVolumeCopy;
+	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
+}
+
 std::unordered_map<HashPos, float, HashFunc> & SignedDistance::ConvedGlanceOnlyMaxUnion(HashVoxeler & oVoxeler, visualization_msgs::MarkerArray* oDebugMarker) {
 	
 	HashVoxeler::HashVolume vTempVolumeCopy;
 	oVoxeler.GetRecentMaxConnectVolume(vTempVolumeCopy, m_iKeepTime);
+	CopyAndExpandVolume(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
+
+	if(oDebugMarker != nullptr) 
+		oVoxeler.DrawVolume(vTempVolumeCopy, *oDebugMarker);
+
+	return ConvedGlanceCore(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
+}
+
+std::unordered_map<HashPos, float, HashFunc> & SignedDistance::CenterBasedGlance(HashVoxeler & oVoxeler, const Eigen::Vector3f vCenter, const float fRadius, const int iRemoveSizeRef, visualization_msgs::MarkerArray* oDebugMarker) {
+
+	HashVoxeler::HashVolume vTempVolumeCopy;
+	oVoxeler.GetLocalConnectVolume(vTempVolumeCopy, vCenter, fRadius, iRemoveSizeRef);
 	CopyAndExpandVolume(vTempVolumeCopy, oVoxeler.m_oVoxelLength);
 
 	if(oDebugMarker != nullptr) 

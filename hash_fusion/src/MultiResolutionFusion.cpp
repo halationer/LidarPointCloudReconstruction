@@ -21,9 +21,9 @@ bool MultiResolutionFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 }
 
 
-void MultiResolutionFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFrameId) {
+void MultiResolutionFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const Eigen::Vector3f& vCenter, const int iFrameId) {
 
-    Super::SlideModeling(oResultMesh, iFrameId);
+    Super::SlideModeling(oResultMesh, vCenter, iFrameId);
 
 
 	// TODO : according the flow to do something

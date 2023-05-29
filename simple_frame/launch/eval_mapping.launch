@@ -19,6 +19,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 <launch>
     <arg name="rosbag" default="$(find frame_reconstruction)/../data/nsh_indoor_outdoor.bag" />
     <arg name="gtpos" default="$(find frame_reconstruction)/../data/nsh_indoor_outdoor_pos.txt" />
+    <arg name="jump" default="0" />
+    <arg name="sample" default="1" />
+    <arg name="delay" default="1.0" />
 
     <!-- output evaluation files (point cloud and mesh )-->
     <arg name="sf_output_path" default=""/>
@@ -32,6 +35,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <include file="$(find aloam_velodyne)/launch/eval_velodyne.launch" >
         <arg name="eval_pose_file" value="$(arg gtpos)" />
         <arg name="bag_file" value="$(arg rosbag)" />
+        <arg name="jump_frame" value="$(arg jump)" />
+        <arg name="publish_delay" value="$(arg delay)" />
+        <arg name="sample_frame" value="$(arg sample)" />
     </include>
     <!-- <node pkg="tf" type="static_transform_publisher" name="camera_init_to_map"  args="0 0 0 0 0 0 /map /camera_init 10" /> -->
 

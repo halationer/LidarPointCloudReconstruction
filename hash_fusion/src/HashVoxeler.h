@@ -102,6 +102,7 @@ public:
 	void GetRecentMaxConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
 	void GetRecentNoneFlowVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
 	void GetRecentHighDistributionVolume(HashVoxeler::HashVolume & vVolumeCopy, const int iRecentTime);
+	void GetLocalConnectVolume(HashVoxeler::HashVolume & vVolumeCopy, const Eigen::Vector3f vCenter, const float fRadius, const int iConnectMinSize);
 
 	void DrawVolume(const HashVolume & vVolume, visualization_msgs::MarkerArray & oOutputVolume);
 

@@ -240,12 +240,12 @@ bool PreConvFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 }
 
 
-void PreConvFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const int iFrameId) {
+void PreConvFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const Eigen::Vector3f& vCenter, const int iFrameId) {
 
     // Super::SlideModeling(oResultMesh, iFrameId);
     
 	if(m_bUseUnionSetConnection) {
-		m_oVoxeler.RebuildUnionSet(m_fStrictDotRef, m_fSoftDotRef, m_iConfidenceLevelLength);
+		m_oVoxeler.RebuildUnionSet(m_fStrictDotRef, m_fSoftDotRef, m_fConfidenceLevelLength);
 		m_oVoxeler.UpdateUnionConflict(m_iRemoveSizeRef, m_fRemoveTimeRef);
 	}
     
