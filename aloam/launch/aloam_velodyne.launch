@@ -1,5 +1,10 @@
 <launch>
     
+    <arg name="record_poses" default="false" />
+    <arg name="record_path" default="./" />
+
+    <param name="record_poses" type="bool" value="$(arg record_poses)" />
+    <param name="save_head" type="string" value="$(arg record_path)" />
 
     <!-- if 1, do mapping 10 Hz, if 2, do mapping 5 Hz. Suggest to use 1, it will adjust frequence automaticlly -->
     <param name="mapping_skip_frame" type="int" value="1" />

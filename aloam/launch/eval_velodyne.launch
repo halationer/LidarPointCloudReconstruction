@@ -2,6 +2,9 @@
     
     <arg name="eval_pose_file" default="" />
     <arg name="bag_file" default="" />
+    <arg name="jump_frame" default="0" />
+    <arg name="sample_frame" default="1" />
+    <arg name="publish_delay" default="1.0" />
 
     <!-- no output -->
     <!-- <node pkg="aloam_velodyne" type="EvalNode" name="EvalNode" output="screen"> -->
@@ -10,6 +13,9 @@
         <param name="minimum_range" type="double" value="0.3"/>
         <param name="eval_pose_file" type="string" value="$(arg eval_pose_file)" />
         <param name="bag_file" type="string" value="$(arg bag_file)" />
+        <param name="jump_frame" type="int" value="$(arg jump_frame)" />
+        <param name="publish_delay" type="double" value="$(arg publish_delay)" />
+        <param name="sample_frame" type="int" value="$(arg sample_frame)" />
     </node>
 
     <!-- new add -->

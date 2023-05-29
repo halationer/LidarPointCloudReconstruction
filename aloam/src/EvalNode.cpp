@@ -220,8 +220,9 @@ void readPoses(const std::string& fileName) {
         {
             for (std::size_t j = 0; j < 4; ++j)
             {
-                std::getline(pose_stream, s, ' ');
-                gt_pose(i, j) = stod(s);
+                // std::getline(pose_stream, s, ' ');
+                // gt_pose(i, j) = stod(s);
+                pose_stream >> gt_pose(i,j);
             }
         }
         gt_pose.row(3) = Eigen::RowVector4d(0, 0, 0, 1);
@@ -258,13 +259,25 @@ int main(int argc, char **argv)
 	pubLaserAfterMappedPath = nh.advertise<nav_msgs::Path>("/aft_mapped_path", 100);
 
     // read point clouds
+    int jump_frame_ref, sample_frame_ref;
+    localnh.param<int>("jump_frame", jump_frame_ref, 0);
+    localnh.param<int>("sample_frame", sample_frame_ref, 1);
     localnh.param<std::string>("bag_file", bagFile, "./underground.bag");
     std::cout << "read_bag_file" << bagFile << std::endl;
     rosbag::Bag in_bag;
     in_bag.open(bagFile, rosbag::bagmode::Read);
     rosbag::View view(in_bag, rosbag::TopicQuery("/velodyne_points"));
-    for(auto pMsg = view.begin(); pMsg != view.end() && ros::ok(); ++pMsg) {
 
+    double publish_delay;
+    localnh.param<double>("publish_delay", publish_delay, 1.0);
+
+    for(auto pMsg = view.begin(); pMsg != view.end() && ros::ok(); ++pMsg) {
+        
+        // jump frames
+        if(frame_count < jump_frame_ref || frame_count % sample_frame_ref != 0) {
+            ++frame_count;
+            continue;
+        } 
 
         // publish pc
         auto& msg = *pMsg;
@@ -317,7 +330,7 @@ int main(int argc, char **argv)
         br.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, "/camera_init", "/aft_mapped"));
         br.sendTransform(tf::StampedTransform(tf::Transform::getIdentity(), odomAftMapped.header.stamp, "/map", "/camera_init"));
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(95));
+        std::this_thread::sleep_for(std::chrono::milliseconds(int(100 * publish_delay - 5)));
 
         ++frame_count;
     }

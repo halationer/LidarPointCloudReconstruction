@@ -1,11 +1,11 @@
 <launch>
-    <arg name="pose_file"  default="/home/yudong/Downloads/zhitenglou/poses/01.txt" />
-    <arg name="output_bag_file" default="/home/yudong/Downloads/zhitenglou/ztl_re.bag" />
-    <arg name="pc_folder" default="/home/yudong/Downloads/zhitenglou/sequences/01/velodyne/" />
-    <arg name="start_num" default="4422" />
+    <arg name="pose_file"  default="/home/yudong/Desktop/oridata/L7.txt" />
+    <arg name="output_bag_file" default="/home/yudong/Desktop/oridata/l70517.bag" />
+    <arg name="pc_folder" default="/home/yudong/Desktop/oridata/L7_0517/L7/" />
+    <arg name="start_num" default="3500" />
     <arg name="to_bag"          default="true" />
     <arg name="publish_delay"   default="1" />
-    <arg name="reverse" default="true" />
+    <arg name="reverse" default="false" />
 
     <node name="plyHelper" pkg="aloam_velodyne" type="plyHelper" output="screen"> 
         <param name="pose_file"         type="string"   value="$(arg pose_file)" />

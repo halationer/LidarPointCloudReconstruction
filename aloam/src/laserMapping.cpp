@@ -58,6 +58,12 @@
 #include <iostream>
 #include <string>
 
+#include <pcl/io/ply_io.h>
+#include <sstream>
+#include <iomanip>
+#include <fstream>
+#include <rosbag/bag.h>
+
 #include "lidarFactor.hpp"
 #include "aloam_velodyne/common.h"
 #include "aloam_velodyne/tic_toc.h"
@@ -110,6 +116,13 @@ pcl::KdTreeFLANN<PointType>::Ptr kdtreeSurfFromMap(new pcl::KdTreeFLANN<PointTyp
 double parameters[7] = {0, 0, 0, 1, 0, 0, 0};
 Eigen::Map<Eigen::Quaterniond> q_w_curr(parameters);
 Eigen::Map<Eigen::Vector3d> t_w_curr(parameters + 4);
+
+// TODO: Record Poses
+bool record_poses = false;
+std::string save_head = "./";
+Eigen::MatrixXd pose_curr(3, 4);
+std::vector<Eigen::MatrixXd> pose_list;  
+rosbag::Bag bag_out;
 
 // wmap_T_odom * odom_T_curr = wmap_T_curr;
 // transformation between odom's world and map's world frame
@@ -835,6 +848,23 @@ void process()
 				pubLaserCloudMap.publish(laserCloudMsg);
 			}
 
+			// TODO: Save cloud and poses
+			if(record_poses) {
+				
+				sensor_msgs::PointCloud2 laserCloudMsg;
+				pcl::toROSMsg(*laserCloudFullRes, laserCloudMsg);
+				bag_out.write("/velodyne_points", ros::Time::now(), laserCloudMsg);
+
+				std::stringstream save_str;
+				save_str << save_head << std::setw(4) << std::setfill('0') << frameCount << ".pcd";
+				pcl::io::savePCDFileBinary(save_str.str(), *laserCloudFullRes);
+
+				pose_curr.topLeftCorner(3, 3) = q_w_curr.matrix();
+				pose_curr.topRightCorner(3, 1) = t_w_curr.matrix();
+				pose_list.push_back(pose_curr);
+			}
+			
+
 			int laserCloudFullResNum = laserCloudFullRes->points.size();
 			for (int i = 0; i < laserCloudFullResNum; i++)
 			{
@@ -897,6 +927,13 @@ int main(int argc, char **argv)
 	ros::init(argc, argv, "laserMapping");
 	ros::NodeHandle nh;
 
+	// TODO: Record Poses Params
+	nh.param<bool>("record_poses", record_poses, false);
+	nh.param<std::string>("save_head", save_head, "./");
+	if(save_head.back() != '/') save_head += "/";
+	system(("mkdir -p " + save_head).c_str());
+	if(record_poses) bag_out.open(save_head + "out.bag", rosbag::bagmode::Write);
+
 	float lineRes = 0;
 	float planeRes = 0;
 	nh.param<float>("mapping_line_resolution", lineRes, 0.4);
@@ -934,6 +971,31 @@ int main(int argc, char **argv)
 	std::thread mapping_process{process};
 
 	ros::spin();
+
+	if(record_poses) {
+		
+		bag_out.close();
+
+		std::stringstream pose_file_str;
+		pose_file_str << save_head << "poses.txt";
+		std::ofstream pose_file(pose_file_str.str());
+		pose_file << std::setprecision(18) << std::scientific;
+		for(auto && pose : pose_list) {
+			for (std::size_t i = 0; i < 3; ++i)
+			{
+				if(i != 0) pose_file << " ";
+				pose_file << pose(i,0);
+				for (std::size_t j = 1; j < 4; ++j)
+				{
+					pose_file << " " << pose(i,j);
+				}
+			}
+			pose_file << std::endl;
+			// pose.transposeInPlace();
+			// pose_file << Eigen::Map<Eigen::RowVectorXd>(pose.data(), pose.cols()*pose.rows()) << std::endl;
+		}
+		pose_file.close();
+	}
 
 	return 0;
 }
