@@ -2,7 +2,7 @@
 #define __MULTI_RESOLUTION_FUSION__
 
 #include "FramesFusion.h"
-#include "HashVoxeler.h"
+#include "volume/HashVoxeler.h"
 
 #include <vector>
 

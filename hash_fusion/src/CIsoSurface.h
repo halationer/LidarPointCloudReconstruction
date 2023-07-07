@@ -17,7 +17,7 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/Vertices.h>
 #include "Vectors.h"
-#include "HashVoxeler.h"
+#include "volume/HashVoxeler.h"
 
 struct POINT3DID {
 	unsigned int newID;

@@ -4,7 +4,7 @@
 #include <pcl/io/ply_io.h>
 #include <pcl/io/obj_io.h>
 #include <pcl/PolygonMesh.h>
-#include "HashVoxeler.h"
+#include "volume/HashVoxeler.h"
 #include "ConvexHullOperation.h"
 #include "MeshSample.h"
 #include "Polar.h"

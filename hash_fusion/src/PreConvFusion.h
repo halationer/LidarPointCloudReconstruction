@@ -2,7 +2,7 @@
 #define __PRECONV_FUSION__
 
 #include "FramesFusion.h"
-#include "HashVoxeler.h"
+#include "volume/HashVoxeler.h"
 #include "SignedDistance.h"
 
 class ExpandVoxeler : public HashVoxeler {

@@ -7,7 +7,7 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/kdtree/kdtree.h>
 
-#include "HashVoxeler.h"
+#include "volume/HashVoxeler.h"
 
 //The plane general formula is Ax + By + Cz + D = 0, where (A, B, C)is the normal vector of the plane is
 //and D is the offset from coordinate origin

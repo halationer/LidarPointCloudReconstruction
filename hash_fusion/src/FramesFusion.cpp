@@ -34,12 +34,12 @@ FramesFusion::FramesFusion(ros::NodeHandle & node,
 	m_oCloudSuber = nodeHandle.subscribe(m_sInCloudTopic, 5, &FramesFusion::HandlePointClouds, this);
 
 	//subscribe (hear) the odometry information (trajectory)
-	m_oOdomSuber = nodeHandle.subscribe(
-		m_sInOdomTopic, 
-		1,
-		m_bAsyncReconstruction ? &FramesFusion::HandleTrajectoryThread : &FramesFusion::HandleTrajectory, 
-		this
-	);
+	// m_oOdomSuber = nodeHandle.subscribe(
+	// 	m_sInOdomTopic, 
+	// 	1,
+	// 	m_bAsyncReconstruction ? &FramesFusion::HandleTrajectoryThread : &FramesFusion::HandleTrajectory, 
+	// 	this
+	// );
 
 	//***publisher related*** 
 	//publish point cloud after processing
@@ -67,18 +67,18 @@ Output: a file storing the point clouds with correct normal for accurate reconst
 
 FramesFusion::~FramesFusion() {
 
-	std::cout << std::format_purple
+	std::cout << output::format_purple
 	<< "Fusion frame numbers: " << m_iFusionFrameNum << std::endl
 	<< "Average fusion per frame: " << m_dAverageFusionTime / m_iFusionFrameNum << "ms;\t"
 	<< "Max fusion time: " << m_dMaxFusionTime << "ms"
-	<< std::format_white << std::endl;
+	<< output::format_white << std::endl;
 
-	std::cout << std::format_blue
+	std::cout << output::format_blue
 	<< "Reconstruct frame numbers: " << m_iReconstructFrameNum << std::endl
 	<< "Average recontime per frame: " << m_dAverageReconstructTime / m_iReconstructFrameNum << "ms;\t"
 	<< "Max frame time: " << m_dMaxReconstructTime << "ms" << std::endl
 	<< "Final point nums: " << m_vMapPCN.size() + m_vMapPCNAdded.size() + m_vMapPCNTrueAdded.size()
-	<< std::format_white << std::endl;
+	<< output::format_white << std::endl;
 
 
     //output to the screen
@@ -106,7 +106,7 @@ FramesFusion::~FramesFusion() {
 
 		std::cout << "Please do not force closing the programe, the process is writing output PLY file." << std::endl;
 		std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
-		std::cout << std::format_purple << "The output file is " << sOutPCNormalFileName.str() << std::format_white << std::endl;
+		std::cout << output::format_purple << "The output file is " << sOutPCNormalFileName.str() << output::format_white << std::endl;
 
 		if(m_bUseAdditionalPoints) {
 		
@@ -268,7 +268,7 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
 	if(m_bOutputFiles) {
 
-		std::cout << std::format_blue << "mf_output_path:=" << m_sFileHead << std::format_white << std::endl;
+		std::cout << output::format_blue << "mf_output_path:=" << m_sFileHead << output::format_white << std::endl;
 		if(m_sFileHead.back() != '/') m_sFileHead += "/";
 		std::stringstream sOutputCommand;
 		sOutputCommand << "mkdir -p " << m_sFileHead;
@@ -315,10 +315,12 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	m_oVoxelRes.y = fCubeSize;
 	m_oVoxelRes.z = fCubeSize;
 	m_oVoxeler.SetResolution(m_oVoxelRes);
+	m_oBlock.SetResolution(m_oVoxelRes);
 
 	int eStrategyType;
   	nodeHandle.param("strategy_type", eStrategyType, static_cast<int>(eEmptyStrategy));
 	m_oVoxeler.SetStrategy(static_cast<vus>(eStrategyType));
+	m_oBlock.SetStrategy(static_cast<vus>(eStrategyType));
 
 	//use surfel fusion?
 	nodeHandle.param("use_surfel_fusion", m_bSurfelFusion, true);
@@ -1076,10 +1078,10 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 
 		double frames_fusion_time = fuse_timer.DebugTime("2_main_fusion");
 		
-		std::cout << std::format_purple 
+		std::cout << output::format_purple 
 			<< "The No. " << m_iFusionFrameNum 
 			<< ";\tframes_fusion_time: " << frames_fusion_time << "ms" 
-			<< std::format_white;
+			<< output::format_white;
 		m_dAverageFusionTime += frames_fusion_time;
 		m_dMaxFusionTime = frames_fusion_time > m_dMaxFusionTime ? frames_fusion_time : m_dMaxFusionTime;
 	}
@@ -1103,14 +1105,15 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 	//merge one frame data
 	UpdateOneFrame(oViewPoint, *pFramePN);
 	double voxelize_time = fuse_timer.DebugTime("3_main_voxelize");
-	std::cout << std::format_blue << ";\tvoxelize_time: " << voxelize_time << "ms" << std::format_white << std::endl;
+	std::cout << output::format_blue << ";\tvoxelize_time: " << voxelize_time << "ms" << output::format_white << std::endl;
 
 
 	// output point cloud with (depth & view) confidence
 	if(m_bSurfelFusion) {
 		
 		pcl::PointCloud<pcl::PointNormal> temp;
-		m_oVoxeler.GetVolumeCloud(temp);
+		// m_oVoxeler.GetVolumeCloud(temp);
+		m_oBlock.GetVolumeCloud(temp);
 		vector<float> confidence(temp.size());
 		constexpr float confidence_scalar = 0.8f;
 		for(int i = 0; i < confidence.size(); ++i) {
@@ -1142,7 +1145,8 @@ void FramesFusion::UpdateOneFrame(const pcl::PointNormal& oViewPoint, pcl::Point
 	vFilteredMeasurementCloud.erase(vFilteredMeasurementCloud.begin()+n, vFilteredMeasurementCloud.end());
 	//*/
 
-	m_oVoxeler.VoxelizePointsAndFusion(vFilteredMeasurementCloud);
+	// m_oVoxeler.VoxelizePointsAndFusion(vFilteredMeasurementCloud);
+	m_oBlock.VoxelizePointsAndFusion(vFilteredMeasurementCloud);
 	m_vMapPCN += vFilteredMeasurementCloud;
 }
   
@@ -1255,10 +1259,10 @@ void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 	clock_t frames_fusion_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
 
 	++m_iReconstructFrameNum;
-	std::cout << std::format_blue 
+	std::cout << output::format_blue 
 		<< "The No. " << m_iReconstructFrameNum 
 		<< ";\tframes_fusion_time: " << frames_fusion_time << "ms" 
-		<< std::format_white << std::endl;
+		<< output::format_white << std::endl;
 	m_dAverageReconstructTime += frames_fusion_time;
 	m_dMaxReconstructTime = frames_fusion_time > m_dMaxReconstructTime ? frames_fusion_time : m_dMaxReconstructTime;
 
@@ -1299,7 +1303,7 @@ void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory
 
 	auto ModelingFunction = [&, now_frame_num, oLidarPos]() {
 
-		std::cout << std::format_purple << "No. " << now_frame_num << " reconstruct start" << std::format_white << std::endl;
+		std::cout << output::format_purple << "No. " << now_frame_num << " reconstruct start" << output::format_white << std::endl;
 
 		//get the reconstructed surfaces
 		pcl::PolygonMesh oResultMeshes;
@@ -1315,11 +1319,11 @@ void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory
 		struct timeval end;
 		gettimeofday(&end,NULL);
 		double frame_reconstruct_time = (end.tv_sec - start.tv_sec) * 1000.0 +(end.tv_usec - start.tv_usec) * 0.001;
-		std::cout << std::format_blue 
+		std::cout << output::format_blue 
 			<< "The No. " << now_frame_num
 			<< ";\tframes_reconstruct_time: " << frame_reconstruct_time << "ms" 
 			<< ";\tgen_face_num: " << oResultMeshes.polygons.size()
-			<< std::format_white << std::endl;
+			<< output::format_white << std::endl;
 		m_dAverageReconstructTime += frame_reconstruct_time;
 		m_dMaxReconstructTime = frame_reconstruct_time > m_dMaxReconstructTime ? frame_reconstruct_time : m_dMaxReconstructTime;
 
@@ -1473,7 +1477,8 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 
 		// 记录测量点从属的voxel
 		HashPos oPos;
-		m_oVoxeler.PointBelongVoxelPos(oCurrentPoint, oPos);
+		// m_oVoxeler.PointBelongVoxelPos(oCurrentPoint, oPos);
+		m_oBlock.PointBelongVoxelPos(oCurrentPoint, oPos);
 		pos_record.emplace(oPos);
 
 
@@ -1532,12 +1537,13 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 		// */
 	}	
 	
-	// std::cout << std::format_red << "min depth: " << min_depth << " | conf: " << vDepthMeasurementCloud[min_id].data_n[3] << "\t";
-	// std::cout << std::format_red << "max depth: " << max_depth << " | conf: " << vDepthMeasurementCloud[max_id].data_n[3] << std::format_white << std::endl;
+	// std::cout << output::format_red << "min depth: " << min_depth << " | conf: " << vDepthMeasurementCloud[min_id].data_n[3] << "\t";
+	// std::cout << output::format_red << "max depth: " << max_depth << " | conf: " << vDepthMeasurementCloud[max_id].data_n[3] << output::format_white << std::endl;
 
 	// 将多帧重建结果点云拷贝到Buffer中，并筛选范围内的点
 	pcl::PointCloud<pcl::PointNormal> vVolumeCloud;
-	m_oVoxeler.GetVolumeCloud(vVolumeCloud);
+	// m_oVoxeler.GetVolumeCloud(vVolumeCloud);
+	m_oBlock.GetVolumeCloud(vVolumeCloud);
 	pcl::PointXYZ oBase(oLidarPos.x, oLidarPos.y, oLidarPos.z);
 	NearbyClouds(vVolumeCloud, oBase, vPointCloudBuffer, max_depth);
 
@@ -1606,7 +1612,8 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 			float a = p2.norm() - v12.dot(vp2), b = p2.norm();
 
 			HashPos oPos;
-			m_oVoxeler.PointBelongVoxelPos(oCurrentPoint, oPos);
+			// m_oVoxeler.PointBelongVoxelPos(oCurrentPoint, oPos);
+			m_oBlock.PointBelongVoxelPos(oCurrentPoint, oPos);
 
 			if( pos_record.count(oPos) ) { // 避免自穿透现象
 				associated_feature[i] = -1.0f;
@@ -1645,7 +1652,8 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 	SurfelFusionCore(oLidarPos, vDepthMeasurementCloud, vPointCloudBuffer);
 
 	// 更新volume
-	m_oVoxeler.UpdateConflictResult(vPointCloudBuffer, m_bDynamicDebug || m_bKeepVoxel);
+	// m_oVoxeler.UpdateConflictResult(vPointCloudBuffer, m_bDynamicDebug || m_bKeepVoxel);
+	m_oBlock.UpdateConflictResult(vPointCloudBuffer, m_bDynamicDebug || m_bKeepVoxel);
 
 	// output connect
 	// pcl::PointCloud<pcl::PointNormal> vMaxConnected;
