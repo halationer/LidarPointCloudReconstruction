@@ -30,7 +30,8 @@
 #include "SignedDistance.h"
 #include "CIsoSurface.h"
 #include "MeshOperation.h"
-#include "HashVoxeler.h"
+#include "volume/HashBlock.h"
+#include "volume/HashVoxeler.h"
 #include "tools/CloudVector.h"
 #include "tools/OutputUtils.h"
 #include "tools/DebugManager.h"
@@ -259,6 +260,7 @@ protected:
     // std::mutex m_mNewPointMutex;
     // pcl::PointCloud<pcl::PointNormal> m_vNewPoints; //
     HashVoxeler m_oVoxeler;
+    HashBlock m_oBlock;
 
     // meshing params
 	int m_iKeepTime;

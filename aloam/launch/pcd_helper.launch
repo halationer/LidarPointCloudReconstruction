@@ -1,13 +1,28 @@
 <launch>
-    <arg name="dataset_folder"  default="/ncd_example/quad/" />
-    <arg name="to_bag"          default="true" />
-    <arg name="output_bag_file" default="$(arg dataset_folder)bag/ncd_example.bag" />
-    <arg name="publish_delay"   default="1" />
+    <!-- by seq search -->
+    <!-- 
+    <arg name="dataset_folder"      default="/ncd_example/quad/" />
+    <arg name="to_bag"              default="true" />
+    <arg name="output_bag_file"     default="$(arg dataset_folder)bag/ncd_example.bag" />
+    <arg name="publish_delay"       default="1" />
+    <arg name="ref_file"            default="poses.txt" />
+    <arg name="file_name_method"    default="1" /> 
+    -->
+
+    <!-- by file name search -->
+    <arg name="dataset_folder"      default="/home/yudong/Desktop/HuskyData/changan/pcd/middle" />
+    <arg name="to_bag"              default="true" />
+    <arg name="output_bag_file"     default="$(arg dataset_folder)/changan.bag" />
+    <arg name="publish_delay"       default="1" />
+    <arg name="ref_file"            default="file.txt" />
+    <arg name="file_name_method"    default="2" />
 
     <node name="pcdHelper" pkg="aloam_velodyne" type="pcdHelper" output="screen"> 
         <param name="dataset_folder"    type="string"   value="$(arg dataset_folder)" />
         <param name="to_bag"            type="bool"     value="$(arg to_bag)" />
         <param name="output_bag_file"   type="string"   value="$(arg output_bag_file)" /> <!-- replace with your output folder -->
         <param name="publish_delay"     type="int"      value="$(arg publish_delay)" />
+        <param name="ref_file"          type="string"   value="$(arg ref_file)" />
+        <param name="file_name_method"  type="int"      value="$(arg file_name_method)" />
     </node>
 </launch>

@@ -2,9 +2,11 @@
 #define __HASH_POS__
 
 #include <iostream>
+#include <Eigen/Core>
 
 // 3d index of voxel(or corner)
 struct HashPos {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     int x, y, z;
     HashPos():x(0),y(0),z(0){}
     HashPos(int x, int y, int z):x(x),y(y),z(z){}

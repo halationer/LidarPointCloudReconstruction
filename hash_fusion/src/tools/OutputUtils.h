@@ -1,7 +1,7 @@
 #ifndef __OUTPUT_UTILS__
 #define __OUTPUT_UTILS__
 
-namespace std {
+namespace output {
 	extern const char* format_white;
 	extern const char* format_red;
 	extern const char* format_yellow;

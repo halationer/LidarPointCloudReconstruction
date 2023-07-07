@@ -41,9 +41,11 @@ include_directories(
 
 aux_source_directory(src DIR_SRCS)
 aux_source_directory(src/tools DIR_SRCS)
+aux_source_directory(src/volume DIR_SRCS)
 
 ###### build ########
 add_executable(hash_fusion ${DIR_SRCS})
 
+target_include_directories(hash_fusion PUBLIC src)
 
 target_link_libraries(hash_fusion ${catkin_LIBRARIES} ${PCL_LIBRARIES})

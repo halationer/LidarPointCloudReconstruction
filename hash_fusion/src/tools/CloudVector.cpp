@@ -99,7 +99,7 @@ pcl::PointNormal& CloudVector::at(const int index) {
 	
 	if(iter == size_pre_sum.end()) {
 		
-		std::cout << std::format_red << "CloudVector out of range!!!" << std::format_white << std::endl;
+		std::cout << output::format_red << "CloudVector out of range!!!" << output::format_white << std::endl;
 		return data[seq_record.back()]->back();
 	}
 	else return data[seq_record[iter - size_pre_sum.begin()]]->at(data[seq_record[iter - size_pre_sum.begin()]]->size() - *iter + index);
@@ -114,7 +114,7 @@ void CloudVector::erase(int index) {
 	
 	if(iter == size_pre_sum.end()) {
 		
-		std::cout << std::format_red << "CloudVector out of range!!!" << std::format_white << std::endl;
+		std::cout << output::format_red << "CloudVector out of range!!!" << output::format_white << std::endl;
 		return;
 	}
 	std::swap(
