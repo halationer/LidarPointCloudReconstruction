@@ -59,7 +59,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="remove_time_ref"     default="10.0"/>
     <arg name="confidence_level_length" default="3"/>
 
-    <!-- fusion mode:
+    <!-- fusion mode:(not use)
         0 - normal fusion 
         1 - multi-resolution fusion
         2 - pre-conv fusion
@@ -76,7 +76,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="center_based_recon" default="false" />
     <arg name="dynamic_debug" default="false" />
     <arg name="keep_voxel" default="true" />
-    <arg name="recon_range" default="80.0" /> <!-- 80 for show -->
+    <arg name="recon_range" default="30.0" /> <!-- 80 for show -->
     
 
     <!-- frames_fusion node in frames_fusion pkg-->

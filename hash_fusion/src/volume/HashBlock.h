@@ -57,7 +57,6 @@ public:
         constexpr int voxel_num_per_block = 16;
         m_vVoxelNumsPerBlock = Eigen::Vector3i(voxel_num_per_block, voxel_num_per_block, voxel_num_per_block);
         m_iVoxelFullNumPerBlock = m_vVoxelNumsPerBlock.prod();
-        std::cout << output::format_red << "full num is: " << m_iVoxelFullNumPerBlock << output::format_white << std::endl;
         m_vVoxelSize = oLength.getVector3fMap(); 
         m_vVoxelSizeInverse = m_vVoxelSize.cwiseInverse();
         m_vBlockSize = m_vVoxelSize.cwiseProduct(m_vVoxelNumsPerBlock.cast<float>());

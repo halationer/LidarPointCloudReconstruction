@@ -61,13 +61,17 @@ template void HashBlock::PointBelongVoxelPos(const pcl::PointNormal & oPoint, Ha
 template<class PointType>
 void HashBlock::PointBelongVoxelIndex(const PointType & oPoint, int & iIndex) const {
     
+    // std::cout << output::format_red << "intput point is: " << oPoint.getVector3fMap().transpose() << " | ";
 	HashPos oBlockPos;
 	PointBelongBlockPos(oPoint, oBlockPos);
+	// std::cout << "block is: " << oBlockPos << " | ";
 	Eigen::Vector3f vPointOffset(oBlockPos.x, oBlockPos.y, oBlockPos.z);
 	vPointOffset = vPointOffset.cwiseProduct(-m_vBlockSize);
 	vPointOffset += oPoint.getVector3fMap();
 	Eigen::Vector3i vPointPos = vPointOffset.cwiseProduct(m_vVoxelSizeInverse).array().floor().cast<int>();
-	iIndex = (vPointPos.z() * m_vVoxelNumsPerBlock.y() + vPointPos.y()) * m_vVoxelNumsPerBlock.x() + vPointPos.z();
+	// std::cout << "voxel is: " << vPointPos.transpose() << " | ";
+	iIndex = (vPointPos.z() * m_vVoxelNumsPerBlock.y() + vPointPos.y()) * m_vVoxelNumsPerBlock.x() + vPointPos.x();
+	// std::cout << "index is: " << iIndex << output::format_white << std::endl;
 }
 template void HashBlock::PointBelongVoxelIndex(const pcl::PointXYZ & oPoint, int & iIndex) const;
 template void HashBlock::PointBelongVoxelIndex(const pcl::PointNormal & oPoint, int & iIndex) const;
@@ -98,6 +102,7 @@ void HashBlock::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vClo
     }
 }
 
+
 /**
  * @brief voxelize the points in the block
  * @param vCloud the input lidar cloud with normals
@@ -109,7 +114,7 @@ void HashBlock::FusePointToBlock(pcl::PointCloud<pcl::PointNormal> & vCloud, Blo
 	// put point into voxels
     std::unordered_map<size_t, std::vector<int>> vPointContainer;
 	int iVoxelIndex = 0;
-	for(int iCloudIndex = 0; iCloudIndex < vIndices.size(); ++iCloudIndex) {
+	for(size_t& iCloudIndex : vIndices) {
 		const pcl::PointNormal & oCurrentPoint = vCloud.at(iCloudIndex);
 		PointBelongVoxelIndex(oCurrentPoint, iVoxelIndex);
 		vPointContainer[iVoxelIndex].emplace_back(iCloudIndex);
@@ -130,8 +135,10 @@ void HashBlock::FusePointToBlock(pcl::PointCloud<pcl::PointNormal> & vCloud, Blo
 		float& fTimeStamp = oFusedPoint.data_c[2];
 		fTimeStamp = m_iFrameCount;
 		oCurrentVoxel.point = oFusedPoint;
+		oCurrentVoxel.bIsOccupied = true;
 	}
 }
+
 
 /**
  * @brief decrease the confidence of dynamic point and record conflict
