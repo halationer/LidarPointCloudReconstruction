@@ -53,15 +53,7 @@ public:
     ~HashBlock();
 
     // set the resolution of voxel
-	void SetResolution(pcl::PointXYZ & oLength) { 
-        constexpr int voxel_num_per_block = 16;
-        m_vVoxelNumsPerBlock = Eigen::Vector3i(voxel_num_per_block, voxel_num_per_block, voxel_num_per_block);
-        m_iVoxelFullNumPerBlock = m_vVoxelNumsPerBlock.prod();
-        m_vVoxelSize = oLength.getVector3fMap(); 
-        m_vVoxelSizeInverse = m_vVoxelSize.cwiseInverse();
-        m_vBlockSize = m_vVoxelSize.cwiseProduct(m_vVoxelNumsPerBlock.cast<float>());
-        m_vBlockSizeInverse = m_vBlockSize.cwiseInverse();
-    }
+	void SetResolution(pcl::PointXYZ & oLength);
 	// Set the strategy of fusion and remove dynamic points
 	void SetStrategy(enum vus eStrategy) { m_pUpdateStrategy = std::shared_ptr<VolumeUpdateStrategy>(CreateStrategy(eStrategy)); }
 	// Copy strategy from another

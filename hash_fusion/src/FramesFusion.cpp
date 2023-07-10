@@ -49,10 +49,12 @@ FramesFusion::FramesFusion(ros::NodeHandle & node,
 	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::MarkerArray>(m_sOutMeshTopic, 1, true);
 }
 
+
 void FramesFusion::LazyLoading() {
 	
     std::cout << "Load Fixed Resolution Fusion..." << std::endl;
 }
+
 
 /*************************************************
 Function: ~FramesFusion
@@ -64,7 +66,6 @@ Table Updated: none
 Input: none
 Output: a file storing the point clouds with correct normal for accurate reconstruction
 *************************************************/
-
 FramesFusion::~FramesFusion() {
 
 	std::cout << output::format_purple
@@ -100,151 +101,153 @@ FramesFusion::~FramesFusion() {
 		std::cout << "The output eval file is " << sReconEvalFileName.str() << std::endl;
 		reconstruct_timer.OutputDebug(sReconEvalFileName.str());
 
-		//define ouput ply file name
-		std::stringstream sOutPCNormalFileName;
-		sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply";
-
-		std::cout << "Please do not force closing the programe, the process is writing output PLY file." << std::endl;
-		std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
-		std::cout << output::format_purple << "The output file is " << sOutPCNormalFileName.str() << output::format_white << std::endl;
-
-		if(m_bUseAdditionalPoints) {
-		
-			m_vMapPCN += m_vMapPCNAdded;
-			m_vMapPCN += m_vMapPCNTrueAdded;
-		}
-		
-		auto vAllPoints = AllCloud(m_vMapPCN);
-
-		// TODO： output fix
-
-		if(m_bUseUnionSetConnection) {
-			m_oVoxeler.RebuildUnionSetAll(m_fStrictDotRef, m_fSoftDotRef, m_fConfidenceLevelLength);
-			m_oVoxeler.UpdateUnionConflict(m_iRemoveSizeRef, m_fRemoveTimeRef);
-		}
-
-		HashVoxeler::HashVolume vVolumeCopy;
-		// m_oVoxeler.GetRecentConnectVolume(vVolumeCopy, m_iKeepTime, m_iRemoveSizeRef);
-		// m_oVoxeler.GetAllVolume(vVolumeCopy);
-
-		SignedDistance oSDF(-1, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
-		std::unordered_map<HashPos, float, HashFunc> vSignedDis;
-		if(m_bUseUnionSetConnection) vSignedDis = oSDF.ConvedGlanceAllUnion(m_oVoxeler, m_iRemoveSizeRef);
-		else vSignedDis = oSDF.ConvedGlance(m_oVoxeler);
-		vVolumeCopy = oSDF.m_vVolumeCopy;
-
-		// output mesh static
-		{
-			pcl::PolygonMesh oResultMesh;
-			CIsoSurface<float> oMarchingCuber;
-			oMarchingCuber.GenerateSurface(vSignedDis, oSDF.m_vVolumeCopy, 0, m_oVoxeler.m_oVoxelLength.x, m_oVoxeler.m_oVoxelLength.y, m_oVoxeler.m_oVoxelLength.z);
-			pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
-			pcl::PointXYZ oOffset(0, 0, 0);
-			oMarchingCuber.OutputMesh(oOffset, oResultMesh, pMCResultCloud);
-			for(auto & polygon : oResultMesh.polygons) {
-				polygon.vertices.pop_back();
-			}
-			std::stringstream sOutputPath;
-			sOutputPath << m_sFileHead << "final_mesh.ply";
-			pcl::io::savePLYFileBinary(sOutputPath.str(), oResultMesh);
-		}
-		// output mesh dynamic
-		{
-			SignedDistance oSDF(-1, m_iConvDim, 0, m_fConvFusionDistanceRef1);
-			auto vSignedDis = oSDF.ConvedGlanceAll(m_oVoxeler);
-			
-			pcl::PolygonMesh oResultMesh;
-			CIsoSurface<float> oMarchingCuber;
-			oMarchingCuber.GenerateSurface(vSignedDis, oSDF.m_vVolumeCopy, 0, m_oVoxeler.m_oVoxelLength.x, m_oVoxeler.m_oVoxelLength.y, m_oVoxeler.m_oVoxelLength.z);
-			pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
-			pcl::PointXYZ oOffset(0, 0, 0);
-			oMarchingCuber.OutputMesh(oOffset, oResultMesh, pMCResultCloud);
-			for(auto & polygon : oResultMesh.polygons) {
-				polygon.vertices.pop_back();
-			}
-			std::stringstream sOutputPath;
-			sOutputPath << m_sFileHead << "final_mesh_worm.ply";
-			pcl::io::savePLYFileBinary(sOutputPath.str(), oResultMesh);
-		}
-
-		// output pc
-		pcl::PointCloud<pcl::PointNormal> pc; 
-		pcl::PointCloud<pcl::PointXYZINormal> static_pc;
-		pcl::PointCloud<pcl::PointNormal> dynamic_pc;
-		for(int i = 0; i < vAllPoints->size(); ++i) {
-
-			// if the point cloud is too large, open this to random sample
-			// if(rand() % 8 > 3) continue;
-
-			std::cout << "All ready process points: " << i+1 << "/" << vAllPoints->size() << "\r";
-
-			pcl::PointNormal& point = (*vAllPoints)[i];
-			pc.push_back(point);
-
-			HashPos pos;
-			m_oVoxeler.PointBelongVoxelPos(point, pos);
-			if(!vVolumeCopy.count(pos)) {
-				dynamic_pc.push_back(point);
-				continue;
-			}
-
-			// filter inner points
-			float distance_ref, normal_ref;
-			Eigen::Vector3f oCorner = vVolumeCopy[pos].getVector3fMap();
-			Eigen::Vector3f oNormal = vVolumeCopy[pos].getNormalVector3fMap();
-			Eigen::Vector3f vPoint = point.getVector3fMap();
-			Eigen::Vector3f vNormal = point.getNormalVector3fMap();
-			float & token = vVolumeCopy[pos].data_c[1];
-			if(vVolumeCopy[pos].data_c[3] > m_fConvFusionDistanceRef1 || token >= __INT_MAX__) {
-				distance_ref = m_oVoxeler.m_oVoxelLength.getVector3fMap().norm() * 0.1;
-				normal_ref = 0.8;
-			}
-			else {
-				distance_ref = m_oVoxeler.m_oVoxelLength.getVector3fMap().norm() * 0.3;
-				normal_ref = 0;
-			}
-
-			if(abs(oNormal.dot(oCorner - vPoint)) > distance_ref || vNormal.dot(oNormal) < normal_ref) {
-				// if(vNormal.dot(oNormal) < normal_ref)
-				// 	dynamic_pc.push_back(point);
-				continue;
-			}
-
-			// put point in final result
-			pcl::PointXYZINormal new_point;
-			new_point.x = point.x;
-			new_point.y = point.y;
-			new_point.z = point.z;
-			new_point.normal_x = point.normal_x;
-			new_point.normal_y = point.normal_y;
-			new_point.normal_z = point.normal_z;
-			
-			// point confidence (impacted by depth & support & conflict)
-			new_point.intensity = min(vVolumeCopy[pos].data_n[3], 100.0f); 
-			
-			// maybe use to save gauss distance, but now don't make scence
-			new_point.curvature = vVolumeCopy[pos].data_c[2];
-
-			static_pc.push_back(new_point);
-		}
-		std::cout << "\nSaving file ..." << std::endl;
-		pcl::io::savePLYFileBinary(sOutPCNormalFileName.str(), pc);
-		pcl::io::savePLYFileBinary(sOutPCNormalFileName.str()+".static.ply", static_pc);
-		pcl::io::savePLYFileBinary(sOutPCNormalFileName.str()+".dynamic.ply", dynamic_pc);
-
-		/** 
-			if the point cloud has too many points, ros may not wait it to save.
-			to solve this problem, change the file: /opt/ros/melodic/lib/python2.7/dist-packages/roslaunch/nodeprocess.py
-				DEFAULT_TIMEOUT_SIGINT = 15.0  ->  DEFAULT_TIMEOUT_SIGINT = 60.0 
-		**/
-
-		std::cout << "Output is complete! The process will be automatically terminated. Thank you for waiting. " << std::endl;
+		SaveFinalMeshAndPointCloud();
 	}
 
 	system("rm -r /tmp/lidar_recon_temp/");
-
 }
 
+void FramesFusion::SaveFinalMeshAndPointCloud() {
+
+	//define ouput ply file name
+	std::stringstream sOutPCNormalFileName;
+	sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply";
+
+	std::cout << "Please do not force closing the programe, the process is writing output PLY file." << std::endl;
+	std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
+	std::cout << output::format_purple << "The output file is " << sOutPCNormalFileName.str() << output::format_white << std::endl;
+
+	if(m_bUseAdditionalPoints) {
+	
+		m_vMapPCN += m_vMapPCNAdded;
+		m_vMapPCN += m_vMapPCNTrueAdded;
+	}
+
+	// TODO： output fix
+
+	if(m_bUseUnionSetConnection) {
+		m_oVoxeler.RebuildUnionSetAll(m_fStrictDotRef, m_fSoftDotRef, m_fConfidenceLevelLength);
+		m_oVoxeler.UpdateUnionConflict(m_iRemoveSizeRef, m_fRemoveTimeRef);
+	}
+
+	HashVoxeler::HashVolume vVolumeCopy;
+	// m_oVoxeler.GetRecentConnectVolume(vVolumeCopy, m_iKeepTime, m_iRemoveSizeRef);
+	// m_oVoxeler.GetAllVolume(vVolumeCopy);
+
+	SignedDistance oSDF(-1, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
+	std::unordered_map<HashPos, float, HashFunc> vSignedDis;
+	if(m_bUseUnionSetConnection) vSignedDis = oSDF.ConvedGlanceAllUnion(m_oVoxeler, m_iRemoveSizeRef);
+	else vSignedDis = oSDF.ConvedGlance(m_oVoxeler);
+	vVolumeCopy = oSDF.m_vVolumeCopy;
+
+	// output mesh static
+	{
+		pcl::PolygonMesh oResultMesh;
+		CIsoSurface<float> oMarchingCuber;
+		oMarchingCuber.GenerateSurface(vSignedDis, oSDF.m_vVolumeCopy, 0, m_oVoxeler.m_oVoxelLength.x, m_oVoxeler.m_oVoxelLength.y, m_oVoxeler.m_oVoxelLength.z);
+		pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
+		pcl::PointXYZ oOffset(0, 0, 0);
+		oMarchingCuber.OutputMesh(oOffset, oResultMesh, pMCResultCloud);
+		for(auto & polygon : oResultMesh.polygons) {
+			polygon.vertices.pop_back();
+		}
+		std::stringstream sOutputPath;
+		sOutputPath << m_sFileHead << "final_mesh.ply";
+		pcl::io::savePLYFileBinary(sOutputPath.str(), oResultMesh);
+	}
+	// output mesh dynamic
+	{
+		SignedDistance oSDF(-1, m_iConvDim, 0, m_fConvFusionDistanceRef1);
+		auto vSignedDis = oSDF.ConvedGlanceAll(m_oVoxeler);
+		
+		pcl::PolygonMesh oResultMesh;
+		CIsoSurface<float> oMarchingCuber;
+		oMarchingCuber.GenerateSurface(vSignedDis, oSDF.m_vVolumeCopy, 0, m_oVoxeler.m_oVoxelLength.x, m_oVoxeler.m_oVoxelLength.y, m_oVoxeler.m_oVoxelLength.z);
+		pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
+		pcl::PointXYZ oOffset(0, 0, 0);
+		oMarchingCuber.OutputMesh(oOffset, oResultMesh, pMCResultCloud);
+		for(auto & polygon : oResultMesh.polygons) {
+			polygon.vertices.pop_back();
+		}
+		std::stringstream sOutputPath;
+		sOutputPath << m_sFileHead << "final_mesh_worm.ply";
+		pcl::io::savePLYFileBinary(sOutputPath.str(), oResultMesh);
+	}
+
+	// output pc
+	auto vAllPoints = AllCloud(m_vMapPCN);
+	pcl::PointCloud<pcl::PointNormal> pc; 
+	pcl::PointCloud<pcl::PointXYZINormal> static_pc;
+	pcl::PointCloud<pcl::PointNormal> dynamic_pc;
+	for(int i = 0; i < vAllPoints->size(); ++i) {
+
+		// if the point cloud is too large, open this to random sample
+		// if(rand() % 8 > 3) continue;
+
+		std::cout << "All ready process points: " << i+1 << "/" << vAllPoints->size() << "\r";
+
+		pcl::PointNormal& point = (*vAllPoints)[i];
+		pc.push_back(point);
+
+		HashPos pos;
+		m_oVoxeler.PointBelongVoxelPos(point, pos);
+		if(!vVolumeCopy.count(pos)) {
+			dynamic_pc.push_back(point);
+			continue;
+		}
+
+		// filter inner points
+		float distance_ref, normal_ref;
+		Eigen::Vector3f oCorner = vVolumeCopy[pos].getVector3fMap();
+		Eigen::Vector3f oNormal = vVolumeCopy[pos].getNormalVector3fMap();
+		Eigen::Vector3f vPoint = point.getVector3fMap();
+		Eigen::Vector3f vNormal = point.getNormalVector3fMap();
+		float & token = vVolumeCopy[pos].data_c[1];
+		if(vVolumeCopy[pos].data_c[3] > m_fConvFusionDistanceRef1 || token >= __INT_MAX__) {
+			distance_ref = m_oVoxeler.m_oVoxelLength.getVector3fMap().norm() * 0.1;
+			normal_ref = 0.8;
+		}
+		else {
+			distance_ref = m_oVoxeler.m_oVoxelLength.getVector3fMap().norm() * 0.3;
+			normal_ref = 0;
+		}
+
+		if(abs(oNormal.dot(oCorner - vPoint)) > distance_ref || vNormal.dot(oNormal) < normal_ref) {
+			// if(vNormal.dot(oNormal) < normal_ref)
+			// 	dynamic_pc.push_back(point);
+			continue;
+		}
+
+		// put point in final result
+		pcl::PointXYZINormal new_point;
+		new_point.x = point.x;
+		new_point.y = point.y;
+		new_point.z = point.z;
+		new_point.normal_x = point.normal_x;
+		new_point.normal_y = point.normal_y;
+		new_point.normal_z = point.normal_z;
+		
+		// point confidence (impacted by depth & support & conflict)
+		new_point.intensity = min(vVolumeCopy[pos].data_n[3], 100.0f); 
+		
+		// maybe use to save gauss distance, but now don't make scence
+		new_point.curvature = vVolumeCopy[pos].data_c[2];
+
+		static_pc.push_back(new_point);
+	}
+	std::cout << "\nSaving file ..." << std::endl;
+	pcl::io::savePLYFileBinary(sOutPCNormalFileName.str(), pc);
+	pcl::io::savePLYFileBinary(sOutPCNormalFileName.str()+".static.ply", static_pc);
+	pcl::io::savePLYFileBinary(sOutPCNormalFileName.str()+".dynamic.ply", dynamic_pc);
+
+	/** 
+		if the point cloud has too many points, ros may not wait it to save.
+		to solve this problem, change the file: /opt/ros/melodic/lib/python2.7/dist-packages/roslaunch/nodeprocess.py
+			DEFAULT_TIMEOUT_SIGINT = 15.0  ->  DEFAULT_TIMEOUT_SIGINT = 60.0 
+	**/
+
+	std::cout << "Output is complete! The process will be automatically terminated. Thank you for waiting. " << std::endl;
+}
 
 
 /*************************************************
@@ -259,7 +262,6 @@ Output: the individual parameter value for system
 Return: none
 Others: none
 *************************************************/
-
 bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
  	//output file name
@@ -311,15 +313,13 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	//side length of cube (voxel)
   	float fCubeSize;
   	nodeHandle.param("voxel_cube_size", fCubeSize, 0.5f);
- 	m_oVoxelRes.x = fCubeSize;
-	m_oVoxelRes.y = fCubeSize;
-	m_oVoxelRes.z = fCubeSize;
-	m_oVoxeler.SetResolution(m_oVoxelRes);
-	m_oBlock.SetResolution(m_oVoxelRes);
+ 	m_oVoxelResolution = pcl::PointXYZ(fCubeSize, fCubeSize, fCubeSize);
+	// m_oVoxeler.SetResolution(m_oVoxelResolution);
+	m_oBlock.SetResolution(m_oVoxelResolution);
 
 	int eStrategyType;
   	nodeHandle.param("strategy_type", eStrategyType, static_cast<int>(eEmptyStrategy));
-	m_oVoxeler.SetStrategy(static_cast<vus>(eStrategyType));
+	// m_oVoxeler.SetStrategy(static_cast<vus>(eStrategyType));
 	m_oBlock.SetStrategy(static_cast<vus>(eStrategyType));
 
 	//use surfel fusion?

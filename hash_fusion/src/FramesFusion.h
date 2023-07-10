@@ -82,6 +82,7 @@ public:
 
     //Destructor
     virtual ~FramesFusion();
+    void SaveFinalMeshAndPointCloud();
 
     //Reads and verifies the ROS parameters.
     bool ReadLaunchParams(ros::NodeHandle & nodeHandle);  
@@ -193,7 +194,7 @@ protected:
     float m_fNearLengths;
 
     //voxel resolution
-    pcl::PointXYZ m_oVoxelRes;
+    pcl::PointXYZ m_oVoxelResolution;
 
     //frame sampling
     int m_iFrameSmpNum;

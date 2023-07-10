@@ -22,6 +22,21 @@ HashBlock::~HashBlock() {}
 
 
 /**
+ * @brief set voxel resolution and related params
+ * @param oLength - 3d size of a voxel
+*/
+void HashBlock::SetResolution(pcl::PointXYZ & oLength) { 
+	constexpr int voxel_num_per_block = 16;
+	m_vVoxelNumsPerBlock = Eigen::Vector3i(voxel_num_per_block, voxel_num_per_block, voxel_num_per_block);
+	m_iVoxelFullNumPerBlock = m_vVoxelNumsPerBlock.prod();
+	m_vVoxelSize = oLength.getVector3fMap(); 
+	m_vVoxelSizeInverse = m_vVoxelSize.cwiseInverse();
+	m_vBlockSize = m_vVoxelSize.cwiseProduct(m_vVoxelNumsPerBlock.cast<float>());
+	m_vBlockSizeInverse = m_vBlockSize.cwiseInverse();
+}
+
+
+/**
  * @brief get hash pos according to point position
  * @param oPoint point with position
  * @return oPos - output block pos
