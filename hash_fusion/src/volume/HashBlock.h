@@ -52,6 +52,8 @@ public:
     HashBlock();
     ~HashBlock();
 
+    void InitLog() override { std::cout << "Load HashBlock.." << std::endl; }
+
     // set the resolution of voxel
 	void SetResolution(pcl::PointXYZ & oLength);
 	// Set the strategy of fusion and remove dynamic points
@@ -64,11 +66,10 @@ public:
 	void VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vCloud) override;
 	void UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & vVolumeCloud, const bool bKeepVoxel = false) override;
 
+	void PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oPos) const override;
 
 	template<class PointType>
 	void PointBelongBlockPos(const PointType & oPoint, HashPos & oPos) const;
-	template<class PointType>
-	void PointBelongVoxelPos(const PointType & oPoint, HashPos & oPos) const;
 	template<class PointType>
     void PointBelongVoxelIndex(const PointType & oPoint, int & iIndex) const;
 };

@@ -11,12 +11,13 @@
 #include<memory>
 #include <visualization_msgs/MarkerArray.h>
 
+#include"volume/VolumeBase.h"
 #include"tools/VolumeUpdateStrategy.h"
 #include"tools/UnionSet.h"
 #include"tools/HashPos.h"
 
 // volume of surfels
-class HashVoxeler{
+class HashVoxeler : public VolumeBase {
 
 // center component
 protected:
@@ -84,6 +85,7 @@ public:
 	HashVoxeler();
 
 	~HashVoxeler();
+    void InitLog() override { std::cout << "Load HashVoxeler.." << std::endl; }
 
 	// get volume
 	
@@ -129,8 +131,7 @@ public:
 	void UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & vVolumeCloud, const bool bKeepVoxel = false);
 
 	// transfer the position
-	template<class PointType>
-	void PointBelongVoxelPos(const PointType & oPoint, HashPos & oPos);
+	void PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oPos) const override;
 
 	template<class PointType>
 	static HashPos GetVoxelPos(const PointType & oPoint, const pcl::PointXYZ & oVoxelLength);

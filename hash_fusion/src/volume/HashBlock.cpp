@@ -57,15 +57,12 @@ template void HashBlock::PointBelongBlockPos(const pcl::PointNormal & oPoint, Ha
  * @param oPoint point with position
  * @return oPos - output block pos
 */
-template<class PointType>
-void HashBlock::PointBelongVoxelPos(const PointType & oPoint, HashPos & oVoxelPos) const {
+void HashBlock::PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oVoxelPos) const {
     
     oVoxelPos.x = floor(oPoint.x * m_vVoxelSizeInverse.x());
 	oVoxelPos.y = floor(oPoint.y * m_vVoxelSizeInverse.y());
 	oVoxelPos.z = floor(oPoint.z * m_vVoxelSizeInverse.z());
 }
-template void HashBlock::PointBelongVoxelPos(const pcl::PointXYZ & oPoint, HashPos & oVoxelPos) const;
-template void HashBlock::PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oVoxelPos) const;
 
 
 /**

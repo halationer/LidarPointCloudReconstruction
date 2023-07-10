@@ -264,6 +264,12 @@ Others: none
 *************************************************/
 bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
+	// volume type
+	int iVolumeType;
+	nodeHandle.param("volume_type", iVolumeType, static_cast<int>(VolumeBase::VolumeType::HASH_VOXELER));
+	m_pVolume.reset(VolumeBase::CreateVolume(static_cast<VolumeBase::VolumeType>(iVolumeType)));
+	m_pVolume->InitLog();
+
  	//output file name
  	nodeHandle.param("file_output_path", m_sFileHead, std::string());
 	m_bOutputFiles = !m_sFileHead.empty();
@@ -315,12 +321,12 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
   	nodeHandle.param("voxel_cube_size", fCubeSize, 0.5f);
  	m_oVoxelResolution = pcl::PointXYZ(fCubeSize, fCubeSize, fCubeSize);
 	// m_oVoxeler.SetResolution(m_oVoxelResolution);
-	m_oBlock.SetResolution(m_oVoxelResolution);
+	m_pVolume->SetResolution(m_oVoxelResolution);
 
 	int eStrategyType;
   	nodeHandle.param("strategy_type", eStrategyType, static_cast<int>(eEmptyStrategy));
 	// m_oVoxeler.SetStrategy(static_cast<vus>(eStrategyType));
-	m_oBlock.SetStrategy(static_cast<vus>(eStrategyType));
+	m_pVolume->SetStrategy(static_cast<vus>(eStrategyType));
 
 	//use surfel fusion?
 	nodeHandle.param("use_surfel_fusion", m_bSurfelFusion, true);
@@ -921,6 +927,7 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	//*/
 }
 
+// TODO: Start from this, 主要包含 传入SigedDistance能力，传入MC能力，构建连通集的能力
 
 /*************************************************
 Function: SlideModeling
@@ -1113,7 +1120,7 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 		
 		pcl::PointCloud<pcl::PointNormal> temp;
 		// m_oVoxeler.GetVolumeCloud(temp);
-		m_oBlock.GetVolumeCloud(temp);
+		m_pVolume->GetVolumeCloud(temp);
 		vector<float> confidence(temp.size());
 		constexpr float confidence_scalar = 0.8f;
 		for(int i = 0; i < confidence.size(); ++i) {
@@ -1146,7 +1153,7 @@ void FramesFusion::UpdateOneFrame(const pcl::PointNormal& oViewPoint, pcl::Point
 	//*/
 
 	// m_oVoxeler.VoxelizePointsAndFusion(vFilteredMeasurementCloud);
-	m_oBlock.VoxelizePointsAndFusion(vFilteredMeasurementCloud);
+	m_pVolume->VoxelizePointsAndFusion(vFilteredMeasurementCloud);
 	m_vMapPCN += vFilteredMeasurementCloud;
 }
   
@@ -1478,7 +1485,7 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 		// 记录测量点从属的voxel
 		HashPos oPos;
 		// m_oVoxeler.PointBelongVoxelPos(oCurrentPoint, oPos);
-		m_oBlock.PointBelongVoxelPos(oCurrentPoint, oPos);
+		m_pVolume->PointBelongVoxelPos(oCurrentPoint, oPos);
 		pos_record.emplace(oPos);
 
 
@@ -1543,7 +1550,7 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 	// 将多帧重建结果点云拷贝到Buffer中，并筛选范围内的点
 	pcl::PointCloud<pcl::PointNormal> vVolumeCloud;
 	// m_oVoxeler.GetVolumeCloud(vVolumeCloud);
-	m_oBlock.GetVolumeCloud(vVolumeCloud);
+	m_pVolume->GetVolumeCloud(vVolumeCloud);
 	pcl::PointXYZ oBase(oLidarPos.x, oLidarPos.y, oLidarPos.z);
 	NearbyClouds(vVolumeCloud, oBase, vPointCloudBuffer, max_depth);
 
@@ -1613,7 +1620,7 @@ void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<
 
 			HashPos oPos;
 			// m_oVoxeler.PointBelongVoxelPos(oCurrentPoint, oPos);
-			m_oBlock.PointBelongVoxelPos(oCurrentPoint, oPos);
+			m_pVolume->PointBelongVoxelPos(oCurrentPoint, oPos);
 
 			if( pos_record.count(oPos) ) { // 避免自穿透现象
 				associated_feature[i] = -1.0f;
@@ -1653,7 +1660,7 @@ void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud
 
 	// 更新volume
 	// m_oVoxeler.UpdateConflictResult(vPointCloudBuffer, m_bDynamicDebug || m_bKeepVoxel);
-	m_oBlock.UpdateConflictResult(vPointCloudBuffer, m_bDynamicDebug || m_bKeepVoxel);
+	m_pVolume->UpdateConflictResult(vPointCloudBuffer, m_bDynamicDebug || m_bKeepVoxel);
 
 	// output connect
 	// pcl::PointCloud<pcl::PointNormal> vMaxConnected;

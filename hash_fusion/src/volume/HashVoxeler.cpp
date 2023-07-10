@@ -716,15 +716,12 @@ Input: oPoint - the input point to be judged
 Output: oPos - which voxel pos does the point belong
 Function: calculate the voxel pos the point belongs
 ========================================*/
-template<class PointType>
-void HashVoxeler::PointBelongVoxelPos(const PointType & oPoint, HashPos & oPos) {
+void HashVoxeler::PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oPos) const {
 	
 	oPos.x = floor(oPoint.x / m_oVoxelLength.x);
 	oPos.y = floor(oPoint.y / m_oVoxelLength.y);
 	oPos.z = floor(oPoint.z / m_oVoxelLength.z);
 }
-template void HashVoxeler::PointBelongVoxelPos(const pcl::PointXYZ & oPoint, HashPos & oPos);
-template void HashVoxeler::PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oPos);
 
 
 /*=======================================

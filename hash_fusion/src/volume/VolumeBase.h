@@ -25,6 +25,7 @@ struct VoxelBase {
 	bool bIsOccupied;
 };
 
+
 // class VoxelIteratorBase {
 // public:
 //     VoxelBase& get() { return ptr; }
@@ -34,13 +35,22 @@ struct VoxelBase {
 //     VoxelBase* ptr;
 // }
 
-// volume of surfels
+// volume base class (abstract)
 class VolumeBase{
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	
 	typedef std::unordered_map<HashPos, pcl::PointNormal, HashFunc> HashVolume;
+	
+	enum VolumeType {
+		HASH_VOXELER = 0,
+		HASH_BLOCK
+	};
+
+	static VolumeBase* CreateVolume(enum VolumeType volumeType);
+
+	virtual void InitLog() = 0;
 
 	// update vehicle move status
 	virtual void UpdateLidarCenter(Eigen::Vector3f& oLidarCenter){}
@@ -88,8 +98,7 @@ public:
 
 	// transfer the position 
 	// !!! notice : template should not be virtual
-	// template<class PointType>
-	// virtual void PointBelongVoxelPos(const PointType & oPoint, HashPos & oPos){}
+	virtual void PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oPos) const = 0;
 	// template<class PointType>
 	// virtual static HashPos GetVoxelPos(const PointType & oPoint, const pcl::PointXYZ & oVoxelLength){}
 

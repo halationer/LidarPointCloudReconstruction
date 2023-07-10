@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <mutex>
+#include <memory>
 
 #include <thread>
 
@@ -30,6 +31,7 @@
 #include "SignedDistance.h"
 #include "CIsoSurface.h"
 #include "MeshOperation.h"
+#include "volume/VolumeBase.h"
 #include "volume/HashBlock.h"
 #include "volume/HashVoxeler.h"
 #include "tools/CloudVector.h"
@@ -261,7 +263,7 @@ protected:
     // std::mutex m_mNewPointMutex;
     // pcl::PointCloud<pcl::PointNormal> m_vNewPoints; //
     HashVoxeler m_oVoxeler;
-    HashBlock m_oBlock;
+    std::unique_ptr<VolumeBase> m_pVolume;
 
     // meshing params
 	int m_iKeepTime;
