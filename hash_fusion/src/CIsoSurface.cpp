@@ -333,7 +333,7 @@ template <class T> CIsoSurface<T>::~CIsoSurface()
 }
 
 template <class T> 
-void CIsoSurface<T>::GenerateSurface(const std::unordered_map<HashPos, T, HashFunc> & ptScalarField, const HashVoxeler::HashVolume & vVolume, T tIsoLevel, float fCellLengthX, float fCellLengthY, float fCellLengthZ) {
+void CIsoSurface<T>::GenerateSurface(const std::unordered_map<HashPos, T, HashFunc> & ptScalarField, const VolumeBase::HashVolume & vVolume, T tIsoLevel, float fCellLengthX, float fCellLengthY, float fCellLengthZ) {
 	
 	if (m_bValidSurface)
 		DeleteSurface();
@@ -351,7 +351,7 @@ void CIsoSurface<T>::GenerateSurface(const std::unordered_map<HashPos, T, HashFu
 		// vertices which are below the isolevel.
 		unsigned int tableIndex = 0;
 		std::vector<HashPos> vCornerPoses;
-		HashVoxeler::GetCornerPoses(oPos, vCornerPoses);
+		VolumeBase::GetCornerPoses(oPos, vCornerPoses);
 		int iNowBit = 1;
 		for(auto && oCornerPos : vCornerPoses) {
 			if (m_ptScalarField[oCornerPos] < m_tIsoLevel)

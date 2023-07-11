@@ -17,7 +17,7 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/Vertices.h>
 #include "Vectors.h"
-#include "volume/HashVoxeler.h"
+#include "volume/VolumeBase.h"
 
 struct POINT3DID {
 	unsigned int newID;
@@ -56,7 +56,7 @@ public:
 	
 	// Generates the isosurface from the scalar field contained in the
 	// buffer ptScalarField[].
-	void GenerateSurface(const std::unordered_map<HashPos, T, HashFunc> & ptScalarField, const HashVoxeler::HashVolume & vVolume, T tIsoLevel, float fCellLengthX, float fCellLengthY, float fCellLengthZ);
+	void GenerateSurface(const std::unordered_map<HashPos, T, HashFunc> & ptScalarField, const VolumeBase::HashVolume & vVolume, T tIsoLevel, float fCellLengthX, float fCellLengthY, float fCellLengthZ);
 
 
 	// Returns true if a valid surface has been generated.

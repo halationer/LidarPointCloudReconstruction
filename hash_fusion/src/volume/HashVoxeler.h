@@ -86,6 +86,7 @@ public:
 
 	~HashVoxeler();
     void InitLog() override { std::cout << "Load HashVoxeler.." << std::endl; }
+	Eigen::Vector3f GetVoxelLength() const override {return m_oVoxelLength.getVector3fMap();}
 
 	// get volume
 	

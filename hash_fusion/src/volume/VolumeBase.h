@@ -49,8 +49,11 @@ public:
 	};
 
 	static VolumeBase* CreateVolume(enum VolumeType volumeType);
+	static void GetCornerPoses(const HashPos & oVoxel, std::vector<HashPos> & vCornerPoses);
+	static void HashPosTo3DPos(const HashPos & oCornerPos, const Eigen::Vector3f & oVoxelLength, Eigen::Vector3f & oCorner3DPos);
 
 	virtual void InitLog() = 0;
+	virtual Eigen::Vector3f GetVoxelLength() const = 0;
 
 	// update vehicle move status
 	virtual void UpdateLidarCenter(Eigen::Vector3f& oLidarCenter){}
@@ -107,6 +110,7 @@ public:
 	// virtual static void GetCornerPoses(const HashPos & oVoxelPos, std::vector<HashPos> & vCornerPoses){}
 	// virtual static void HashPosTo3DPos(const HashPos & oCornerPos, const pcl::PointXYZ & oVoxelLength, Eigen::Vector3f & oCorner3DPos){}
 	virtual pcl::PointXYZ HashPosTo3DPos(const HashPos & oPos){}
+
 };
 
 

@@ -53,6 +53,7 @@ public:
     ~HashBlock();
 
     void InitLog() override { std::cout << "Load HashBlock.." << std::endl; }
+    Eigen::Vector3f GetVoxelLength() const override { return m_vVoxelSize; }
 
     // set the resolution of voxel
 	void SetResolution(pcl::PointXYZ & oLength);

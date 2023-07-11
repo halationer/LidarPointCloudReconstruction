@@ -217,7 +217,7 @@ std::unordered_map<HashPos, float, HashFunc> & PreConvSD::PreConvGlance(HashVoxe
 	oConvexHullOPer.ComputeAllFaceParams(vVolumeToMeshing, vVoxelNormalPara);
 
 	//output
-	return PlanDistance(vVolumeToMeshing, vVoxelNormalPara, oVoxeler.m_oVoxelLength);
+	return PlanDistance(vVolumeToMeshing, vVoxelNormalPara, oVoxeler.GetVoxelLength());
 
 }
 
