@@ -261,8 +261,7 @@ protected:
 
     // add for hash fusion
     // std::mutex m_mNewPointMutex;
-    // pcl::PointCloud<pcl::PointNormal> m_vNewPoints; //
-    HashVoxeler m_oVoxeler;
+    // pcl::PointCloud<pcl::PointNormal> m_vNewPoints;
     std::unique_ptr<VolumeBase> m_pVolume;
 
     // meshing params
