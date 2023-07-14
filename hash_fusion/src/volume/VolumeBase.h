@@ -26,15 +26,6 @@ struct VoxelBase {
 };
 
 
-// class VoxelIteratorBase {
-// public:
-//     VoxelBase& get() { return ptr; }
-//     virtual VoxelIteratorBase& operator++() = 0;
-//     virtual VoxelIteratorBase  operator++(VoxelIteratorBase&) = 0;
-// private:
-//     VoxelBase* ptr;
-// }
-
 // volume base class (abstract)
 class VolumeBase{
 
@@ -47,17 +38,32 @@ public:
 		HASH_VOXELER = 0,
 		HASH_BLOCK
 	};
+	
 
-	static VolumeBase* CreateVolume(enum VolumeType volumeType);
-	static void GetCornerPoses(const HashPos & oVoxel, std::vector<HashPos> & vCornerPoses);
-	static void HashPosTo3DPos(const HashPos & oCornerPos, const Eigen::Vector3f & oVoxelLength, Eigen::Vector3f & oCorner3DPos);
-
-	virtual void InitLog() = 0;
+	// abstract functions
+	virtual void InitLog() const = 0;
 	virtual Eigen::Vector3f GetVoxelLength() const = 0;
-
+	// voxelize the points and fuse them
+	virtual void VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vCloud) = 0;
+	// decrease the confidence of dynamic point and record conflict
+	virtual void UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & vVolumeCloud, const bool bKeepVoxel = false) = 0;
+	// transfer the position 
+	virtual void PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oPos) const = 0;
 	// update vehicle move status
 	virtual void UpdateLidarCenter(Eigen::Vector3f& oLidarCenter){}
 
+
+	// implemented functions
+	static VolumeBase* CreateVolume(enum VolumeType volumeType);
+	static void GetCornerPoses(const HashPos & oVoxel, std::vector<HashPos> & vCornerPoses);
+	static void HashPosTo3DPos(const HashPos & oCornerPos, const Eigen::Vector3f & oVoxelLength, Eigen::Vector3f & oCorner3DPos);
+	virtual pcl::PointXYZ HashPosTo3DPos(const HashPos & oPos) const {
+        return pcl::PointXYZ(oPos.x * GetVoxelLength().x(), oPos.y * GetVoxelLength().y(), oPos.z * GetVoxelLength().z());
+	}
+	virtual void DrawVolume(const HashVolume & vVolume, visualization_msgs::MarkerArray & oOutputVolume);
+
+
+	// optional functions
 	// get volume
 	virtual void GetAllVolume(HashVolume & vVolumeCopy) const{}
 	virtual void GetStaticVolume(HashVolume & vVolumeCopy) const{}
@@ -75,12 +81,9 @@ public:
 	virtual void GetRecentHighDistributionVolume(HashVolume & vVolumeCopy, const int iRecentTime){}
 	virtual void GetLocalConnectVolume(HashVolume & vVolumeCopy, const Eigen::Vector3f vCenter, const float fRadius, const int iConnectMinSize){}
 
-	virtual void DrawVolume(const HashVolume & vVolume, visualization_msgs::MarkerArray & oOutputVolume){}
-
 	// build union set
 	virtual void RebuildUnionSetAll(const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength){}
 	virtual void RebuildUnionSet(const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength){}
-	virtual void RebuildUnionSetCore(HashVolume & vVolumeCopy, const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength){}
 	virtual void DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet){}
 	virtual void UpdateUnionConflict(const int iRemoveSetSizeRef, const float fRemoveTimeRef){}
 
@@ -92,25 +95,6 @@ public:
 	virtual void SetStrategy(enum vus eStrategy) {}
 	// Copy strategy from another
 	virtual void GetStrategy(VolumeBase& oVolume) {}
-
-	// voxelize the points and fuse them
-	virtual void VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vCloud) = 0;
-
-	// decrease the confidence of dynamic point and record conflict
-	virtual void UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & vVolumeCloud, const bool bKeepVoxel = false) = 0;
-
-	// transfer the position 
-	// !!! notice : template should not be virtual
-	virtual void PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oPos) const = 0;
-	// template<class PointType>
-	// virtual static HashPos GetVoxelPos(const PointType & oPoint, const pcl::PointXYZ & oVoxelLength){}
-
-	// calcualte corner poses
-	// !!! notice : template should not be static
-	// virtual static void GetCornerPoses(const HashPos & oVoxelPos, std::vector<HashPos> & vCornerPoses){}
-	// virtual static void HashPosTo3DPos(const HashPos & oCornerPos, const pcl::PointXYZ & oVoxelLength, Eigen::Vector3f & oCorner3DPos){}
-	virtual pcl::PointXYZ HashPosTo3DPos(const HashPos & oPos){}
-
 };
 
 

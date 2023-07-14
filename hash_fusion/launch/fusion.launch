@@ -83,7 +83,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="center_based_recon" default="false" />
     <arg name="dynamic_debug" default="false" />
     <arg name="keep_voxel" default="true" />
-    <arg name="recon_range" default="30.0" /> <!-- 80 for show -->
+    <arg name="recon_range" default="80.0" /> <!-- 80 for show -->
     
 
     <!-- frames_fusion node in frames_fusion pkg-->

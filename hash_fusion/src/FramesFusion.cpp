@@ -120,7 +120,6 @@ void FramesFusion::SaveFinalMeshAndPointCloud() {
 
 	std::cout << "Please do not force closing the programe, the process is writing output PLY file." << std::endl;
 	std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
-	std::cout << output::format_purple << "The output file is " << sOutPCNormalFileName.str() << output::format_white << std::endl;
 
 	if(m_bUseAdditionalPoints) {
 	
@@ -136,9 +135,6 @@ void FramesFusion::SaveFinalMeshAndPointCloud() {
 	}
 
 	HashVoxeler::HashVolume vVolumeCopy;
-	// m_pVolume->GetRecentConnectVolume(vVolumeCopy, m_iKeepTime, m_iRemoveSizeRef);
-	// m_pVolume->GetAllVolume(vVolumeCopy);
-
 	SignedDistance oSDF(-1, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
 	std::unordered_map<HashPos, float, HashFunc> vSignedDis;
 	if(m_bUseUnionSetConnection) vSignedDis = oSDF.ConvedGlanceAllUnion(*m_pVolume, m_iRemoveSizeRef);
@@ -160,6 +156,7 @@ void FramesFusion::SaveFinalMeshAndPointCloud() {
 		std::stringstream sOutputPath;
 		sOutputPath << m_sFileHead << "final_mesh.ply";
 		pcl::io::savePLYFileBinary(sOutputPath.str(), oResultMesh);
+		std::cout << output::format_purple << "The output file is " << sOutputPath.str() << output::format_white << std::endl;
 	}
 	// output mesh dynamic
 	{
@@ -179,6 +176,7 @@ void FramesFusion::SaveFinalMeshAndPointCloud() {
 		std::stringstream sOutputPath;
 		sOutputPath << m_sFileHead << "final_mesh_worm.ply";
 		pcl::io::savePLYFileBinary(sOutputPath.str(), oResultMesh);
+		std::cout << output::format_purple << "The output file is " << sOutputPath.str() << output::format_white << std::endl;
 	}
 
 	// output pc
@@ -246,6 +244,7 @@ void FramesFusion::SaveFinalMeshAndPointCloud() {
 	pcl::io::savePLYFileBinary(sOutPCNormalFileName.str(), pc);
 	pcl::io::savePLYFileBinary(sOutPCNormalFileName.str()+".static.ply", static_pc);
 	pcl::io::savePLYFileBinary(sOutPCNormalFileName.str()+".dynamic.ply", dynamic_pc);
+	std::cout << output::format_purple << "The output file is " << sOutPCNormalFileName.str() << output::format_white << std::endl;
 
 	/** 
 		if the point cloud has too many points, ros may not wait it to save.
@@ -975,28 +974,34 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const Eigen::Ve
 	SignedDistance oSDer(m_iKeepTime, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
 	//compute signed distance based on centroids and its normals within voxels
 	std::unordered_map<HashPos, float, HashFunc> vSignedDis;
-	visualization_msgs::MarkerArray static_expand_marker;
-	std::string sTopicName = "/static_expand";
+	// std::unique_ptr<visualization_msgs::MarkerArray> pStaticDebug(new visualization_msgs::MarkerArray);
+	std::unique_ptr<visualization_msgs::MarkerArray> pStaticDebug(nullptr);
+	// choose which mode to use
 	if(m_bDynamicDebug) {
 		vSignedDis = oSDer.DebugGlance(*m_pVolume);
 	}
 	else if(m_bCenterBasedRecon) {
-		vSignedDis = oSDer.CenterBasedGlance(*m_pVolume, vCenter, m_fNearLengths, m_iRemoveSizeRef, &static_expand_marker);
+		vSignedDis = oSDer.CenterBasedGlance(*m_pVolume, vCenter, m_fNearLengths, m_iRemoveSizeRef, pStaticDebug.get());
 	}
 	else if(!m_bUseUnionSetConnection) {
-		vSignedDis = oSDer.ConvedGlance(*m_pVolume, &static_expand_marker);
+		vSignedDis = oSDer.ConvedGlance(*m_pVolume, pStaticDebug.get());
 	}
 	else if(m_bOnlyMaxUnionSet) {
-		vSignedDis = oSDer.ConvedGlanceOnlyMaxUnion(*m_pVolume, &static_expand_marker);
+		vSignedDis = oSDer.ConvedGlanceOnlyMaxUnion(*m_pVolume, pStaticDebug.get());
 	}
 	else {
-		vSignedDis = oSDer.ConvedGlanceLargeUnion(*m_pVolume, m_iRemoveSizeRef, &static_expand_marker);
+		vSignedDis = oSDer.ConvedGlanceLargeUnion(*m_pVolume, m_iRemoveSizeRef, pStaticDebug.get());
 	}
-	if(m_vDebugPublishers.count(sTopicName) == 0)
-	{
-		m_vDebugPublishers[sTopicName] = m_oNodeHandle.advertise<visualization_msgs::MarkerArray>(sTopicName, 1, true);
+	// publish intermediate result
+	if(pStaticDebug != nullptr) {
+		std::string sTopicName = "/static_expand";
+		if(m_vDebugPublishers.count(sTopicName) == 0)
+		{
+			m_vDebugPublishers[sTopicName] = m_oNodeHandle.advertise<visualization_msgs::MarkerArray>(sTopicName, 1, true);
+		}
+		m_vDebugPublishers[sTopicName].publish(*pStaticDebug);
 	}
-	m_vDebugPublishers[sTopicName].publish(static_expand_marker);
+
 	timer.DebugTime("4_main_conv");
 
 	//marching cuber

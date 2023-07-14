@@ -85,7 +85,7 @@ public:
 	HashVoxeler();
 
 	~HashVoxeler();
-    void InitLog() override { std::cout << "Load HashVoxeler.." << std::endl; }
+    void InitLog() const override { std::cout << "Load HashVoxeler.." << std::endl; }
 	Eigen::Vector3f GetVoxelLength() const override {return m_oVoxelLength.getVector3fMap();}
 
 	// get volume
@@ -140,7 +140,7 @@ public:
 	// calcualte corner poses
 	static void GetCornerPoses(const HashPos & oVoxelPos, std::vector<HashPos> & vCornerPoses);
 	static void HashPosTo3DPos(const HashPos & oCornerPos, const pcl::PointXYZ & oVoxelLength, Eigen::Vector3f & oCorner3DPos);
-	pcl::PointXYZ HashPosTo3DPos(const HashPos & oPos);
+	pcl::PointXYZ HashPosTo3DPos(const HashPos & oPos) const;
 };
 
 

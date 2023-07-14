@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "HashPos.h"
+#include "tools/HashPos.h"
 
 // Union-Find Set
 class UnionSet {

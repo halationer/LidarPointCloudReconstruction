@@ -892,12 +892,12 @@ void HashVoxeler::HashPosTo3DPos(const HashPos & oCornerPos, const pcl::PointXYZ
 
 
 /*=======================================
-HashPosTo3DPos(static)
+HashPosTo3DPos
 Input: 	oPos - the 3d index of a voxel cube corner
 Output: pcl::PointXYZ - the 3d gt position of the corner point
 Function: transfer a HashPos variable to 3d gt position (pcl styled)
 ========================================*/
-pcl::PointXYZ HashVoxeler::HashPosTo3DPos(const HashPos & oPos) {
+pcl::PointXYZ HashVoxeler::HashPosTo3DPos(const HashPos & oPos) const {
 
 	return pcl::PointXYZ(oPos.x * m_oVoxelLength.x, oPos.y * m_oVoxelLength.y, oPos.z * m_oVoxelLength.z);
 }

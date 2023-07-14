@@ -1,9 +1,10 @@
 #include <memory>
 #include <shared_mutex>
 
-#include "HashBlock.h"
+#include "volume/HashBlock.h"
 #include "Fusion.h"
 #include "SignedDistance.h"
+#include "tools/CubeIntersection.h"
 
 /**
  * @brief init default params
@@ -30,6 +31,7 @@ void HashBlock::SetResolution(pcl::PointXYZ & oLength) {
 	m_vVoxelNumsPerBlock = Eigen::Vector3i(voxel_num_per_block, voxel_num_per_block, voxel_num_per_block);
 	m_iVoxelFullNumPerBlock = m_vVoxelNumsPerBlock.prod();
 	m_vVoxelSize = oLength.getVector3fMap(); 
+	m_vVoxelHalfSize = m_vVoxelSize * 0.5f;
 	m_vVoxelSizeInverse = m_vVoxelSize.cwiseInverse();
 	m_vBlockSize = m_vVoxelSize.cwiseProduct(m_vVoxelNumsPerBlock.cast<float>());
 	m_vBlockSizeInverse = m_vBlockSize.cwiseInverse();
@@ -87,6 +89,21 @@ void HashBlock::PointBelongVoxelIndex(const PointType & oPoint, int & iIndex) co
 }
 template void HashBlock::PointBelongVoxelIndex(const pcl::PointXYZ & oPoint, int & iIndex) const;
 template void HashBlock::PointBelongVoxelIndex(const pcl::PointNormal & oPoint, int & iIndex) const;
+
+
+
+template<class PointType>
+void HashBlock::PointBelongVoxelIndex(const PointType & oPoint, HashPos & oBlockPos, int & iVoxelIndex) const {
+	
+	PointBelongBlockPos(oPoint, oBlockPos);
+	Eigen::Vector3f vPointOffset(oBlockPos.x, oBlockPos.y, oBlockPos.z);
+	vPointOffset = vPointOffset.cwiseProduct(-m_vBlockSize);
+	vPointOffset += oPoint.getVector3fMap();
+	Eigen::Vector3i vPointPos = vPointOffset.cwiseProduct(m_vVoxelSizeInverse).array().floor().cast<int>();
+	iVoxelIndex = (vPointPos.z() * m_vVoxelNumsPerBlock.y() + vPointPos.y()) * m_vVoxelNumsPerBlock.x() + vPointPos.x();
+}
+template void HashBlock::PointBelongVoxelIndex(const pcl::PointXYZ & oPoint, HashPos & oBlockPos, int & iVoxelIndex) const;
+template void HashBlock::PointBelongVoxelIndex(const pcl::PointNormal & oPoint, HashPos & oBlockPos, int & iVoxelIndex) const;
 
 
 /**
@@ -194,6 +211,27 @@ void HashBlock::UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & v
 
 
 /**
+ * @brief get the whole volume include both dynamic and static voxels
+ * @return vVolumeCopy - the output volume result
+*/
+void HashBlock::GetAllVolume(HashVolume & vVolumeCopy) const {
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+	
+	for(auto && [oBlockPos, vBlock] : m_vBlockVolume) {
+		for(auto && vVoxel : vBlock) {
+			if(vVoxel.bIsOccupied) {
+				HashPos oVoxelPos;
+				PointBelongVoxelPos(vVoxel.point, oVoxelPos);
+				vVolumeCopy[oVoxelPos] = vVoxel.point;
+			}
+		}
+	}
+}
+
+
+/**
  * @brief get the whole volume without dynamic voxels
  * @return vVolumeCopy - the output volume result
 */
@@ -202,11 +240,12 @@ void HashBlock::GetStaticVolume(HashVolume & vVolumeCopy) const {
 	vVolumeCopy.clear();
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 	for(auto && [oBlockPos, vBlock] : m_vBlockVolume) {
-		for(auto && vVoxel : vBlock) {
-			if(vVoxel.bIsOccupied) {
+		for(auto && oVoxel : vBlock) {
+			if(oVoxel.bIsOccupied
+				&& m_pUpdateStrategy->IsStatic(oVoxel.point.data_c[1])) {
 				HashPos oVoxelPos;
-				PointBelongVoxelPos(vVoxel.point, oVoxelPos);
-				vVolumeCopy[oVoxelPos] = vVoxel.point;
+				PointBelongVoxelPos(oVoxel.point, oVoxelPos);
+				vVolumeCopy[oVoxelPos] = oVoxel.point;
 			}
 		}
 	}
@@ -227,5 +266,374 @@ void HashBlock::GetVolumeCloud(pcl::PointCloud<pcl::PointNormal> & vVolumeCloud)
 				vVolumeCloud.push_back(vVoxel.point);
 			}
 		}
+	}
+}
+
+
+/**
+ * @brief get recent & static voxels in volume
+ * @param iRecentTime - how long (second) the recent time is 
+ * @return vVolumeCopy - the return volume
+*/
+void HashBlock::GetRecentVolume(HashVolume & vVolumeCopy, const int iRecentTime) const {
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+
+	for(auto && [oBlockPos, oBlock] : m_vBlockVolume) {
+		for(auto && oVoxel : oBlock) {
+
+			if(oVoxel.bIsOccupied
+				&& m_iFrameCount - oVoxel.point.data_c[2] <= (uint32_t)iRecentTime 
+				&& m_pUpdateStrategy->IsStatic(oVoxel.point.data_c[1])) {
+
+					HashPos oPos;
+					PointBelongVoxelPos(oVoxel.point, oPos);
+					vVolumeCopy[oPos] = oVoxel.point;
+			}
+		}
+	}
+}
+
+
+/**
+ * @brief get recent & static & connected voxels in volume
+ * @param iRecentTime how long (second) the recent time is
+ * @param iConnectMinSize min connected set size of static voxel set
+ * @return vVolumeCopy - the return volume
+*/
+void HashBlock::GetRecentConnectVolume(HashVolume & vVolumeCopy, const int iRecentTime, const int iConnectMinSize) {
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+	for(auto && [oBlockPos, oBlock] : m_vBlockVolume) {
+		for(auto && oVoxel : oBlock) {
+
+			HashPos oPos;
+			PointBelongVoxelPos(oVoxel.point, oPos);
+
+			if(oVoxel.bIsOccupied
+				&& m_iFrameCount - oVoxel.point.data_c[2] <= (uint32_t)iRecentTime 
+				&& m_pUpdateStrategy->IsStatic(oVoxel.point.data_c[1])
+				&& m_oUnionSet.GetSetSize(oPos) > iConnectMinSize) {
+
+					vVolumeCopy[oPos] = oVoxel.point;
+			}
+		}
+	}
+}
+
+
+/**
+ * @brief get static & connected voxels in volume
+ * @param iRecentTime - how long (second) the recent time is 
+ * @param iConnectMinSize min connected set size of static voxel set
+ * @return vVolumeCopy - the return volume
+*/
+void HashBlock::GetAllConnectVolume(HashVolume & vVolumeCopy, const int iConnectMinSize) {
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+	for(auto && [oBlockPos, oBlock] : m_vBlockVolume) {
+		for(auto && oVoxel : oBlock) {
+
+			HashPos oPos;
+			PointBelongVoxelPos(oVoxel.point, oPos);
+
+			if(oVoxel.bIsOccupied
+				&& m_pUpdateStrategy->IsStatic(oVoxel.point.data_c[1])
+				&& m_oUnionSet.GetSetSize(oPos) > iConnectMinSize) {
+
+					vVolumeCopy[oPos] = oVoxel.point;
+			}
+		}
+	}
+}
+
+
+/**
+ * @brief get local area & static voxels in volume
+ * @param vCenter - center position of the area
+ * @param fRadius - radius of the area
+*/
+void HashBlock::GetLocalVolume(HashVolume & vVolumeCopy, const Eigen::Vector3f vCenter, const float fRadius) const {
+
+	vVolumeCopy.clear();
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+
+	for(auto && [oBlockPos, oBlock] : m_vBlockVolume) {
+		for(auto && oVoxel : oBlock) {
+
+			HashPos oPos;
+			PointBelongVoxelPos(oVoxel.point, oPos);
+
+			Eigen::Vector3f vCurrent(oPos.x, oPos.y, oPos.z);
+			if(oVoxel.bIsOccupied
+				&& (vCurrent - vCenter).norm() <= fRadius 
+				&& m_pUpdateStrategy->IsStatic(oVoxel.point.data_c[1]))
+				vVolumeCopy[oPos] = oVoxel.point;
+		}
+	}
+}
+
+
+/**
+ * @brief building union set of current local volume
+ * @param fStrictDotRef the threshold of normal similarity (larger)
+ * @param fSoftDotRef the threshold of normal similarity (smaller)
+ * @param fConfidenceLevelLength the scaling of confidence, larger means less confidence, due to different speed of vehicle, we should set this param.
+ * @return void, but m_oUnionSet is calculated
+*/
+void HashBlock::RebuildUnionSet(const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength) {
+
+	// copy avoid of block
+	HashVolume vVolumeCopy;
+	GetRecentVolume(vVolumeCopy, m_iRecentTimeToGetRadius);
+	
+	// get center and radius
+	Eigen::Vector3f vCenter(0, 0, 0);
+	for(auto && [oPos,_] : vVolumeCopy) {
+		Eigen::Vector3f vCurrent(oPos.x, oPos.y, oPos.z);
+		vCenter += vCurrent;
+	}
+	vCenter /= vVolumeCopy.size();
+	float fRadius = 0.0f;
+	for(auto && [oPos, _] : vVolumeCopy) {
+		Eigen::Vector3f vCurrent(oPos.x, oPos.y, oPos.z);
+		fRadius = max(fRadius, (vCurrent - vCenter).norm());
+	}
+	fRadius *= m_fRadiusExpandFactor;
+	GetLocalVolume(vVolumeCopy, vCenter, fRadius);
+
+	RebuildUnionSetCore(vVolumeCopy, fStrictDotRef, fSoftDotRef, fConfidenceLevelLength);
+}
+
+
+/**
+ * @brief building union set of the whole volume, usually for output
+ * @param fStrictDotRef the threshold of normal similarity (larger)
+ * @param fSoftDotRef the threshold of normal similarity (smaller)
+ * @param fConfidenceLevelLength the scaling of confidence, larger means less confidence, due to different speed of vehicle, we should set this param.
+ * @return void, but m_oUnionSet is calculated
+*/
+void HashBlock::RebuildUnionSetAll(const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength) {
+
+	HashVolume vVolumeCopy;
+	GetStaticVolume(vVolumeCopy);
+	RebuildUnionSetCore(vVolumeCopy, fStrictDotRef, fSoftDotRef, fConfidenceLevelLength);
+}
+
+
+/**
+ * @brief the core function of building union set of a volume
+ * @param vVolumeCopy the volume input
+ * @param fStrictDotRef the threshold of normal similarity (larger)
+ * @param fSoftDotRef the threshold of normal similarity (smaller)
+ * @param fConfidenceLevelLength the scaling of confidence, larger means less confidence, due to different speed of vehicle, we should set this param.
+ * @return void, but m_oUnionSet is calculated
+*/
+void HashBlock::RebuildUnionSetCore(HashVolume & vVolumeCopy, const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength) {
+
+	std::unique_lock<std::shared_mutex> union_write_lock(m_mUnionSetLock);
+	m_oUnionSet.Clear();
+	
+	std::unique_ptr<CubeIntersection> oIntersection(new CubeIntersection());
+	for(auto && [oPos, oPoint] : vVolumeCopy) {
+
+		// 置信度分级 0 - 4
+		int confidence = oPoint.data_n[3] / fConfidenceLevelLength;
+		if(confidence > 4) confidence = 4; // 4 is the max conf level
+		// 时间戳
+		int time_stamp = oPoint.data_c[2];
+		constexpr int time_diff_ref = 30;
+		
+		// 面片连通性 Ax + By + Cz + D = 0 (+法向限制）
+		float normal_dot_ref = m_pUpdateStrategy->IsSoftDynamic(oPoint.data_c[1]) ? fStrictDotRef : fSoftDotRef;
+		// 找到左下角角点
+		pcl::PointXYZ oPosPoint = HashPosTo3DPos(oPos);
+
+		// 计算面相交
+		oIntersection->Reset(oPoint, GetVoxelLength(), oPosPoint.getVector3fMap());
+		bool connect_neg[3] = {
+			oIntersection->CrossNegX() || confidence == 4,
+			oIntersection->CrossNegY() || confidence == 4,
+			oIntersection->CrossNegZ() || confidence == 4
+		};
+
+		// 遍历相交的邻体素
+		const Eigen::Vector3i vPosFix[3] = {
+			{-1, 0, 0},
+			{0, -1, 0},
+			{0, 0, -1}
+		};
+		for(int iAxisId = 0; iAxisId < 3; ++iAxisId) {
+
+			HashPos oNearPos(oPos.x + vPosFix[iAxisId].x(), oPos.y + vPosFix[iAxisId].y(), oPos.z + vPosFix[iAxisId].z());
+
+			if(connect_neg[iAxisId] && vVolumeCopy.count(oNearPos)) {
+
+				pcl::PointNormal& oNearPoint = vVolumeCopy[oNearPos];
+				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
+
+				// 物体若置信度相似，且更新时间相似，说明是连在一起的
+				int current_confidence = oNearPoint.data_n[3] / fConfidenceLevelLength;
+				if(current_confidence > 4) current_confidence = 4;
+				int current_time_stamp = oNearPoint.data_c[2];
+				bool confidence_and_time_connect = current_confidence == 4 && confidence == 4 && abs(current_time_stamp - time_stamp) < time_diff_ref;
+				if(confidence_and_time_connect) {
+					m_oUnionSet.Union(oPos, oNearPos);
+					continue;
+				}
+
+				// 法向相似性计算
+				Eigen::Vector3f vNearNormal = oNearPoint.getNormalVector3fMap();
+				float current_dot_ref = m_pUpdateStrategy->IsSoftDynamic(vVolumeCopy[oNearPos].data_c[1]) ? fStrictDotRef : normal_dot_ref;
+				bool normal_dot = vNearNormal.dot(oPoint.getNormalVector3fMap()) > current_dot_ref;
+				if(!normal_dot) continue;
+
+				// 相交计算
+				oIntersection->Reset(oNearPoint, GetVoxelLength(), oPosPoint.getVector3fMap());
+				bool cross_pos = oIntersection->CrossPos(iAxisId);
+				if(cross_pos) m_oUnionSet.Union(oPos, oNearPos);
+			}
+		}
+	}
+}
+
+
+/**
+ * @brief give a hash voxel pos, find the voxel
+ * @param oPos hash voxel pos
+ * @return the reference of the voxel
+*/
+VoxelBase* HashBlock::GetVoxelPtr(const HashPos & oPos) {
+
+	HashPos oBlockPos;
+	int iVoxelIndex;
+	pcl::PointXYZ oVoxelBase = HashPosTo3DPos(oPos);
+	oVoxelBase.x += m_vVoxelHalfSize.x();
+	oVoxelBase.y += m_vVoxelHalfSize.y();
+	oVoxelBase.z += m_vVoxelHalfSize.z();
+	PointBelongVoxelIndex(oVoxelBase, oBlockPos, iVoxelIndex);
+	if(m_vBlockVolume.count(oBlockPos) && m_vBlockVolume[oBlockPos].size() > iVoxelIndex)
+		return &m_vBlockVolume[oBlockPos][iVoxelIndex];
+	return nullptr;
+}
+
+
+/**
+ * @brief update union conflict, when connect judge a voxel dynamic, reduce the weight of voxel
+ * @param iRemoveSetSizeRef min size of static voxel connection set
+ * @param fRemoveTimeRef keep the just came in voxel, because they are always in a small connection set, whatever it is dynamic or not
+*/
+void HashBlock::UpdateUnionConflict(const int iRemoveSetSizeRef, const float fRemoveTimeRef) {
+
+	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
+	auto vVoxelSets = m_oUnionSet.GetSets();
+
+	std::unique_lock<std::shared_mutex> volume_write_lock(m_mVolumeLock);
+	for(auto && [oPos, oPosList] : vVoxelSets) {
+		if(oPosList.size() < iRemoveSetSizeRef && !m_oUnionSet.InMaxSet(oPos)) {
+			for(auto && oPosInSet : oPosList) {
+				
+				VoxelBase* oVoxel = GetVoxelPtr(oPosInSet);
+				if(!oVoxel->bIsOccupied) continue;
+
+				float& fTimeStamp = oVoxel->point.data_c[2];
+				if(m_iFrameCount - fTimeStamp > fRemoveTimeRef) {
+					float& fConflictTime = oVoxel->point.data_c[1];
+					bool bToDelete = m_pUpdateStrategy->Conflict(fConflictTime);
+				}
+			}
+		}
+	}
+}
+
+
+/**
+ * @brief publish the union set for visual and debug
+ * @return oOutputUnionSet - output marker msg to show different set of voxels
+*/
+void HashBlock::DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet) {
+
+	constexpr int remove_set_size_ref = 10;
+	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
+	auto vVoxelSets = m_oUnionSet.GetSets();
+
+	srand(6552);
+	int index = 10;
+
+	for(auto && [oPos, oPosList] : vVoxelSets) {
+
+		// if(oPosList.size() < remove_set_size_ref && !m_oUnionSet.InMaxSet(oPos)) {
+		if(oPosList.size() >= remove_set_size_ref) {
+
+			visualization_msgs::Marker oCurrentSet;
+			oCurrentSet.header.frame_id = "map";
+			oCurrentSet.header.stamp = ros::Time::now();
+			oCurrentSet.type = visualization_msgs::Marker::CUBE_LIST;
+			oCurrentSet.action = visualization_msgs::Marker::MODIFY;
+			oCurrentSet.id = index++; 
+
+			oCurrentSet.scale.x = GetVoxelLength().x();
+			oCurrentSet.scale.y = GetVoxelLength().y();
+			oCurrentSet.scale.z = GetVoxelLength().z();
+
+			oCurrentSet.pose.position.x = 0.0;
+			oCurrentSet.pose.position.y = 0.0;
+			oCurrentSet.pose.position.z = 0.0;
+
+			oCurrentSet.pose.orientation.x = 0.0;
+			oCurrentSet.pose.orientation.y = 0.0;
+			oCurrentSet.pose.orientation.z = 0.0;
+			oCurrentSet.pose.orientation.w = 1.0;
+
+			oCurrentSet.color.a = 1.0;
+			oCurrentSet.color.r = random() / (float)RAND_MAX;
+			oCurrentSet.color.g = random() / (float)RAND_MAX;
+			oCurrentSet.color.b = random() / (float)RAND_MAX;
+
+			for(auto && oPosInSet : oPosList) {
+
+				auto o3DPos = HashPosTo3DPos(oPosInSet);
+				
+				geometry_msgs::Point point;
+				point.x = o3DPos.x + GetVoxelLength().x() / 2;
+				point.y = o3DPos.y + GetVoxelLength().y() / 2;
+				point.z = o3DPos.z + GetVoxelLength().z() / 2;
+				oCurrentSet.points.push_back(point);
+			}
+
+			oOutputUnionSet.markers.push_back(oCurrentSet);
+		}
+	}
+
+	while(index < 1000) {
+
+		visualization_msgs::Marker oCurrentSet;
+		oCurrentSet.header.frame_id = "map";
+		oCurrentSet.header.stamp = ros::Time::now();
+		oCurrentSet.type = visualization_msgs::Marker::CUBE_LIST;
+		oCurrentSet.action = visualization_msgs::Marker::MODIFY;
+		oCurrentSet.id = index++; 
+
+		oCurrentSet.scale.x = GetVoxelLength().x();
+		oCurrentSet.scale.y = GetVoxelLength().y();
+		oCurrentSet.scale.z = GetVoxelLength().z();
+
+		oCurrentSet.pose.position.x = 0.0;
+		oCurrentSet.pose.position.y = 0.0;
+		oCurrentSet.pose.position.z = 0.0;
+
+		oCurrentSet.pose.orientation.x = 0.0;
+		oCurrentSet.pose.orientation.y = 0.0;
+		oCurrentSet.pose.orientation.z = 0.0;
+		oCurrentSet.pose.orientation.w = 1.0;
+		
+		oCurrentSet.color.a = 0.8;
+		
+		oOutputUnionSet.markers.push_back(oCurrentSet);
 	}
 }
