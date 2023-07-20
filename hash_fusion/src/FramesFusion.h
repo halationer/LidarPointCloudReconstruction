@@ -31,12 +31,18 @@
 #include "SignedDistance.h"
 #include "CIsoSurface.h"
 #include "MeshOperation.h"
+
 #include "volume/VolumeBase.h"
 #include "volume/HashBlock.h"
 #include "volume/HashVoxeler.h"
+
 #include "tools/CloudVector.h"
 #include "tools/OutputUtils.h"
 #include "tools/DebugManager.h"
+#include "tools/RosPublishManager.h"
+
+#include "updater/ProjectUpdater.h"
+#include "updater/RayUpdater.h"
 
 // Trajectory state data. 
 struct RosTimePoint{
@@ -106,18 +112,7 @@ public:
     void SamplePoints(const pcl::PointCloud<pcl::PointXYZ> & vCloud, pcl::PointCloud<pcl::PointXYZ> & vNewCloud, int iSampleNum, bool bIntervalSamp = true);
 
     //get the nearby point for reconstruction
-    void GetNearClouds(float fNearLengths);
-
-    //compute the Euclidean distance between two points
-    float EuclideanDistance(const pcl::PointXYZ & oBasedP, const pcl::PointNormal & oTargetP);
-
-    //get the nearby point clouds
-    void NearbyClouds(const pcl::PointCloud<pcl::PointNormal> & pRawCloud, const pcl::PointXYZ & oBasedP, pcl::PointCloud<pcl::PointNormal> & pNearCloud, float fLength);
-    void NearbyClouds(CloudVector & pRawCloud, const pcl::PointXYZ & oBasedP, pcl::PointCloud<pcl::PointNormal> & pNearCloud, float fLength);
-    
-    //get the nearby point clouds and delete the geted point in rawCloud
-    void ExtractNearbyClouds(pcl::PointCloud<pcl::PointNormal> & pRawCloud, const pcl::PointXYZ & oBasedP, pcl::PointCloud<pcl::PointNormal> & pNearCloud, float fLength);
-    void ExtractNearbyClouds(CloudVector & pRawCloud, const pcl::PointXYZ & oBasedP, pcl::PointCloud<pcl::PointNormal> & pNearCloud, float fLength);
+    // void GetNearClouds(float fNearLengths);
 
     //build surrounding models
     void SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonMesh & oCBModel, const int iFrameId);
@@ -127,17 +122,6 @@ public:
     void FusionNormalBackToPoint(const pcl::PointCloud<pcl::PointNormal>& pNearCloud, CloudVector & pRawCloud, int offset, int point_num);
 
     //*************Output function*************
-    //publish point clouds
-    template<class T>
-    void PublishPointCloud(const pcl::PointCloud<T> & vCloud);
-    
-    //reload, publish point clouds with labels
-    void PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures);
-
-    //publish debug clouds for self defined topic
-    template<class T>
-    void PublishPointCloud(const pcl::PointCloud<T> & vCloud, const std::vector<float> & vFeatures, const std::string sTopicName);
-
     //publish meshes
     void PublishMeshs(const pcl::PolygonMesh & oMeshModel);
 
@@ -241,8 +225,9 @@ protected:
     // more strict when filtering the points
     // void AddedSurfelFusion(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
     // viewpoint and current frame for surfel fusion - multi-thread
-    void SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud, pcl::PointCloud<pcl::PointNormal>& vPointCloudBuffer);
-    virtual void SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud);
+    ProjectUpdater& m_oProjectUpdater;
+    RayUpdater& m_oRayUpdater;
+    RosPublishManager& m_oRpManager;
     virtual void UpdateOneFrame(const pcl::PointNormal& oViewPoint, pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud);
 
     bool m_bAsyncReconstruction;
@@ -255,7 +240,6 @@ protected:
     // simple to publish in a new topic
     ros::NodeHandle& m_oGlobalNode;
     ros::NodeHandle& m_oNodeHandle;
-    std::unordered_map<std::string, ros::Publisher> m_vDebugPublishers;
 
     ros::Rate m_OdomLoopRate;
 
@@ -293,14 +277,3 @@ protected:
 };
 
 #endif
-
-
-
-
-
-
-
-
-
-
-

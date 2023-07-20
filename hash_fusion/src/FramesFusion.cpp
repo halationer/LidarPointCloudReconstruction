@@ -24,7 +24,10 @@ FramesFusion::FramesFusion(ros::NodeHandle & node,
                        ros::NodeHandle & nodeHandle): 
 					   m_oGlobalNode(node), m_oNodeHandle(nodeHandle), m_iOdomCount(0), 
 					   m_dAverageReconstructTime(0), m_dMaxReconstructTime(0),  m_iReconstructFrameNum(0),
-					   m_dAverageFusionTime(0), m_dMaxFusionTime(0), m_iFusionFrameNum(0), m_OdomLoopRate(1) {
+					   m_dAverageFusionTime(0), m_dMaxFusionTime(0), m_iFusionFrameNum(0), m_OdomLoopRate(1),
+					   m_oProjectUpdater(ProjectUpdater::GetInstance()),
+					   m_oRayUpdater(RayUpdater::GetInstance()),
+					   m_oRpManager(RosPublishManager::GetInstance()) {
 
 	//read parameters
 	ReadLaunchParams(nodeHandle);
@@ -302,6 +305,8 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
 	//input point cloud topic
 	nodeHandle.param("outcloud_tf_id", m_sOutCloudTFId, std::string("map"));
+	m_oRpManager.m_sFrameId = m_sOutCloudTFId;
+	m_oRpManager.m_pNodeHandle = &nodeHandle;
 
 	//input odom topic
 	nodeHandle.param("polygon_out_topic", m_sOutMeshTopic, std::string("/surrounding_meshes"));
@@ -370,176 +375,6 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
 }
 
-
-/*************************************************
-Function: PublishPointCloud
-Description: publish point clouds (mainly used for display and test)
-Calls: none
-Called By: ComputeConfidence()
-Table Accessed: none
-Table Updated: none
-Input: vCloud - a point clouds to be published
-Output: none
-Return: none
-Others: none
-*************************************************/
-template<class T>
-void FramesFusion::PublishPointCloud(const pcl::PointCloud<T> & vCloud){
-  
-	//publish obstacle points
-	sensor_msgs::PointCloud2 vCloudData;
-
-	pcl::toROSMsg(vCloud, vCloudData);
-
-	vCloudData.header.frame_id = m_sOutCloudTFId;
-
-	vCloudData.header.stamp = ros::Time::now();
-
-	m_oCloudPublisher.publish(vCloudData);
-
-}
-// Make instances of the defined template function
-// template void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ>&);
-template void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointNormal>&);
-
-/*************************************************
-Function: PublishPointCloud
-Description: publish point clouds (mainly used for display and test)
-Calls: none
-Called By: ComputeConfidence()
-Table Accessed: none
-Table Updated: none
-Input: vCloud - a point clouds to be published
-Output: none
-Return: none
-Others: none
-*************************************************/
-void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures){
-  
-	//get colors
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr  pColorClouds (new pcl::PointCloud<pcl::PointXYZRGB>);
-
-	//to each point
-	for (int i = 0; i <  vCloud.points.size(); ++i){
-
-		pcl::PointXYZRGB oColorP;
-		oColorP.x = vCloud.points[i].x;
-		oColorP.y = vCloud.points[i].y;
-		oColorP.z = vCloud.points[i].z;
-
-		oColorP.r =  (1.0-vFeatures[i])*255.0f;
-		oColorP.g =  vFeatures[i]*255.0f;
-		oColorP.b =  (1.0-vFeatures[i])*255.0f; 
-		pColorClouds->points.push_back(oColorP);
-	}
-
-    pColorClouds->width = 1;
-
-    pColorClouds->height = vCloud.points.size();
-
-    //convert to pc2 message
-	sensor_msgs::PointCloud2 vCloudData;
-
-	pcl::toROSMsg(*pColorClouds, vCloudData);
-
-	//other informations
-	vCloudData.header.frame_id = m_sOutCloudTFId;
-
-	vCloudData.header.stamp = ros::Time::now();
-
-	//publish
-	m_oCloudPublisher.publish(vCloudData);
-
-}
-
-void HSVToRGB(float H, float S, float V, float& R, float& G, float& B) {
-
-	float C = V * S;
-	int FixFactor = int(H / 60) & 1;
-	float X = C * ((FixFactor ? -1 : 1) * (int(H) % 60) / 60.0 + FixFactor); // X 值的变化随H波动，锯齿状0-1之间周期变化
-	float m = V - C;
-	switch(int(H) / 60)
-	{
-		case 1:		R = X;	G = C;	B = 0; break;	// 60  <= H < 120
-		case 2:		R = 0;	G = C;	B = X; break;	// 120 <= H < 180
-		case 3:		R = 0;	G = X;	B = C; break;	// 180 <= H < 240
-		case 4:		R = X;	G = 0;	B = C; break;	// 240 <= H < 300
-		case 5:
-		case 6:		R = C;	G = 0;	B = X; break;	// 300 <= H < 360
-		default:	R = C;	G = X;	B = 0; 		// 0   <= H < 60 or outlier
-	}
-	R += m;
-	G += m;
-	B += m;
-}
-
-void HSVToRGB(float H, float S, float V, uint8_t& R, uint8_t& G, uint8_t& B) {
-
-	float R_, G_, B_;
-	HSVToRGB(H, S, V, R_, G_, B_);
-	R = R_ * 255;
-	G = G_ * 255;
-	B = B_ * 255;
-}
-
-/*************************************************
-Function: PublishPointCloud
-Description: publish point clouds (mainly used for display and test)
-Calls: none
-Called By: ComputeConfidence()
-Table Accessed: none
-Table Updated: none
-Input: vCloud - a point clouds to be published
-       vFeatures - use different color to show the features, should in [0.0, 1.0]
-	   sTopicName - topic to output
-*************************************************/
-template<class T>
-void FramesFusion::PublishPointCloud(const pcl::PointCloud<T> & vCloud, const std::vector<float> & vFeatures, const std::string sTopicName) {
-	
-	//get colors
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr  pColorClouds(new pcl::PointCloud<pcl::PointXYZRGB>);
-
-	//to each point
-	for (int i = 0; i < vCloud.points.size() && i < vFeatures.size(); ++i){
-
-		pcl::PointXYZRGB oColorP;
-		oColorP.x = vCloud.points[i].x;
-		oColorP.y = vCloud.points[i].y;
-		oColorP.z = vCloud.points[i].z;
-
-		float H = abs(vFeatures[i]) * 360.0f;
-		float S = vFeatures[i] < 0.0f ? 0.0f : 1.0f;
-		float V = vFeatures[i] < 0.0f ? 0.5f : 1.0f;
-
-		HSVToRGB(H, S, V, oColorP.r, oColorP.g, oColorP.b);
-
-		pColorClouds->points.push_back(oColorP);
-	}
-
-    pColorClouds->width = 1;
-
-    pColorClouds->height = vCloud.points.size();
-
-    //convert to pc2 message
-	sensor_msgs::PointCloud2 vCloudData;
-
-	pcl::toROSMsg(*pColorClouds, vCloudData);
-
-	//other informations
-	vCloudData.header.frame_id = m_sOutCloudTFId;
-
-	vCloudData.header.stamp = ros::Time::now();
-
-	//publish
-	if(m_vDebugPublishers.count(sTopicName) == 0)
-	{
-		m_vDebugPublishers[sTopicName] = m_oNodeHandle.advertise<sensor_msgs::PointCloud2>(sTopicName, 1, true);
-	}
-	m_vDebugPublishers[sTopicName].publish(vCloudData);
-}
-template void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointNormal>&, const std::vector<float>&, const std::string);
-template void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ>&, const std::vector<float>&, const std::string);
-
 void InitMeshMsg(visualization_msgs::Marker& oMeshMsgs, string frame_id, int id, float r, float g, float b) {
 	
 	oMeshMsgs.header.frame_id = frame_id;
@@ -568,7 +403,7 @@ void InitMeshMsg(visualization_msgs::Marker& oMeshMsgs, string frame_id, int id,
 }
 
 /*************************************************
-Function: PublishPointCloud
+Function: PublishMeshs
 Description: publish point clouds (mainly used for display and test)
 Calls: none
 Called By: ComputeConfidence()
@@ -648,128 +483,6 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 	m_oMeshPublisher.publish(oMeshMsgList);
 }
 
- 
-
-/*************************************************
-Function: EuclideanDistance
-Description: calculate the Euclidean distance between two points
-Calls: none
-Called By: NearbyClouds
-Table Accessed: none
-Table Updated: none
-Input: oBasedP - point a
-           oTargetP - point b
-Output: distance between two points
-Return: sqrt(fDis)
-Others: none
-*************************************************/
- float FramesFusion::EuclideanDistance(const pcl::PointXYZ & oBasedP, const pcl::PointNormal & oTargetP){
-
- 	 float fDis = (oBasedP.x - oTargetP.x)*(oBasedP.x - oTargetP.x)
-              	+ (oBasedP.y - oTargetP.y)*(oBasedP.y - oTargetP.y)
-              	+ (oBasedP.z - oTargetP.z)*(oBasedP.z - oTargetP.z);
-
- 	 return sqrt(fDis);
-
-}
-
-
-/*************************************************
-Function: NearbyClouds
-Description: Get the neighboring points based on the given distance
-Calls: none
-Called By: NearbyClouds
-Table Accessed: none
-Table Updated: none
-Input: pRawCloud - input point clouds
-          oBasedP - a query point
-          fLength - the neighboring distance
-Output:  pNearCloud - the neighboring points near the query point
-Return: none
-Others: none
-*************************************************/
-void FramesFusion::NearbyClouds(const pcl::PointCloud<pcl::PointNormal> & pRawCloud, const pcl::PointXYZ & oBasedP, pcl::PointCloud<pcl::PointNormal> & pNearCloud, float fLength){
-
-	// pNearCloud.clear();
-			
-	for (int i = 0; i != pRawCloud.size(); ++i){
-		
-		if (EuclideanDistance(oBasedP, pRawCloud.at(i)) <= fLength) {
-			pNearCloud.push_back(pRawCloud.at(i));
-			pNearCloud.points.rbegin()->data_c[3] = i; //record the rawcloud index in data_c[3]
-		}
-
-	}
-
-}
-
-void FramesFusion::NearbyClouds(CloudVector & pRawCloud, const pcl::PointXYZ & oBasedP, pcl::PointCloud<pcl::PointNormal> & pNearCloud, float fLength) {
-	
-	for (int i = 0; i != pRawCloud.size(); ++i){
-		
-		if (EuclideanDistance(oBasedP, pRawCloud.at(i)) <= fLength) {
-			pNearCloud.push_back(pRawCloud.at(i));
-			pNearCloud.points.rbegin()->data_c[3] = i; //record the rawcloud index in data_c[3]
-		}
-
-	}
-}
-
-
-/*************************************************
-Function: ExtractNearbyClouds
-Description: Get the nearby point clouds and delete the geted point in rawCloud
-Calls: none
-Called By: NearbyClouds
-Table Accessed: none
-Table Updated: none
-Input: pRawCloud - input point clouds
-          oBasedP - a query point
-          fLength - the neighboring distance
-Output:  pNearCloud - the neighboring points near the query point
-Return: none
-Others: none
-*************************************************/
-void FramesFusion::ExtractNearbyClouds(pcl::PointCloud<pcl::PointNormal> & pRawCloud, const pcl::PointXYZ & oBasedP, pcl::PointCloud<pcl::PointNormal> & pNearCloud, float fLength){
-
-	// pNearCloud.clear();
-	
-	for (int i = 0; i < pRawCloud.points.size();){
-		
-		if (EuclideanDistance(oBasedP, pRawCloud.points[i]) <= fLength) {
-			pNearCloud.push_back(pRawCloud.points[i]);
-			pNearCloud.points.rbegin()->data_c[3] = i; //record the rawcloud index in data_c[3]
-
-			//删除已经识别的顶点
-			swap(pRawCloud.points[i], pRawCloud.points.back());
-			pRawCloud.points.pop_back();
-		}
-		else {
-			++i;
-		}
-	}
-
-	pRawCloud.width = static_cast<uint32_t> (pRawCloud.points.size ()); // 模仿pointcloud中的erase函数
-
-};
-
-void FramesFusion::ExtractNearbyClouds(CloudVector & pRawCloud, const pcl::PointXYZ & oBasedP, pcl::PointCloud<pcl::PointNormal> & pNearCloud, float fLength){
-
-	for (int i = 0; i < pRawCloud.size();){
-		
-		if (EuclideanDistance(oBasedP, pRawCloud.at(i)) <= fLength) {
-			pNearCloud.push_back(pRawCloud.at(i));
-			pNearCloud.points.rbegin()->data_c[3] = i; //record the rawcloud index in data_c[3]
-
-			//删除已经识别的顶点
-			pRawCloud.erase(i);
-		}
-		else {
-			++i;
-		}
-	}
-};
-
 void FramesFusion::FusionNormalBackToPoint(const pcl::PointCloud<pcl::PointNormal>& pNearCloud, pcl::PointCloud<pcl::PointNormal> & pRawCloud, int offset, int point_num) {
 
 	MeshOperation m;
@@ -838,7 +551,7 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	}
 
 	std::vector<float> temp_feature(pProcessedCloud->size());
-	PublishPointCloud(*pProcessedCloud, temp_feature, "/temp_near_cloud");
+	m_oRpManager.PublishPointCloud(*pProcessedCloud, temp_feature, "/temp_near_cloud");
 
 
 	///* output nearby cloud
@@ -877,37 +590,6 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 
 	//compute signed distance based on centroids and its normals within voxels
 	std::unordered_map<HashPos, float, HashFunc> vSignedDis = oSDer.ConvedGlance(*m_pVolume);
-
-	// debug
-	// pcl::PointCloud<pcl::PointNormal> vVolumeCloud;
-	// std::vector<float> vVoxelValue;
-	// for(auto && [oPos, oPoint] : m_pVolume->m_vVolume) {
-	// 	vVolumeCloud.push_back(oPoint);
-	// 	vVoxelValue.push_back(oPoint.data_n[3] > 1 ? 0.3f : 0.0f);
-	// }
-	// PublishPointCloud(vVolumeCloud, vVoxelValue, "/temp_voxel_cloud");
-
-	// pcl::PointCloud<pcl::PointXYZ> vSignedDisCloud;
-	// std::vector<float> vSignedDisValue;
-	// for(auto && [oPos, fSDF] : vSignedDis) {
-	// 	vSignedDisCloud.push_back(m_pVolume->HashPosTo3DPos(oPos));
-	// 	vSignedDisValue.push_back(fSDF > 0 ? 0.5f : 0.0f);
-	// } 
-	// PublishPointCloud(vSignedDisCloud, vSignedDisValue, "/temp_sdf_cloud");
-
-	//传回去
-	// m_mPCNMutex.lock();
-	// FusionNormalBackToPoint(*pProcessedCloud, m_vMapPCN, 0, point_num);
-	// FusionNormalBackToPoint(*pProcessedCloud, m_vMapPCNAdded, point_num + 1, pProcessedCloud->size() - point_num);
-	// m_vMapPCN += *pProcessedCloud;
-	// m_mPCNMutex.unlock();
-
-	//record non-empty voxels
-	// std::vector<bool> vVoxelStatus;
-	// oVoxeler.OutputNonEmptyVoxels(vVoxelStatus);
-
-	//clear accelerated data
-	// oVoxeler.ClearMiddleData();
 
 	//******construction********
 	//marching cuber
@@ -961,12 +643,7 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const Eigen::Ve
 		// output unionset result
 		visualization_msgs::MarkerArray union_set_marker;
 		m_pVolume->DrawUnionSet(union_set_marker);
-		std::string sTopicName = "/union_set";
-		if(m_vDebugPublishers.count(sTopicName) == 0)
-		{
-			m_vDebugPublishers[sTopicName] = m_oNodeHandle.advertise<visualization_msgs::MarkerArray>(sTopicName, 1, true);
-		}
-		m_vDebugPublishers[sTopicName].publish(union_set_marker);
+		m_oRpManager.PublishMarkerArray(union_set_marker, "/union_set");
 		timer.DebugTime("3_publish_connect");
 	}
 
@@ -994,12 +671,7 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const Eigen::Ve
 	}
 	// publish intermediate result
 	if(pStaticDebug != nullptr) {
-		std::string sTopicName = "/static_expand";
-		if(m_vDebugPublishers.count(sTopicName) == 0)
-		{
-			m_vDebugPublishers[sTopicName] = m_oNodeHandle.advertise<visualization_msgs::MarkerArray>(sTopicName, 1, true);
-		}
-		m_vDebugPublishers[sTopicName].publish(*pStaticDebug);
+		m_oRpManager.PublishMarkerArray(*pStaticDebug, "/static_expand");
 	}
 
 	timer.DebugTime("4_main_conv");
@@ -1092,7 +764,8 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 
 		std::cout << "fusion start \t";
 
-		SurfelFusionQuick(oViewPoint, *pFramePN);
+		m_oProjectUpdater.SurfelFusionQuick(oViewPoint, *pFramePN, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
+		// m_oRayUpdater.RayFusion(oViewPoint, *pFramePN, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
 
 		double frames_fusion_time = fuse_timer.DebugTime("2_main_fusion");
 		
@@ -1138,7 +811,7 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 			if(confidence[i] > confidence_scalar) confidence[i] = confidence_scalar;
 			if(temp[i].data_c[1] > 1 || temp[i].data_n[3] == .0f) confidence[i] = -1;
 		}
-		PublishPointCloud(temp, confidence, "/all_cloud_confidence");
+		m_oRpManager.PublishPointCloud(temp, confidence, "/all_cloud_confidence");
 		fuse_timer.DebugTime("4_debug_publish");
 	}
 
@@ -1459,219 +1132,6 @@ void FramesFusion::OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, c
 
     //count new point cloud input (plus frame) 
 
-}
-
-
-void FramesFusion::SurfelFusionCore(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud, pcl::PointCloud<pcl::PointNormal>& vPointCloudBuffer) {
-
-	constexpr int pitch_dim_expand = 4;
-	constexpr int yaw_dim_expand = 4;
-	constexpr int pitch_dim = 180 * pitch_dim_expand;
-	constexpr int yaw_dim = 360 * yaw_dim_expand;
-	
-	constexpr double support_factor = 0.3;
-	constexpr double tight_support_factor = 0.1;
-	constexpr double normal_support_factor = 0.8;
-
-	//计算点云每个点的角度，将其置于相机像素中 4ms - 8ms
-	std::vector<std::vector<double>> depth_image(pitch_dim, std::vector<double>(yaw_dim));
-	std::vector<std::vector<int>> depth_index(pitch_dim, std::vector<int>(yaw_dim));
-	// std::vector<bool> vCurrentFuseIndex(vDepthMeasurementCloud.size(), false); //因为只记录一个点，哪些点被覆盖需要记录
-
-	// 记录测量点从属的voxel
-	std::unordered_set<HashPos, HashFunc> pos_record;
-
-	// conf - 0.01 - 0.5
-	// double min_depth = __INT_MAX__; 
-	// int min_id = 0, max_id = 0;
-	double max_depth = 0;
-	for(int i = 0; i < vDepthMeasurementCloud.size(); ++i) {
-
-
-		const pcl::PointNormal& oCurrentPoint = vDepthMeasurementCloud.at(i);
-		Eigen::Vector3f oRefPoint(oCurrentPoint.x - oLidarPos.x, oCurrentPoint.y - oLidarPos.y, oCurrentPoint.z - oLidarPos.z);
-
-		// 记录测量点从属的voxel
-		HashPos oPos;
-		m_pVolume->PointBelongVoxelPos(oCurrentPoint, oPos);
-		pos_record.emplace(oPos);
-
-
-		// 计算投影位置和深度
-		double depth = oRefPoint.norm();
-		if(depth < 1e-5) continue;
-		max_depth = max_depth < depth ? depth : max_depth;
-
-		// min_depth = min_depth > depth ? depth : min_depth;
-		// if(min_depth == depth) min_id = i;
-		// if(max_depth == depth) max_id = i;
-
-		oRefPoint.normalize();
-		double yaw = std::atan2((double)oRefPoint.y(), (double)oRefPoint.x()) / M_PI * 180.0;
-		double pitch = std::asin((double)oRefPoint.z()) / M_PI * 180.0;
-
-		// 将投影结果存储
-		double row = (pitch + 90) * pitch_dim_expand;
-		double col = (yaw   + 180) * yaw_dim_expand;
-		if(int(row) < 0 || int(row) >= pitch_dim || int(col) < 0 || int(col) >= yaw_dim) continue;
-		if(depth_image[int(row)][int(col)] > 0 && depth < depth_image[int(row)][int(col)] || depth_image[int(row)][int(col)] == 0) {
-			// vCurrentFuseIndex[depth_index[int(row)][int(col)]] = true;
-			depth_image[int(row)][int(col)] = depth;
-			depth_index[int(row)][int(col)] = i;
-		}
-
-		// 根据surfel在subpixel的位置，添加到邻近的像素中去
-		double local_row = row - int(row);
-		double local_col = col - int(col);
-
-		// 如果只扩展左右，不扩展上下如何？好像效果还可以，但是仍然不能完全解决单向素拉长导致的错误complict判断问题
-		// /* 双向扩展
-		if(local_col > 0.6) {
-			// 右
-			int temp_col = col + 1;
-			if(temp_col >= yaw_dim) temp_col = 0;
-
-			if(depth_image[int(row)][temp_col] > 0 && depth < depth_image[int(row)][temp_col] || depth_image[int(row)][temp_col] == 0) {
-
-				// vCurrentFuseIndex[depth_index[int(row)][temp_col]] = true;
-				depth_image[int(row)][temp_col] = depth;
-				depth_index[int(row)][temp_col] = i;
-			}
-		}
-		else if(local_col < 0.4) {
-			// 左
-			int temp_col = col - 1;
-			if(temp_col < 0) temp_col = yaw_dim - 1;
-
-			if(depth_image[int(row)][temp_col] > 0 && depth < depth_image[int(row)][temp_col] || depth_image[int(row)][temp_col] == 0) {
-				// vCurrentFuseIndex[depth_index[int(row)][temp_col]] = true;
-				depth_image[int(row)][temp_col] = depth;
-				depth_index[int(row)][temp_col] = i;
-			}
-		}
-		// */
-	}	
-	
-	// std::cout << output::format_red << "min depth: " << min_depth << " | conf: " << vDepthMeasurementCloud[min_id].data_n[3] << "\t";
-	// std::cout << output::format_red << "max depth: " << max_depth << " | conf: " << vDepthMeasurementCloud[max_id].data_n[3] << output::format_white << std::endl;
-
-	// 将多帧重建结果点云拷贝到Buffer中，并筛选范围内的点
-	pcl::PointCloud<pcl::PointNormal> vVolumeCloud;
-	m_pVolume->GetVolumeCloud(vVolumeCloud);
-	pcl::PointXYZ oBase(oLidarPos.x, oLidarPos.y, oLidarPos.z);
-	NearbyClouds(vVolumeCloud, oBase, vPointCloudBuffer, max_depth);
-
-
-	// /* 对于之前帧的所有点，对应位置建立匹配关系 60 - 150 ms
-	std::vector<float> associated_feature(vPointCloudBuffer.size(), 0);
-
-	for(int i = 0; i < vPointCloudBuffer.size(); ++i) {
-
-		const pcl::PointNormal& oCurrentPoint = vPointCloudBuffer.at(i);
-		Eigen::Vector3f oRefPoint(oCurrentPoint.x - oLidarPos.x, oCurrentPoint.y - oLidarPos.y, oCurrentPoint.z - oLidarPos.z);
-
-		double depth = oRefPoint.norm();
-		if(depth < 1e-5) continue;
-		oRefPoint.normalize();
-		double yaw = std::atan2((double)oRefPoint.y(), (double)oRefPoint.x()) / M_PI * 180.0;
-		double pitch = std::asin((double)oRefPoint.z()) / M_PI * 180.0;
-		
-		int row = (pitch + 90) * pitch_dim_expand;
-		int col = (yaw   + 180) * yaw_dim_expand;
-
-		if(row < 0 || row >= pitch_dim || col < 0 || col >= yaw_dim) continue;
-
-		int complict_count = 0;
-
-		pcl::PointNormal* pSupportPoint = nullptr;
-		pcl::PointNormal* pConflictPoint = nullptr;
-
-		if(row < pitch_dim && col < yaw_dim && depth_image[row][col]) {
-
-			pcl::PointNormal& oAssociatedPoint = vDepthMeasurementCloud.points[depth_index[row][col]];
-			double dAssociatedDepth = depth_image[row][col];
-			// 判断complict关系
-			if(abs(depth - dAssociatedDepth) > support_factor && depth < dAssociatedDepth /*&& abs(depth - dAssociatedDepth) < 5*/) { // 旧点的depth < 新点的depth
-				
-				++complict_count;
-				pConflictPoint = &oAssociatedPoint;
-			}
-		}
-
-		if(complict_count > 0) {
-
-			//进一步精细的遮挡检查
-			
-			pcl::PointNormal& oOldPoint = vPointCloudBuffer.at(i);
-			// pcl::PointNormal& oOldPoint = i < lidar_size ? m_vMapPCN[vPointCloudBuffer[i].data_c[3]] : m_vMapPCNAdded[vPointCloudBuffer[i].data_c[3]];
-			float& fOldConfidence = oOldPoint.data_n[3];
-			float& fConfidenceRecord = oOldPoint.data_c[0];
-			pcl::PointNormal& oNewPoint = *pConflictPoint;
-			float& fNewConfidence = oNewPoint.data_n[3];
-
-			Eigen::Vector3f p1(oOldPoint.x - oLidarPos.x, oOldPoint.y - oLidarPos.y, oOldPoint.z - oLidarPos.z);
-			Eigen::Vector3f n1(oOldPoint.normal_x, oOldPoint.normal_y, oOldPoint.normal_z);
-			Eigen::Vector3f p2(oNewPoint.x - oLidarPos.x, oNewPoint.y - oLidarPos.y, oNewPoint.z - oLidarPos.z);
-			Eigen::Vector3f n2(oNewPoint.normal_x, oNewPoint.normal_y, oNewPoint.normal_z);
-			// 给测量点加一个bais，减少错误判断
-			p2 += n2 * tight_support_factor;
-
-			Eigen::Vector3f vp2 = p2 / p2.norm();
-			Eigen::Vector3f v12 = p2 - p1;
-
-			// dynamic surfel radius, according to confidence
-			float r = abs(n2.dot(vp2)) * 2 * fNewConfidence;
-			// float r = abs(n2.dot(vp2)) * support_factor;
-			Eigen::Vector3f vr = v12.dot(vp2) * vp2 - v12;
-			float a = p2.norm() - v12.dot(vp2), b = p2.norm();
-
-			HashPos oPos;
-			m_pVolume->PointBelongVoxelPos(oCurrentPoint, oPos);
-
-			if( pos_record.count(oPos) ) { // 避免自穿透现象
-				associated_feature[i] = -1.0f;
-			}
-			else if( vr.norm() < r * a / b && v12.dot(n2) < 0 //保守剔除（在斜圆锥内部）
-			|| n1.dot(v12) < -0.2 && n1.dot(Eigen::Vector3f(0,0,1)) < 0.2 && depth < 30 //针对自遮挡加强剔除(法向与视线方向相近 && 法向不朝上 && 距离足够近)
-			) { 
-				associated_feature[i] = 0.0f;
-
-				// 记录减少的置信度
-				fConfidenceRecord = fOldConfidence;
-				fOldConfidence = - 0.8 * fNewConfidence;
-				// if(fOldConfidence < 0.f) fOldConfidence = 0.f;
-			}
-			else associated_feature[i] = -1.0f;
-		}
-		else {
-			associated_feature[i] = -1.0f;
-		}
-	}	
-	
-	// output dynamic
-	PublishPointCloud(vPointCloudBuffer, associated_feature, "/debug_associated_point");
-}
-
-/** 基于反投影的点云融合
-   @param 	pcl::PointNormal 					oLidarPos - m_oCurrentViewPoint 雷达视点的位置
-   @param 	pcl::PointCloud<pcl::PointNormal> 	vDepthMeasurementCloud - vDepthMeasurementCloud 新一帧的点云
-   @param_	pcl::PointCloud<pcl::PointNormal> 	m_vMapPCN - 旧点云（源自于lidar测量）
-   @param_	pcl::PointCloud<pcl::PointNormal> 	m_vMapPCNAdded - 新点云（源自于单帧重建补点）
-*/
-void FramesFusion::SurfelFusionQuick(pcl::PointNormal oLidarPos, pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud) {
-
-	pcl::PointCloud<pcl::PointNormal> vPointCloudBuffer;
-
-	SurfelFusionCore(oLidarPos, vDepthMeasurementCloud, vPointCloudBuffer);
-
-	// 更新volume
-	m_pVolume->UpdateConflictResult(vPointCloudBuffer, m_bDynamicDebug || m_bKeepVoxel);
-
-	// output connect
-	// pcl::PointCloud<pcl::PointNormal> vMaxConnected;
-	// m_pVolume->GetMaxConnectCloud(vMaxConnected);
-	// std::vector<float> feature(vMaxConnected.size(), 0.8f);
-	// PublishPointCloud(vMaxConnected, feature, "/debug_max_connect");
 }
 
 pcl::PointCloud<pcl::PointNormal>::Ptr AllCloud(pcl::PointCloud<pcl::PointNormal>& cloud_vector) {

@@ -1,5 +1,17 @@
 # 实时激光雷达点云重建
 
+## 更新说明 2023.7.20
+
+编译时报错 error: conflicting declaration ‘typedef struct LZ4_streamDecode_t LZ4_streamDecode_t’
+参考<a href="https://blog.csdn.net/qq_39779233/article/details/127496950"> 解决方案：</a>
+```shell
+sudo mv /usr/include/flann/ext/lz4.h /usr/include/flann/ext/lz4.h.bak
+sudo mv /usr/include/flann/ext/lz4hc.h /usr/include/flann/ext/lz4hc.h.bak
+
+sudo ln -s /usr/include/lz4.h /usr/include/flann/ext/lz4.h
+sudo ln -s /usr/include/lz4hc.h /usr/include/flann/ext/lz4hc.h
+```
+
 ## 更新说明 2023.1.9
 
 由于时间问题，没有写专门的配置文件，因此将配置文件修改的方法附上
@@ -52,7 +64,7 @@
 
 2. 安装 ROS Melodic 环境, 参见 <a href="http://wiki.ros.org/melodic/Installation/Ubuntu">ROS 官方文档</a>.
 
-3. 安装 Ceres Solver, 参见 <a href="http://ceres-solver.org/installation.html">Ceres Solver 官方文档</a>.
+3. 安装 Ceres Solver, 参见 <a href="http://ceres-solver.org/installation.html">Ceres Solver 官方文档</a>.（推荐 Version 1.14.0）
 
 4. 安装 PCL, 参见 <a href="https://pointclouds.org/downloads/#linux">PCL 官方文档</a>.
 
