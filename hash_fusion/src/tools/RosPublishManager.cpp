@@ -10,6 +10,13 @@ void RosPublishManager::PublishPointCloud(
     const std::string & sTopicName,
     const int iQueueSize) {
     
+    // check topic
+    if(m_vPublishers.count(sTopicName) == 0)
+    {
+        m_vPublishers[sTopicName] = m_pNodeHandle->advertise<sensor_msgs::PointCloud2>(sTopicName, iQueueSize, true);
+    }
+    if(!PublishCheck(sTopicName)) return;
+
     //get colors
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr pColorClouds(new pcl::PointCloud<pcl::PointXYZRGB>);
 
@@ -45,10 +52,6 @@ void RosPublishManager::PublishPointCloud(
     vCloudData.header.stamp = ros::Time::now();
 
     //publish
-    if(m_vPublishers.count(sTopicName) == 0)
-    {
-        m_vPublishers[sTopicName] = m_pNodeHandle->advertise<sensor_msgs::PointCloud2>(sTopicName, iQueueSize, true);
-    }
     m_vPublishers[sTopicName].publish(vCloudData);
 }
 template void RosPublishManager::PublishPointCloud(
@@ -67,6 +70,7 @@ void RosPublishManager::PublishMarkerArray(
     {
         m_vPublishers[sTopicName] = m_pNodeHandle->advertise<visualization_msgs::MarkerArray>(sTopicName, iQueueSize, true);
     }
+    if(!PublishCheck(sTopicName)) return;
     m_vPublishers[sTopicName].publish(oMarkerArray);
 }
 

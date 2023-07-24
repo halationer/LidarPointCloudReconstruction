@@ -764,8 +764,8 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 
 		std::cout << "fusion start \t";
 
-		m_oProjectUpdater.SurfelFusionQuick(oViewPoint, *pFramePN, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
-		// m_oRayUpdater.RayFusion(oViewPoint, *pFramePN, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
+		// m_oProjectUpdater.SurfelFusionQuick(oViewPoint, *pFramePN, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
+		m_oRayUpdater.RayFusion(oViewPoint, *pFramePN, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
 
 		double frames_fusion_time = fuse_timer.DebugTime("2_main_fusion");
 		

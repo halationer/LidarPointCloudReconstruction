@@ -23,6 +23,10 @@ public:
         return instance;
     }
 
+private:
+    bool PublishCheck(const std::string& sTopicName) {
+        return m_vPublishers.count(sTopicName) && m_vPublishers[sTopicName].getNumSubscribers() > 0;
+    }
 
 public:
     template<class T>
