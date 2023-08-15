@@ -18,9 +18,7 @@ std::ostream & operator << (std::ostream & out, const HashPos & pos);
 
 // hash func of HashPos
 struct HashFunc {
-    size_t operator()(const HashPos& pos) const {
-        return abs((pos.x * 131.1f + pos.y) * 131.2f + pos.z); // only simple func, maybe have better func
-    }
+    size_t operator()(const HashPos& pos) const; 
 };
 
 #endif

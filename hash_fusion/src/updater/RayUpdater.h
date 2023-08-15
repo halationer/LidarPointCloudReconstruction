@@ -4,19 +4,25 @@
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <Eigen/Core>
-#include <vector>
+#include <unordered_set>
 
 #include "volume/VolumeBase.h"
+#include "volume/HashBlock.h"
 #include "tools/PointCloudOperation.h"
 #include "tools/RosPublishManager.h"
 #include "tools/HashPos.h"
+#include "tools/DebugManager.h"
 
 class RayCaster{
 
 private:
+
     Eigen::Vector3f m_vStartPoint;
     Eigen::Vector3f m_vEndPoint;
     Eigen::Vector3f m_vBlockSize;
+    static Eigen::Vector3f m_vLastStartPoint;
+    static Eigen::Vector3f m_vLastEndPoint;
+    static Eigen::Vector3f m_vLastBlockSize;
 
     // Caster params
     // 当前行进到的体素位置
@@ -35,7 +41,9 @@ public:
     RayCaster(const Eigen::Vector3f& vStartPoint, const Eigen::Vector3f& vEndPoint, const Eigen::Vector3f& vBlockSize);
     bool GetNextHashPos(HashPos& oBlockPos);
     void InitCasterParams();
-    void MakeRayDebugMarker(const std::vector<HashPos>& vBlockList, visualization_msgs::MarkerArray& oOutputVolume, int iOffset = 0); 
+
+    typedef std::unordered_set<HashPos, HashFunc> HashPosSet;
+    static void MakeRayDebugMarker(const HashPosSet& vBlockList, visualization_msgs::MarkerArray& oOutputVolume, int iIdOffset = 0); 
 };
 
 class RayUpdater {
@@ -55,15 +63,28 @@ public:
 
 public:
     void RayFusion(
-        pcl::PointNormal oLidarPos, 
+        const pcl::PointNormal& oLidarPos, 
         pcl::PointCloud<pcl::PointNormal>& vDepthMeasurementCloud,
         VolumeBase& oVolume,
         bool bKeepVoxel);
 
+private:
+    void BlockFusion(
+        const pcl::PointNormal& oLidarPos, 
+        pcl::PointCloud<pcl::PointNormal>& vLocalCloud,
+	    HashBlock* pHashBlockVolume,
+        Block& oBlock);
+
+    void GetDepthAndIndexMap(pcl::PointCloud<pcl::PointNormal>& vLocalCloud);
 
 protected:
     PointCloudOperation& m_oPcOperation;
     RosPublishManager& m_oRpManager;
+    std::vector<std::vector<double>> m_vDepthImage;
+    std::vector<std::vector<size_t>> m_vDepthIndex;
+    std::unordered_set<HashPos, HashFunc> m_vPosRecord;
+
+    TimeDebugger m_oFuseTimer;
 };
 
 #endif

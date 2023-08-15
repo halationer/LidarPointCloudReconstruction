@@ -58,7 +58,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="use_surfel_fusion"   default="true"/>
     <arg name="strategy_type"       default="2"/>
     <!-- union set -->
-    <arg name="use_union_set"       default="true"/>
+    <arg name="use_union_set"       default="false"/>
     <arg name="only_max_union_set"  default="false"/>
     <arg name="strict_dot_ref"      default="0.95"/>
     <arg name="soft_dot_ref"        default="0.3"/>

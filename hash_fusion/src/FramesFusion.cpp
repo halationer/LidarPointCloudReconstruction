@@ -760,6 +760,7 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 	// start update frame point cloud
 	++m_iFusionFrameNum;
 
+	// TODO: the core time cost, to be reduce
 	if(m_bSurfelFusion) {
 
 		std::cout << "fusion start \t";

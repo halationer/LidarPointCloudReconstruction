@@ -2,6 +2,14 @@
 #include "HashBlock.h"
 #include "HashVoxeler.h"
 
+
+unsigned int VoxelBase::TypeByQueue() {
+
+	if(IsUnknown()) return Unknown;
+	if(__builtin_popcount(iStatusQueue) >= 4) return Free;
+	return Occupied;
+}
+
 VolumeBase* VolumeBase::CreateVolume(enum VolumeType volumeType) {
 
     switch(volumeType) {

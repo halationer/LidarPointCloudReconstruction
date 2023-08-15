@@ -22,7 +22,30 @@ struct VoxelBase {
     // Eigen::Vector3f normal;
 	pcl::PointNormal point;
 
-	bool bIsOccupied;
+	// bool bIsOccupied;
+	bool IsUnknown() const { return enumStatus == 0; }
+	bool IsOccupied() const { return enumStatus == 1; }
+	bool IsFreeSpace() const { return enumStatus == 2; }
+	void SetUnknown() { enumStatus = 0; }
+	void SetOccupied() { enumStatus = 1; }
+	void SetFreeSpace() { enumStatus = 2; }
+
+private:
+	char enumStatus = 0;
+
+public:
+
+	static constexpr unsigned int Occupied = 0;
+	static constexpr unsigned int Free = 1;
+	static constexpr unsigned int Unknown = 2;
+
+	unsigned int iStatusQueue = 0;
+	// use VoxelBase::
+	void PushQueue(unsigned int enumStatus) { iStatusQueue = (iStatusQueue << 1) | enumStatus; }
+	// only 0 - 15
+	int SearchQueue(unsigned int index) { return iStatusQueue & (1 << index); }
+
+	unsigned int TypeByQueue();
 };
 
 

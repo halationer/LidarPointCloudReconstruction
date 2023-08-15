@@ -3,12 +3,37 @@
 
 #include <vector>
 #include <unordered_map>
+#include <string>
 
 #include "VolumeBase.h"
 #include "tools/VolumeUpdateStrategy.h"
 #include "tools/OutputUtils.h"
 #include "tools/UnionSet.h"
+#include "tools/RosPublishManager.h"
 
+struct Block {
+
+    typedef Block *Ptr;
+    typedef std::vector<VoxelBase, Eigen::aligned_allocator<VoxelBase>> DataType;
+    DataType data;
+    HashPos pos;
+
+    Block(){}
+    Block(int iVoxelNum, const HashPos& oPos):data(iVoxelNum),pos(oPos){}
+    Block(const Block& oBlock):data(oBlock.data),pos(oBlock.pos) {}
+    void copy(const Block& oBlock) { data = oBlock.data; pos = oBlock.pos; }
+
+    size_t size() const { return data.size(); }
+    VoxelBase& operator[](size_t iIndex) { return data[iIndex]; }
+    VoxelBase& at(size_t iIndex) { return data[iIndex]; }
+
+    typedef DataType::iterator iterator;
+    typedef DataType::const_iterator const_iterator;
+    iterator begin()                { return data.begin(); }
+    iterator end()                  { return data.end(); }
+    const_iterator begin() const   { return data.begin(); }
+    const_iterator end() const     { return data.end(); }
+};
 
 class HashBlock : public VolumeBase {
 
@@ -18,10 +43,8 @@ public:
     // types
     typedef std::vector<size_t> Indices;
 
-    typedef std::vector<VoxelBase, Eigen::aligned_allocator<VoxelBase>> Block;
-
-    typedef std::unordered_map<HashPos, Block, HashFunc, std::equal_to<HashPos>,
-        Eigen::aligned_allocator<std::pair<const HashPos, Block>>> HashBlockVolume;
+    typedef std::unordered_map<HashPos, Block::Ptr, HashFunc, std::equal_to<HashPos>,
+        Eigen::aligned_allocator<std::pair<const HashPos, Block::Ptr>>> HashBlockVolume;
 
     typedef std::unordered_map<HashPos, Indices, HashFunc, std::equal_to<HashPos>,
         Eigen::aligned_allocator<std::pair<const HashPos, Indices>>> HashIndices;
@@ -65,6 +88,17 @@ public:
     Eigen::Vector3f GetVoxelLength() const override { return m_vVoxelSize; }
     Eigen::Vector3f HashBlockPosTo3DPos(const HashPos & oPos) const {
         return {oPos.x * m_vBlockSize.x(), oPos.y * m_vBlockSize.y(), oPos.z * m_vBlockSize.z()};
+    }    
+    Eigen::Vector3f HashVoxelIndexTo3DPos(int iIndex) const {
+	    // iIndex = (vPointPos.z() * m_vVoxelNumsPerBlock.y() + vPointPos.y()) * m_vVoxelNumsPerBlock.x() + vPointPos.x();
+        Eigen::Vector3f vVoxelPos;
+        vVoxelPos[0] = iIndex % m_vVoxelNumsPerBlock[0];
+        for(int i = 1; i < 3; ++i){
+            iIndex -= vVoxelPos[i - 1];
+            iIndex /= m_vVoxelNumsPerBlock[i - 1];
+            vVoxelPos[i] = iIndex % m_vVoxelNumsPerBlock[i];
+        }
+        return vVoxelPos.cwiseProduct(m_vVoxelSize) + m_vVoxelHalfSize;
     }
 
     // set the resolution of voxel
@@ -79,7 +113,8 @@ public:
 	void VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vCloud) override;
 	void UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & vVolumeCloud, const bool bKeepVoxel = false) override;
 
-	void PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oPos) const override;
+	void PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oVoxelPos) const override;
+	void PointBelongVoxelPos(const Eigen::Vector3f & vPoint, HashPos & oVoxelPos) const;
 
 	template<class PointType>
 	void PointBelongBlockPos(const PointType & oPoint, HashPos & oPos) const;
@@ -89,8 +124,9 @@ public:
     void PointBelongVoxelIndex(const PointType & oPoint, HashPos & oBlockPos, int & iVoxelIndex) const;
     
     VoxelBase* GetVoxelPtr(const HashPos & oPos);
-    // =========================================================================================================================
 
+    // =========================================================================================================================
+public:
     // sdf transfer should use these
 	void GetRecentVolume(HashVolume & vVolumeCopy, const int iRecentTime) const override;
 
@@ -106,6 +142,14 @@ public:
 	void GetAllVolume(HashVolume & vVolumeCopy) const override;
 	void GetAllConnectVolume(HashVolume & vVolumeCopy, const int iConnectMinSize) override;
 	void RebuildUnionSetAll(const float fStrictDotRef, const float fSoftDotRef, const float fConfidenceLevelLength) override;
+
+    // ========================================================================================================================
+public:
+    size_t GetBlockNum() const { return m_vBlockVolume.size(); }
+    std::string PrintVolumeStatus() const;
+
+    void GetBlockCopy(const HashPos& oBlockPos, Block& oBlock);
+	void UpdateConflictResult(Block & oBlock, const bool bKeepVoxel = false);
 };
 
 #endif

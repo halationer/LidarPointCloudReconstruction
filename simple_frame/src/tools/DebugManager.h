@@ -6,6 +6,7 @@
 #include <vector>
 #include <ros/ros.h>
 #include <fstream>
+#include <iostream>
 
 class DebugManager {
 
@@ -41,6 +42,12 @@ public:
         record_list.back()["all"] = current_line_time;
         return current_line_time;
     }
+    void CoutCurrentLine() {
+        for(auto && [name,time] : record_list.back()) {
+            std::cout << name << ": " << time << " | ";
+        }
+        std::cout << "\n";
+    }
     void OutputDebug(const std::string& file_name) {
         std::ofstream file(file_name);
         for(auto && [name,_] : record_list.back())
@@ -67,14 +74,9 @@ private:
 // 线程安全的计时类
 class TimeDebuggerThread {
 
-public:
+    friend class TimeDebuggerProxy;
 
-    void UpdateLine(const size_t id, const std::map<std::string, double>& record) {
-        std::unique_lock<std::mutex> lock(record_mutex);
-        while(record_list.size() <= id) 
-            record_list.push_back(std::map<std::string,double>());
-        record_list[id] = record;
-    }
+public:
     
     void OutputDebug(const std::string& file_name) {
         std::unique_lock<std::mutex> lock(record_mutex);
@@ -91,11 +93,19 @@ public:
     }
 
 private:
+
+    void UpdateLine(const size_t id, const std::map<std::string, double>& record) {
+        std::unique_lock<std::mutex> lock(record_mutex);
+        while(record_list.size() <= id) 
+            record_list.push_back(std::map<std::string,double>());
+        record_list[id] = record;
+    }
+
     std::mutex record_mutex;
     std::vector<std::map<std::string, double>> record_list;
 };
 
-// 记录单行数据的代理，用于 TimeDebuggerThread
+// 记录单行数据的代理，由于线程安全的计时类不可以直接被使用，因此，需要代理类进行接管
 class TimeDebuggerProxy {
 
 public:

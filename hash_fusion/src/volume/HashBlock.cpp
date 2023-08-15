@@ -1,5 +1,6 @@
 #include <memory>
 #include <shared_mutex>
+#include <sstream>
 
 #include "volume/HashBlock.h"
 #include "Fusion.h"
@@ -65,7 +66,11 @@ void HashBlock::PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & o
 	oVoxelPos.y = floor(oPoint.y * m_vVoxelSizeInverse.y());
 	oVoxelPos.z = floor(oPoint.z * m_vVoxelSizeInverse.z());
 }
-
+void HashBlock::PointBelongVoxelPos(const Eigen::Vector3f & vPoint, HashPos & oVoxelPos) const {
+    oVoxelPos.x = floor(vPoint.x() * m_vVoxelSizeInverse.x());
+	oVoxelPos.y = floor(vPoint.y() * m_vVoxelSizeInverse.y());
+	oVoxelPos.z = floor(vPoint.z() * m_vVoxelSizeInverse.z());
+}
 
 /**
  * @brief get voxel index according to point position, please use it before in-block check
@@ -125,20 +130,41 @@ void HashBlock::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointNormal> & vClo
 	std::unique_lock<std::shared_mutex> volume_write_lock(m_mVolumeLock);
 	++m_iFrameCount;
     for(auto&& [oPos, vIndices] : vPointContainer) {
-		Block& vBlock = m_vBlockVolume[oPos];
-		if(vBlock.empty()) vBlock.resize(m_iVoxelFullNumPerBlock);
-        FusePointToBlock(vCloud, vBlock, vIndices);
+		Block::Ptr& pBlock = m_vBlockVolume[oPos];
+		if(pBlock == nullptr) 
+			pBlock = new Block(m_iVoxelFullNumPerBlock, oPos);
+        FusePointToBlock(vCloud, *pBlock, vIndices);
     }
+
+	/* 目前的问题是，有相当一部分的voxel，其占用队列的更新停滞了
+	// debug free voxels
+	static int update_count = 0;
+	if(update_count++ % 30 != 0) return;
+	std::vector<float> associate;
+	pcl::PointCloud<pcl::PointNormal> vFreeCloud;
+	for(auto&& [oBlockPos, pBlock] : m_vBlockVolume) {
+		for(int i = 0; i < pBlock->size(); ++i) {
+			VoxelBase& oVoxel = pBlock->at(i);
+			if(oVoxel.IsFreeSpace()) {
+				pcl::PointNormal oPoint;
+				oPoint.getVector3fMap() = HashVoxelIndexTo3DPos(i) + HashBlockPosTo3DPos(pBlock->pos);
+				vFreeCloud.push_back(oPoint);
+				associate.push_back(__builtin_popcount(oVoxel.iStatusQueue) * 0.1f);
+			}
+		}
+	}
+	RosPublishManager::GetInstance().PublishPointCloud(vFreeCloud, associate, "/debug_free_voxel");
+	//*/
 }
 
 
 /**
  * @brief voxelize the points in the block
  * @param vCloud the input lidar cloud with normals
- * @param vBlock the reference of processed block
+ * @param oBlock the reference of processed block
  * @param vIndices indices of points in the processed block
 */
-void HashBlock::FusePointToBlock(pcl::PointCloud<pcl::PointNormal> & vCloud, Block& vBlock, Indices& vIndices) {
+void HashBlock::FusePointToBlock(pcl::PointCloud<pcl::PointNormal> & vCloud, Block& oBlock, Indices& vIndices) {
 
 	// put point into voxels
     std::unordered_map<size_t, std::vector<int>> vPointContainer;
@@ -153,18 +179,22 @@ void HashBlock::FusePointToBlock(pcl::PointCloud<pcl::PointNormal> & vCloud, Blo
 	Fusion oVoxelFusion;
 	for(auto&& [iVoxelIndex, iCloudIndices] : vPointContainer) {
 
-		// init base point
-		VoxelBase& oCurrentVoxel = vBlock[iVoxelIndex];
-		pcl::PointNormal oBasePoint = oCurrentVoxel.bIsOccupied ? oCurrentVoxel.point : pcl::PointNormal();
+		// init queue
+		VoxelBase& oCurrentVoxel = oBlock[iVoxelIndex];
+		oCurrentVoxel.PushQueue(VoxelBase::Occupied);
+		if(oCurrentVoxel.TypeByQueue() == VoxelBase::Free) {
+			continue;
+		}
 
 		// fusion points
+		pcl::PointNormal oBasePoint = oCurrentVoxel.IsUnknown() ? pcl::PointNormal() : oCurrentVoxel.point;
 		pcl::PointNormal oFusedPoint = oVoxelFusion.NormalFusionWeighted(iCloudIndices, vCloud, oBasePoint);
 		float& fConflictTime = oFusedPoint.data_c[1];
 		m_pUpdateStrategy->Support(fConflictTime);
 		float& fTimeStamp = oFusedPoint.data_c[2];
 		fTimeStamp = m_iFrameCount;
 		oCurrentVoxel.point = oFusedPoint;
-		oCurrentVoxel.bIsOccupied = true;
+		oCurrentVoxel.SetOccupied();
 	}
 }
 
@@ -190,15 +220,15 @@ void HashBlock::UpdateConflictResult(const pcl::PointCloud<pcl::PointNormal> & v
 
 		if(fDeconfidence < 0 && m_vBlockVolume.count(oBlockPos)) {
 
-			Block& vBlock = m_vBlockVolume[oBlockPos];
-			VoxelBase& oCurrentVoxel = vBlock[iVoxelIndex];
-			if(!oCurrentVoxel.bIsOccupied) continue;
+			Block& oBlock = *m_vBlockVolume[oBlockPos];
+			VoxelBase& oCurrentVoxel = oBlock[iVoxelIndex];
+			if(!oCurrentVoxel.IsOccupied()) continue;
 
 			float& fConflictTime = oCurrentVoxel.point.data_c[1];
 			bool bToDelete = m_pUpdateStrategy->Conflict(fConflictTime);
 
 			if(bToDelete && !bKeepVoxel) {
-				oCurrentVoxel.bIsOccupied = false;
+				oCurrentVoxel.SetFreeSpace();
 			} 
 			else {
 				float& fConfidence = oCurrentVoxel.point.data_n[3];
@@ -219,9 +249,9 @@ void HashBlock::GetAllVolume(HashVolume & vVolumeCopy) const {
 	vVolumeCopy.clear();
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 	
-	for(auto && [oBlockPos, vBlock] : m_vBlockVolume) {
-		for(auto && vVoxel : vBlock) {
-			if(vVoxel.bIsOccupied) {
+	for(auto && [oBlockPos, pBlock] : m_vBlockVolume) {
+		for(auto && vVoxel : *pBlock) {
+			if(!vVoxel.IsUnknown()) {
 				HashPos oVoxelPos;
 				PointBelongVoxelPos(vVoxel.point, oVoxelPos);
 				vVolumeCopy[oVoxelPos] = vVoxel.point;
@@ -239,9 +269,9 @@ void HashBlock::GetStaticVolume(HashVolume & vVolumeCopy) const {
 
 	vVolumeCopy.clear();
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
-	for(auto && [oBlockPos, vBlock] : m_vBlockVolume) {
-		for(auto && oVoxel : vBlock) {
-			if(oVoxel.bIsOccupied
+	for(auto && [oBlockPos, pBlock] : m_vBlockVolume) {
+		for(auto && oVoxel : *pBlock) {
+			if(oVoxel.IsOccupied()
 				&& m_pUpdateStrategy->IsStatic(oVoxel.point.data_c[1])) {
 				HashPos oVoxelPos;
 				PointBelongVoxelPos(oVoxel.point, oVoxelPos);
@@ -260,9 +290,9 @@ void HashBlock::GetVolumeCloud(pcl::PointCloud<pcl::PointNormal> & vVolumeCloud)
 
 	vVolumeCloud.clear();
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
-	for(auto && [oBlockPos, vBlock] : m_vBlockVolume) {
-		for(auto && vVoxel : vBlock) {
-			if(vVoxel.bIsOccupied) {
+	for(auto && [oBlockPos, pBlock] : m_vBlockVolume) {
+		for(auto && vVoxel : *pBlock) {
+			if(vVoxel.IsOccupied()) {
 				vVolumeCloud.push_back(vVoxel.point);
 			}
 		}
@@ -280,10 +310,10 @@ void HashBlock::GetRecentVolume(HashVolume & vVolumeCopy, const int iRecentTime)
 	vVolumeCopy.clear();
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 
-	for(auto && [oBlockPos, oBlock] : m_vBlockVolume) {
-		for(auto && oVoxel : oBlock) {
+	for(auto && [oBlockPos, pBlock] : m_vBlockVolume) {
+		for(auto && oVoxel : *pBlock) {
 
-			if(oVoxel.bIsOccupied
+			if(oVoxel.IsOccupied()
 				&& m_iFrameCount - oVoxel.point.data_c[2] <= (uint32_t)iRecentTime 
 				&& m_pUpdateStrategy->IsStatic(oVoxel.point.data_c[1])) {
 
@@ -307,13 +337,13 @@ void HashBlock::GetRecentConnectVolume(HashVolume & vVolumeCopy, const int iRece
 	vVolumeCopy.clear();
 	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
-	for(auto && [oBlockPos, oBlock] : m_vBlockVolume) {
-		for(auto && oVoxel : oBlock) {
+	for(auto && [oBlockPos, pBlock] : m_vBlockVolume) {
+		for(auto && oVoxel : *pBlock) {
 
 			HashPos oPos;
 			PointBelongVoxelPos(oVoxel.point, oPos);
 
-			if(oVoxel.bIsOccupied
+			if(oVoxel.IsOccupied()
 				&& m_iFrameCount - oVoxel.point.data_c[2] <= (uint32_t)iRecentTime 
 				&& m_pUpdateStrategy->IsStatic(oVoxel.point.data_c[1])
 				&& m_oUnionSet.GetSetSize(oPos) > iConnectMinSize) {
@@ -336,13 +366,13 @@ void HashBlock::GetAllConnectVolume(HashVolume & vVolumeCopy, const int iConnect
 	vVolumeCopy.clear();
 	std::shared_lock<std::shared_mutex> union_read_lock(m_mUnionSetLock);
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
-	for(auto && [oBlockPos, oBlock] : m_vBlockVolume) {
-		for(auto && oVoxel : oBlock) {
+	for(auto && [oBlockPos, pBlock] : m_vBlockVolume) {
+		for(auto && oVoxel : *pBlock) {
 
 			HashPos oPos;
 			PointBelongVoxelPos(oVoxel.point, oPos);
 
-			if(oVoxel.bIsOccupied
+			if(oVoxel.IsOccupied()
 				&& m_pUpdateStrategy->IsStatic(oVoxel.point.data_c[1])
 				&& m_oUnionSet.GetSetSize(oPos) > iConnectMinSize) {
 
@@ -363,14 +393,14 @@ void HashBlock::GetLocalVolume(HashVolume & vVolumeCopy, const Eigen::Vector3f v
 	vVolumeCopy.clear();
 	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
 
-	for(auto && [oBlockPos, oBlock] : m_vBlockVolume) {
-		for(auto && oVoxel : oBlock) {
+	for(auto && [oBlockPos, pBlock] : m_vBlockVolume) {
+		for(auto && oVoxel : *pBlock) {
 
 			HashPos oPos;
 			PointBelongVoxelPos(oVoxel.point, oPos);
 
 			Eigen::Vector3f vCurrent(oPos.x, oPos.y, oPos.z);
-			if(oVoxel.bIsOccupied
+			if(oVoxel.IsOccupied()
 				&& (vCurrent - vCenter).norm() <= fRadius 
 				&& m_pUpdateStrategy->IsStatic(oVoxel.point.data_c[1]))
 				vVolumeCopy[oPos] = oVoxel.point;
@@ -513,12 +543,10 @@ VoxelBase* HashBlock::GetVoxelPtr(const HashPos & oPos) {
 	HashPos oBlockPos;
 	int iVoxelIndex;
 	pcl::PointXYZ oVoxelBase = HashPosTo3DPos(oPos);
-	oVoxelBase.x += m_vVoxelHalfSize.x();
-	oVoxelBase.y += m_vVoxelHalfSize.y();
-	oVoxelBase.z += m_vVoxelHalfSize.z();
+	oVoxelBase.getVector3fMap() += m_vVoxelHalfSize;
 	PointBelongVoxelIndex(oVoxelBase, oBlockPos, iVoxelIndex);
-	if(m_vBlockVolume.count(oBlockPos) && m_vBlockVolume[oBlockPos].size() > iVoxelIndex)
-		return &m_vBlockVolume[oBlockPos][iVoxelIndex];
+	if(m_vBlockVolume.count(oBlockPos) && m_vBlockVolume[oBlockPos]->size() > iVoxelIndex)
+		return &(m_vBlockVolume[oBlockPos]->at(iVoxelIndex));
 	return nullptr;
 }
 
@@ -539,7 +567,7 @@ void HashBlock::UpdateUnionConflict(const int iRemoveSetSizeRef, const float fRe
 			for(auto && oPosInSet : oPosList) {
 				
 				VoxelBase* oVoxel = GetVoxelPtr(oPosInSet);
-				if(!oVoxel->bIsOccupied) continue;
+				if(!oVoxel->IsOccupied()) continue;
 
 				float& fTimeStamp = oVoxel->point.data_c[2];
 				if(m_iFrameCount - fTimeStamp > fRemoveTimeRef) {
@@ -635,5 +663,64 @@ void HashBlock::DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet) {
 		oCurrentSet.color.a = 0.8;
 		
 		oOutputUnionSet.markers.push_back(oCurrentSet);
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+/**
+ * @brief output the hash volume status
+ * @return debug message, include size/bucket_size/load_factor
+*/
+std::string HashBlock::PrintVolumeStatus() const{
+	std::stringstream ss;
+	ss << "Block size is: " << m_vBlockVolume.size()
+		<< " | Bucket size is: " << m_vBlockVolume.bucket_count()
+		<< " | Load factor is: " << m_vBlockVolume.load_factor();
+	return ss.str();
+}
+
+
+void HashBlock::GetBlockCopy(const HashPos& oBlockPos, Block& oBlock) {
+	
+	std::shared_lock<std::shared_mutex> volume_read_lock(m_mVolumeLock);
+
+	// auto generate new block
+	if(m_vBlockVolume[oBlockPos] == nullptr) {
+		m_vBlockVolume[oBlockPos] = new Block(m_iVoxelFullNumPerBlock, oBlockPos);
+	}
+	oBlock.copy(*m_vBlockVolume[oBlockPos]);
+}
+
+void HashBlock::UpdateConflictResult(Block& oBlock, const bool bKeepVoxel) {
+
+	std::unique_lock<std::shared_mutex> volume_write_lock(m_mVolumeLock);
+
+	for(int i = 0; i < oBlock.size(); ++i) {
+
+		const VoxelBase& oVoxel = oBlock.at(i);
+
+		const float& fDeconfidence = oVoxel.point.data_n[3];
+		if(fDeconfidence >= 0) continue;
+
+		VoxelBase& oCurrentVoxel = m_vBlockVolume[oBlock.pos]->at(i);
+		oCurrentVoxel.PushQueue(VoxelBase::Free);
+		if(oCurrentVoxel.IsUnknown()) {
+			oCurrentVoxel.SetFreeSpace();
+			continue;
+		}
+
+		if(oCurrentVoxel.IsFreeSpace()) continue;
+
+		float& fConflictTime = oCurrentVoxel.point.data_c[1];
+		bool bToDelete = m_pUpdateStrategy->Conflict(fConflictTime);
+
+		if(bToDelete && !bKeepVoxel) {
+			oCurrentVoxel.SetFreeSpace();
+		} 
+		else {
+			float& fConfidence = oCurrentVoxel.point.data_n[3];
+			fConfidence -= fDeconfidence;
+			if(fConfidence < 0) fConfidence = 0;
+		}
 	}
 }

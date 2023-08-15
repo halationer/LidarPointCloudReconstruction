@@ -14,6 +14,7 @@ void RosPublishManager::PublishPointCloud(
     if(m_vPublishers.count(sTopicName) == 0)
     {
         m_vPublishers[sTopicName] = m_pNodeHandle->advertise<sensor_msgs::PointCloud2>(sTopicName, iQueueSize, true);
+        m_vPublishers[sTopicName].publish(sensor_msgs::PointCloud2());
     }
     if(!PublishCheck(sTopicName)) return;
 
@@ -62,15 +63,18 @@ template void RosPublishManager::PublishPointCloud(
 
 
 void RosPublishManager::PublishMarkerArray(
-    const visualization_msgs::MarkerArray & oMarkerArray,
+    visualization_msgs::MarkerArray & oMarkerArray,
     const std::string & sTopicName,
+    const std::function<void(visualization_msgs::MarkerArray &)>& funcMakeMarker,
     const int iQueueSize) {
 
     if(m_vPublishers.count(sTopicName) == 0)
     {
         m_vPublishers[sTopicName] = m_pNodeHandle->advertise<visualization_msgs::MarkerArray>(sTopicName, iQueueSize, true);
+        m_vPublishers[sTopicName].publish(visualization_msgs::MarkerArray());
     }
     if(!PublishCheck(sTopicName)) return;
+    funcMakeMarker(oMarkerArray);
     m_vPublishers[sTopicName].publish(oMarkerArray);
 }
 
