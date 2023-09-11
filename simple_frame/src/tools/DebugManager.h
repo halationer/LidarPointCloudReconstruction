@@ -33,7 +33,7 @@ public:
         struct timeval end;
         gettimeofday(&end, NULL);
 		double dtime = (end.tv_sec - start.tv_sec) * 1000.0 +(end.tv_usec - start.tv_usec) * 0.001;
-        record_list.back()[algo_name] = dtime;
+        record_list.back()[algo_name] += dtime;
         current_line_time += dtime;
         gettimeofday(&start, NULL);
         return dtime;

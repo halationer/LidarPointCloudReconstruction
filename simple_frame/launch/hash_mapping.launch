@@ -52,8 +52,14 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <arg name="mf_output_path" value="$(arg mf_output_path)"/>
     </include>
 
-    <!-- rosbag related: replay with rate = 1 speed up-->
+    <!-- rosbag related: replay with rate = 1 speed up-->    
     <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 $(arg rosbag) --topics /velodyne_points -s $(arg jump)"/>
+
+    <!--
+    <node pkg="rosbag" type="play" name="rosbag" args="-'-clock -r 1 $(arg rosbag) -s $(arg jump)">
+        <remap from="/lidar_points" to="/velodyne_points"/>
+    </node>
+    -->
 
     <!-- <include file="$(find aloam_velodyne)/launch/kitti_helper_simple.launch" /> -->
 

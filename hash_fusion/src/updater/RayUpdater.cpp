@@ -147,7 +147,7 @@ void RayUpdater::RayFusion(
         return;
     }
 
-	m_oFuseTimer.DebugTime("1_exchange_volume_ptr");
+	m_oFuseTimer.DebugTime("1_convert_ptr");
 
     /**
      * 如果依然使用纯 voxel 的形式，则 voxel 数量的峰值为 300,000 左右。
@@ -185,7 +185,7 @@ void RayUpdater::RayFusion(
         RayCaster::MakeRayDebugMarker(vHashPosSet, oMarkerArray);
     });
 	
-	m_oFuseTimer.DebugTime("2_get_all_block_voxel");
+	m_oFuseTimer.DebugTime("2_get_blocks");
 
 
     // 转换坐标系 0.2ms
@@ -194,16 +194,21 @@ void RayUpdater::RayFusion(
     m_oPcOperation.TranslatePointCloudToLocal(oLidarPos, vDepthMeasurementCloud, vLocalCloud);
     GetDepthAndIndexMap(vLocalCloud);
 
-	m_oFuseTimer.DebugTime("3_convert_and_project");
+	m_oFuseTimer.DebugTime("3_convert_pc");
 
     for(const HashPos& oBlockPos : vHashPosSet) {
 		Block oBlock;
 		pHashBlockVolume->GetBlockCopy(oBlockPos, oBlock);
+		m_oFuseTimer.DebugTime("4_1_BlockCopy");
+
         BlockFusion(oLidarPos, vLocalCloud, pHashBlockVolume, oBlock);
+		m_oFuseTimer.DebugTime("4_2_BlockFusion"); // this is the bottleneck
+
 		pHashBlockVolume->UpdateConflictResult(oBlock, bKeepVoxel);
+		m_oFuseTimer.DebugTime("4_3_Update");
     }
 	
-	m_oFuseTimer.DebugTime("4_fusion_all");
+	// m_oFuseTimer.DebugTime("4_fusion_all");
 	m_oFuseTimer.GetCurrentLineTime();
 	m_oFuseTimer.CoutCurrentLine();
 }
@@ -233,8 +238,7 @@ void RayUpdater::BlockFusion(
     Eigen::Vector3f vBlockBasePos = pHashBlockVolume->HashBlockPosTo3DPos(oBlock.pos);
 
 	// /* 对于之前帧的所有点，对应位置建立匹配关系 60 - 150 ms
-	std::vector<float> associated_feature(oBlock.size(), 0);
-
+	// std::vector<float> associated_feature(oBlock.size(), 0);
     for(int i = 0; i < oBlock.size(); ++i) {
         
         VoxelBase& oVoxel = oBlock[i];
@@ -247,20 +251,18 @@ void RayUpdater::BlockFusion(
         HashPos oPos;
         pHashBlockVolume->PointBelongVoxelPos(vRefPoint, oPos);
         if( m_vPosRecord.count(oPos) ) { 
-            associated_feature[i] = -1.0f;
+            // associated_feature[i] = -1.0f;
             continue;
         }
 
-        vRefPoint -= oLidarPos.getVector3fMap();
-
 		// 此处消耗一半时间
+		static const float DEG_RAD_FIX = 180.0f / M_PIf32;
+        vRefPoint -= oLidarPos.getVector3fMap();
         double depth = vRefPoint.norm();
 		if(depth < 1e-5) continue;
         Eigen::Vector3f oDirection = vRefPoint.normalized();
-		float yaw = std::atan2(oDirection.y(), oDirection.x()) / M_PI * 180.0;
-		float pitch = std::asin(oDirection.z()) / M_PI * 180.0;
-		
-
+		float yaw = std::atan2(oDirection.y(), oDirection.x()) * DEG_RAD_FIX;
+		float pitch = std::asin(oDirection.z()) * DEG_RAD_FIX;
 		int row = (pitch + 90) * pitch_dim_expand;
 		int col = (yaw   + 180) * yaw_dim_expand;
 
@@ -310,7 +312,7 @@ void RayUpdater::BlockFusion(
 			if( vr.norm() < r * a / b && v12.dot(n2) < 0 //保守剔除（在斜圆锥内部）
 			|| n1.dot(v12) < -0.2 && n1.dot(Eigen::Vector3f(0,0,1)) < 0.2 && depth < 30 //针对自遮挡加强剔除(法向与视线方向相近 && 法向不朝上 && 距离足够近)
 			) { 
-				associated_feature[i] = 0.0f;
+				// associated_feature[i] = 0.0f;
 
 				// 记录减少的置信度
 				fConfidenceRecord = fOldConfidence;
@@ -318,18 +320,18 @@ void RayUpdater::BlockFusion(
 				oVoxel.SetFreeSpace();
 				// if(fOldConfidence < 0.f) fOldConfidence = 0.f;
 			}
-			else associated_feature[i] = -1.0f;
+			// else associated_feature[i] = -1.0f;
 		}
-		else {
-			associated_feature[i] = -1.0f;
-		}
+		// else {
+		// 	associated_feature[i] = -1.0f;
+		// }
     }
 }
 
 /**
  * @brief project the local cloud onto a sphere image
  * @param vLocalCloud the local cloud
- * @return outvDepthImage the output image with depth |
+ * @return vDepthImage the output image with depth |
  * @return vDepthIndex the output image with index of the cloud
 */
 void RayUpdater::GetDepthAndIndexMap(pcl::PointCloud<pcl::PointNormal>& vLocalCloud)
