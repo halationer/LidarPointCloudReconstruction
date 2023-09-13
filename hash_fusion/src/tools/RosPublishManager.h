@@ -9,6 +9,9 @@
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <unordered_set>
+
+#include "HashPos.h"
 
 
 class RosPublishManager {
@@ -23,10 +26,13 @@ public:
         return instance;
     }
 
+    typedef std::unordered_set<HashPos, HashFunc> HashPosSet;
+
 private:
     bool PublishCheck(const std::string& sTopicName) {
         return m_vPublishers[sTopicName].getNumSubscribers() > 0;
     }
+    static void BlockSetMaker(const HashPosSet& vBlockList, const Eigen::Vector3f& vBlockSize, visualization_msgs::MarkerArray& oOutputVolume, int iIdOffset = 0); 
 
 public:
     template<class T>
@@ -43,6 +49,14 @@ public:
         const std::function<void(visualization_msgs::MarkerArray&)>& funcMakeMarker = [](visualization_msgs::MarkerArray&){},
         const int iQueueSize = 1
     );
+
+    void PublishNormalPoints(
+        const pcl::PointCloud<pcl::PointNormal> & vCloud,
+        const std::string & sTopicName,
+        const int iQueueSize = 1
+    );
+
+    void PublishBlockSet(const HashPosSet& vBlockSet, const Eigen::Vector3f& vBlockSize, const std::string & sTopicName, const int iQueueSize = 1);
 
     void HSVToRGB(float H, float S, float V, float& R, float& G, float& B);
     void HSVToRGB(float H, float S, float V, uint8_t& R, uint8_t& G, uint8_t& B);

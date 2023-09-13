@@ -20,7 +20,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
     <arg name="mf_output_path" default="" />
 
-    <arg name="cloud_in_topic" default="/frame_cloudnormals" />
+    <arg name="mesh_in_topic" default="/frame_mesh_algo" />
 
     <!-- use slam transfer -->
     <!-- <arg name="odom_in_topic" default="/slam_odom" /> -->
@@ -94,7 +94,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <param name="file_output_path" type="string" value="$(arg mf_output_path)"  />
 
         <!-- define input topic name-->
-        <param name="cloud_in_topic" type="string" value="$(arg cloud_in_topic)"  />
+        <param name="mesh_in_topic" type="string" value="$(arg mesh_in_topic)"  />
 
         <param name="odom_in_topic" type="string" value="$(arg odom_in_topic)" />
 

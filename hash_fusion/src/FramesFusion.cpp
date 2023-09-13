@@ -27,6 +27,7 @@ FramesFusion::FramesFusion(ros::NodeHandle & node,
 					   m_dAverageFusionTime(0), m_dMaxFusionTime(0), m_iFusionFrameNum(0), m_OdomLoopRate(1),
 					   m_oProjectUpdater(ProjectUpdater::GetInstance()),
 					   m_oRayUpdater(RayUpdater::GetInstance()),
+					   m_oMeshUpdater(MeshUpdater::GetInstance()),
 					   m_oRpManager(RosPublishManager::GetInstance()) {
 
 	//read parameters
@@ -34,7 +35,7 @@ FramesFusion::FramesFusion(ros::NodeHandle & node,
 
 	//***subscriber related*** 
 	//subscribe (hear) the point cloud topic 
-	m_oCloudSuber = nodeHandle.subscribe(m_sInCloudTopic, 5, &FramesFusion::HandlePointClouds, this);
+	m_oMeshSuber = nodeHandle.subscribe(m_sInMeshTopic, 5, &FramesFusion::HandleMesh, this);
 
 	//subscribe (hear) the odometry information (trajectory)
 	m_oOdomSuber = nodeHandle.subscribe(
@@ -295,7 +296,7 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
 
  	//input point cloud topic
-	nodeHandle.param("cloud_in_topic", m_sInCloudTopic, std::string("/cloud_points"));
+	nodeHandle.param("mesh_in_topic", m_sInMeshTopic, std::string("/frame_mesh_algo"));
 
 	//input odom topic
   	nodeHandle.param("odom_in_topic", m_sInOdomTopic, std::string("/odometry/filtered"));
@@ -718,107 +719,66 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const Eigen::Ve
 	timer.GetCurrentLineTime();
 }
 
-/*************************************************
-Function: HandlePointClouds
-Description: a callback function in below:
-node.subscribe(m_sLaserTopic, 5, &GroundExtraction::HandlePointClouds, this);
-Calls: CheckTruthPoint
-Called By: TransformLaserInOdom, which is the construction function
-Table Accessed: none
-Table Updated: none
-Input: rawpoint, a 3d point with pcl point type
-Output: a point clouds are almost the same with raw point clouds but only their timestamp values are modified
-Return: none
-Others: none
-*************************************************/
-void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
+
+void FramesFusion::HandleMesh(const shape_msgs::Mesh & vMeshRosData)
 {
-	fuse_timer.NewLine();
-
-	//a point clouds in PCL type
-	pcl::PointCloud<pcl::PointNormal>::Ptr pFramePN(new pcl::PointCloud<pcl::PointNormal>);
-	//message from ROS type to PCL type
-	pcl::fromROSMsg(vLaserData, *pFramePN);
-
-
-	// Surfel Cloud Fusion. Done.
-	// 提取中心点
-	pcl::PointNormal oViewPoint;
-	oViewPoint.x = pFramePN->back().x;
-	oViewPoint.y = pFramePN->back().y;
-	oViewPoint.z = pFramePN->back().z;
-
-	if(pFramePN->back().curvature == -1) { //标识码
-		pFramePN->erase(pFramePN->end()-1);
-	}
-
-	fuse_timer.DebugTime("1_transfer_pc");
-
-	// 标识码，单帧输出两种点云：真实点云(true) | 猜测填充点云(false), 目前不对猜测点云有任何处理
-	if(pFramePN->is_dense == false) return;
-
-	// start update frame point cloud
 	++m_iFusionFrameNum;
 
-	// TODO: the core time cost, to be reduce
-	if(m_bSurfelFusion) {
+	fuse_timer.NewLine();
 
-		std::cout << "fusion start \t";
-
-		// m_oProjectUpdater.SurfelFusionQuick(oViewPoint, *pFramePN, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
-		m_oRayUpdater.RayFusion(oViewPoint, *pFramePN, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
-
-		double frames_fusion_time = fuse_timer.DebugTime("2_main_fusion");
-		
-		std::cout << output::format_purple 
-			<< "The No. " << m_iFusionFrameNum 
-			<< ";\tframes_fusion_time: " << frames_fusion_time << "ms" 
-			<< output::format_white;
-		m_dAverageFusionTime += frames_fusion_time;
-		m_dMaxFusionTime = frames_fusion_time > m_dMaxFusionTime ? frames_fusion_time : m_dMaxFusionTime;
+	pcl::PolygonMesh::Ptr pFrameMesh(new pcl::PolygonMesh);
+	pcl::PointCloud<pcl::PointXYZ> oCloud;
+	for(auto&& point : vMeshRosData.vertices) {
+		oCloud.push_back(pcl::PointXYZ(point.x, point.y, point.z));
+	}
+	pcl::toPCLPointCloud2(oCloud, pFrameMesh->cloud);
+	for(auto&& triangle : vMeshRosData.triangles) {
+		pcl::Vertices oVertices;
+		oVertices.vertices.push_back(triangle.vertex_indices[0]);
+		oVertices.vertices.push_back(triangle.vertex_indices[1]);
+		oVertices.vertices.push_back(triangle.vertex_indices[2]);
+		pFrameMesh->polygons.push_back(oVertices);
 	}
 
-	// 点云抽稀
-	// int new_end = 0, point_num = pProcessedCloud->size();
-	// if(m_iSampleInPNum > 1 && point_num > 1e5) {
-	// 	int past_point_num = point_num;
-	// 	std::cout << "sample: " << m_iSampleInPNum << " | " << pProcessedCloud->size();
-	// 	for(int i = 0; i < pProcessedCloud->size(); i+=m_iSampleInPNum) {
-	// 		swap(pProcessedCloud->at(i), pProcessedCloud->at(new_end++));
-	// 		if(i < past_point_num) point_num = new_end;
-	// 	}
-	// 	pProcessedCloud->erase(pProcessedCloud->begin() + new_end, pProcessedCloud->end());
-	// 	std::cout << " | " << pProcessedCloud->size() << std::endl;
-	// }
+	fuse_timer.DebugTime("1_transfer_mesh");
 
-	// std::vector<float> temp_feature(pProcessedCloud->size());
-	// PublishPointCloud(*pProcessedCloud, temp_feature, "/temp_near_cloud");
+	// m_oProjectUpdater.SurfelFusionQuick(oViewPoint, *pFramePN, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
+	// m_oRayUpdater.RayFusion(oViewPoint, *pFramePN, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
+	m_oMeshUpdater.MeshFusion(pcl::PointNormal(), *pFrameMesh, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
+
+	double frames_fusion_time = fuse_timer.DebugTime("2_main_fusion");
+	
+	std::cout << output::format_purple 
+		<< "The No. " << m_iFusionFrameNum 
+		<< ";\tframes_fusion_time: " << frames_fusion_time << "ms" 
+		<< output::format_white;
+	m_dAverageFusionTime += frames_fusion_time;
+	m_dMaxFusionTime = frames_fusion_time > m_dMaxFusionTime ? frames_fusion_time : m_dMaxFusionTime;
 
 	//merge one frame data
-	UpdateOneFrame(oViewPoint, *pFramePN);
-	double voxelize_time = fuse_timer.DebugTime("3_main_voxelize");
-	std::cout << output::format_blue << ";\tvoxelize_time: " << voxelize_time << "ms" << output::format_white << std::endl;
+	// UpdateOneFrame(oViewPoint, *pFramePN);
+	// double voxelize_time = fuse_timer.DebugTime("3_main_voxelize");
+	// std::cout << output::format_blue << ";\tvoxelize_time: " << voxelize_time << "ms" << output::format_white;
+	std::cout << std::endl;
 
 
-	// output point cloud with (depth & view) confidence
-	if(m_bSurfelFusion) {
+	// // output point cloud with (depth & view) confidence
+	// if(m_bSurfelFusion) {
 		
-		pcl::PointCloud<pcl::PointNormal> temp;
-		m_pVolume->GetVolumeCloud(temp);
-		vector<float> confidence(temp.size());
-		constexpr float confidence_scalar = 0.8f;
-		for(int i = 0; i < confidence.size(); ++i) {
-			confidence[i] = int(temp.at(i).data_n[3] / m_fConfidenceLevelLength) * 0.2;
-			if(confidence[i] > confidence_scalar) confidence[i] = confidence_scalar;
-			if(temp[i].data_c[1] > 1 || temp[i].data_n[3] == .0f) confidence[i] = -1;
-		}
-		m_oRpManager.PublishPointCloud(temp, confidence, "/all_cloud_confidence");
-		fuse_timer.DebugTime("4_debug_publish");
-	}
+	// 	pcl::PointCloud<pcl::PointNormal> temp;
+	// 	m_pVolume->GetVolumeCloud(temp);
+	// 	vector<float> confidence(temp.size());
+	// 	constexpr float confidence_scalar = 0.8f;
+	// 	for(int i = 0; i < confidence.size(); ++i) {
+	// 		confidence[i] = int(temp.at(i).data_n[3] / m_fConfidenceLevelLength) * 0.2;
+	// 		if(confidence[i] > confidence_scalar) confidence[i] = confidence_scalar;
+	// 		if(temp[i].data_c[1] > 1 || temp[i].data_n[3] == .0f) confidence[i] = -1;
+	// 	}
+	// 	m_oRpManager.PublishPointCloud(temp, confidence, "/all_cloud_confidence");
+	// 	fuse_timer.DebugTime("4_debug_publish");
+	// }
 
 	fuse_timer.GetCurrentLineTime();
-
-	return;
 }
 
 

@@ -18,9 +18,8 @@
 #include <pcl_conversions/pcl_conversions.h>
 
 //polygon related
-
 #include <visualization_msgs/Marker.h>
-
+#include <shape_msgs/Mesh.h>
 
 //project related
 #include "GHPR.h"
@@ -103,6 +102,7 @@ class FrameRecon{
 
   //publish meshes
   void PublishMeshs();
+  void PublishMeshForAlgorithm();
 
   //*******odom related*******
   //Trajectory line interpolation
@@ -163,6 +163,9 @@ class FrameRecon{
   std::string m_sOutMeshTFId;
   //polygon publisher for test
   ros::Publisher m_oMeshPublisher;
+
+  std::string m_sOutMeshAlgoTopic;
+  ros::Publisher m_oMeshAlgoPublisher;
 
   //displayed point topic
   std::string m_sAdditionalPointTopic = "/additional_points";

@@ -45,6 +45,8 @@ void FrameRecon::LazyLoading() {
 	m_oMeshPublisher = nodeHandle.advertise<visualization_msgs::Marker>(m_sOutMeshTopic, 1, true);		//在接受到点云重建完之后， 被 PublishMeshs() 函数调用
 
     m_oAdditionalPointPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sAdditionalPointTopic, 1, true); //发布补充的点云
+
+	m_oMeshAlgoPublisher = nodeHandle.advertise<shape_msgs::Mesh>(m_sOutMeshAlgoTopic, 1, true); // 用于后续处理的网格消息
 }
 
 /*************************************************
@@ -123,8 +125,9 @@ bool FrameRecon::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	//input point cloud topic
 	nodeHandle.param("outcloud_tf_id", m_sOutCloudTFId, std::string("camera_init"));
 
-	//input odom topic
-	nodeHandle.param("polygon_out_topic", m_sOutMeshTopic, std::string("/processed_clouds"));
+	//input mesh topic
+	nodeHandle.param("polygon_out_topic", m_sOutMeshTopic, std::string("/frame_meshs"));
+	nodeHandle.param("mesh_algo_topic", m_sOutMeshAlgoTopic, std::string("/frame_mesh_algo"));
 
 	//input point cloud topic
 	nodeHandle.param("polygon_tf_id", m_sOutMeshTFId, std::string("camera_init"));
@@ -357,7 +360,15 @@ void FrameRecon::PublishMeshs(){
 	}//end k
 
 	m_oMeshPublisher.publish(oMeshMsgs);
+}
 
+void FrameRecon::PublishMeshForAlgorithm() {
+
+	shape_msgs::Mesh mesh;
+
+	m_oExplicitBuilder.OutputAllMeshes(mesh);
+
+	m_oMeshAlgoPublisher.publish(mesh);
 }
 
 std::ostream& operator<<(std::ostream& out, const sensor_msgs::PointCloud2::_header_type& header) {
@@ -466,6 +477,7 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 
 		// publish
 		PublishMeshs();	//发布 m_oExplicitBuilder 中建立的 mesh
+		PublishMeshForAlgorithm();
 		PublishPointCloud(*pFramePNormal);
 
 		timer.DebugTime("6_publish");

@@ -436,6 +436,68 @@ void ExplicitRec::OutputAllMeshes(pcl::PolygonMesh & MeshModel){
 /*=======================================
 OutputAllMeshes
 Input: none
+Outout: mesh - mesh msg of all point clouds
+========================================*/
+void ExplicitRec::OutputAllMeshes(shape_msgs::Mesh & mesh){
+
+	//new a point idx in scene point clouds
+	std::vector<std::vector<int>> vPointInAllDataIdx(m_vAllSectorClouds.size(), std::vector<int>());
+	mesh.vertices.clear();
+	mesh.triangles.clear();
+
+	int iPNum = 0;
+	
+	//for each sector
+	for (int i = 0; i != m_vAllSectorClouds.size(); ++i){
+
+		//for each point in a sector
+		for (int j = 0; j != m_vAllSectorClouds[i]->points.size(); ++j){
+			
+			geometry_msgs::Point point;
+			point.x = m_vAllSectorClouds[i]->points[j].x;
+			point.y = m_vAllSectorClouds[i]->points[j].y;
+			point.z = m_vAllSectorClouds[i]->points[j].z;
+			mesh.vertices.push_back(point);
+
+			//get point index in all point clouds
+			vPointInAllDataIdx[i].push_back(iPNum);
+			iPNum++;
+
+		}//end j
+
+	}//end i
+
+	//for each sector
+	for (int i = 0; i != m_vAllSectorFaces.size(); ++i){
+		
+		//for each face
+		for (int j = 0; j != m_vAllSectorFaces[i].size(); ++j){
+
+			shape_msgs::MeshTriangle triangle;
+
+			//for each face vertex id
+			for (int k = 0; k != 3; ++k){
+				
+				//vertex id in each sector
+				int iVertexSectorIdx = m_vAllSectorFaces[i][j].vertices[k];
+
+				//vertex id in all data
+				int iVertexGlobalIdx = vPointInAllDataIdx[i][iVertexSectorIdx];
+
+				triangle.vertex_indices[k] = iVertexGlobalIdx;
+					
+			}//end k
+
+			mesh.triangles.push_back(triangle);
+		
+		}//end j
+
+	}//end i
+}
+
+/*=======================================
+OutputAllMeshes
+Input: none
 Outout: vCloud - points presenting face relationship (point repeatable)
 Function: output all vertices in a point repeatable way using three-point arrangement
 ========================================*/

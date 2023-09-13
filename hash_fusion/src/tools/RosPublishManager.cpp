@@ -1,4 +1,8 @@
 #include "RosPublishManager.h"
+
+#include "tools/OutputUtils.h"
+
+#include <iostream>
 #include <pcl_conversions/pcl_conversions.h>
 
 RosPublishManager RosPublishManager::instance;
@@ -55,11 +59,8 @@ void RosPublishManager::PublishPointCloud(
     //publish
     m_vPublishers[sTopicName].publish(vCloudData);
 }
-template void RosPublishManager::PublishPointCloud(
-    const pcl::PointCloud<pcl::PointNormal> & vCloud, 
-    const std::vector<float> & vFeatures, 
-    const std::string & sTopicName,
-    const int iQueueSize);
+template void RosPublishManager::PublishPointCloud(const pcl::PointCloud<pcl::PointNormal> & vCloud, const std::vector<float> & vFeatures, const std::string & sTopicName, const int iQueueSize);
+template void RosPublishManager::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures, const std::string & sTopicName, const int iQueueSize);
 
 
 void RosPublishManager::PublishMarkerArray(
@@ -78,6 +79,109 @@ void RosPublishManager::PublishMarkerArray(
     m_vPublishers[sTopicName].publish(oMarkerArray);
 }
 
+void RosPublishManager::PublishBlockSet(const HashPosSet& vBlockSet, const Eigen::Vector3f& vBlockSize, const std::string & sTopicName, const int iQueueSize) {
+    
+    visualization_msgs::MarkerArray oOutputBlocks;
+    PublishMarkerArray(oOutputBlocks, sTopicName, [&](visualization_msgs::MarkerArray& oMarkerArray){
+        std::cout << output::format_purple << " Block Num: " << vBlockSet.size()  << output::format_white << std::endl;
+        RosPublishManager::BlockSetMaker(vBlockSet, vBlockSize, oMarkerArray);
+    });
+}
+
+void RosPublishManager::PublishNormalPoints(
+    const pcl::PointCloud<pcl::PointNormal> & vCloud,
+    const std::string & sTopicName,
+    const int iQueueSize
+) {
+    // check topic
+    if(m_vPublishers.count(sTopicName) == 0)
+    {
+        m_vPublishers[sTopicName] = m_pNodeHandle->advertise<visualization_msgs::MarkerArray>(sTopicName, iQueueSize, true);
+        m_vPublishers[sTopicName].publish(visualization_msgs::MarkerArray());
+    }
+    if(!PublishCheck(sTopicName)) return;
+
+    visualization_msgs::MarkerArray oOutputPoints;
+    constexpr int index = 1e5;
+
+    // make points
+	visualization_msgs::Marker oPointMarker;
+	oPointMarker.header.frame_id = "map";
+	oPointMarker.header.stamp = ros::Time::now();
+	oPointMarker.type = visualization_msgs::Marker::POINTS;
+	oPointMarker.action = visualization_msgs::Marker::MODIFY;
+	oPointMarker.id = index;
+
+    oPointMarker.scale.x = 0.1;
+    oPointMarker.scale.y = 0.1;
+
+	oPointMarker.pose.position.x = 0.0;
+	oPointMarker.pose.position.y = 0.0;
+	oPointMarker.pose.position.z = 0.0;
+
+	oPointMarker.pose.orientation.x = 0.0;
+	oPointMarker.pose.orientation.y = 0.0;
+	oPointMarker.pose.orientation.z = 0.0;
+	oPointMarker.pose.orientation.w = 1.0;
+
+	oPointMarker.color.a = 1;
+	oPointMarker.color.r = 0.8;
+	oPointMarker.color.g = 0.2;
+	oPointMarker.color.b = 0.8;
+
+    for(const pcl::PointNormal & oPoint : vCloud) {
+        
+		geometry_msgs::Point point;
+		point.x = oPoint.x;
+		point.y = oPoint.y;
+		point.z = oPoint.z;
+		oPointMarker.points.push_back(point);
+    }
+
+	oOutputPoints.markers.push_back(oPointMarker);
+
+    // make normals
+	visualization_msgs::Marker oNormalMarker;
+	oNormalMarker.header.frame_id = "map";
+	oNormalMarker.header.stamp = ros::Time::now();
+	oNormalMarker.type = visualization_msgs::Marker::LINE_LIST;
+	oNormalMarker.action = visualization_msgs::Marker::MODIFY;
+	oNormalMarker.id = index + 1;
+
+    oNormalMarker.scale.x = 0.05;
+
+	oNormalMarker.pose.position.x = 0.0;
+	oNormalMarker.pose.position.y = 0.0;
+	oNormalMarker.pose.position.z = 0.0;
+
+	oNormalMarker.pose.orientation.x = 0.0;
+	oNormalMarker.pose.orientation.y = 0.0;
+	oNormalMarker.pose.orientation.z = 0.0;
+	oNormalMarker.pose.orientation.w = 1.0;
+
+	oNormalMarker.color.a = 1;
+	oNormalMarker.color.r = 0.8;
+	oNormalMarker.color.g = 0.2;
+	oNormalMarker.color.b = 0.2;
+
+    for(const pcl::PointNormal & oPoint : vCloud) {
+        
+		geometry_msgs::Point point;
+		point.x = oPoint.x;
+		point.y = oPoint.y;
+		point.z = oPoint.z;
+		oNormalMarker.points.push_back(point);
+
+        point.x += oPoint.normal_x;
+        point.y += oPoint.normal_y;
+        point.z += oPoint.normal_z;
+        oNormalMarker.points.push_back(point);
+    }
+
+	oOutputPoints.markers.push_back(oNormalMarker);
+
+    m_vPublishers[sTopicName].publish(oOutputPoints);
+}
 
 void RosPublishManager::HSVToRGB(float H, float S, float V, float& R, float& G, float& B) {
 
@@ -107,4 +211,50 @@ void RosPublishManager::HSVToRGB(float H, float S, float V, uint8_t& R, uint8_t&
     R = R_ * 255;
     G = G_ * 255;
     B = B_ * 255;
+}
+
+void RosPublishManager::BlockSetMaker(const HashPosSet& vBlockList, const Eigen::Vector3f& vBlockSize, visualization_msgs::MarkerArray& oOutputVolume, int iIdOffset) {
+
+    constexpr int index = 2e4;
+
+    // make blocks
+	visualization_msgs::Marker oVolumeMarker;
+	oVolumeMarker.header.frame_id = "map";
+	oVolumeMarker.header.stamp = ros::Time::now();
+	oVolumeMarker.type = visualization_msgs::Marker::CUBE_LIST;
+	oVolumeMarker.action = visualization_msgs::Marker::MODIFY;
+	oVolumeMarker.id = index + 2 * iIdOffset; 
+
+	oVolumeMarker.scale.x = vBlockSize.x();
+	oVolumeMarker.scale.y = vBlockSize.y();
+	oVolumeMarker.scale.z = vBlockSize.z();
+
+	oVolumeMarker.pose.position.x = 0.0;
+	oVolumeMarker.pose.position.y = 0.0;
+	oVolumeMarker.pose.position.z = 0.0;
+
+	oVolumeMarker.pose.orientation.x = 0.0;
+	oVolumeMarker.pose.orientation.y = 0.0;
+	oVolumeMarker.pose.orientation.z = 0.0;
+	oVolumeMarker.pose.orientation.w = 1.0;
+
+	oVolumeMarker.color.a = std::min(0.2 * (iIdOffset+1), 1.0);
+	oVolumeMarker.color.r = 0.8;
+	oVolumeMarker.color.g = 0.2;
+	oVolumeMarker.color.b = 0.2;
+
+	for(const HashPos& oPos : vBlockList) {
+
+		Eigen::Vector3f oPoint(oPos.x, oPos.y, oPos.z);
+        oPoint = oPoint.cwiseProduct(vBlockSize);
+        oPoint += 0.5 * vBlockSize;
+
+		geometry_msgs::Point point;
+		point.x = oPoint.x();
+		point.y = oPoint.y();
+		point.z = oPoint.z();
+		oVolumeMarker.points.push_back(point);
+	}
+
+	oOutputVolume.markers.push_back(oVolumeMarker);
 }

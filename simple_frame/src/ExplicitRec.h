@@ -1,8 +1,12 @@
 #ifndef EXPLICITREC_H
 #define EXPLICITREC_H
+
 #include "GHPR.h"
 #include "SectorPartition.h"
 #include "MeshOperation.h"
+
+#include <shape_msgs/Mesh.h>
+
 #define PI 3.1415926
 
 class ExplicitRecParam{
@@ -64,6 +68,8 @@ public:
 
 	//combine and output all vertices
 	void OutputAllMeshes(pcl::PolygonMesh & MeshModel);
+	//output shape_msg/Mesh for alogrithm
+	void OutputAllMeshes(shape_msgs::Mesh & mesh);
 	//reload, output all vertices in a point repeatable way using three-point arrangement
 	void OutputAllMeshes(pcl::PointCloud<pcl::PointXYZI> & vCloud);
 

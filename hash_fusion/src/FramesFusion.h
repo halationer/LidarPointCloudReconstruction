@@ -15,6 +15,7 @@
 //ros related
 #include <ros/ros.h>
 #include <nav_msgs/Odometry.h>
+#include <shape_msgs/Mesh.h>
 #include <geometry_msgs/PointStamped.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
@@ -43,6 +44,7 @@
 
 #include "updater/ProjectUpdater.h"
 #include "updater/RayUpdater.h"
+#include "updater/MeshUpdater.h"
 
 // Trajectory state data. 
 struct RosTimePoint{
@@ -97,7 +99,7 @@ public:
 
     //*************main function*************
     //handle the ground point clouds topic
-    void HandlePointClouds(const sensor_msgs::PointCloud2 & vCloudRosData);
+    void HandleMesh(const shape_msgs::Mesh & vMeshRosData);
 
     //handle the trajectory information
     void HandleTrajectory(const nav_msgs::Odometry & oTrajectory);
@@ -148,11 +150,11 @@ protected:
     //ouput file
     std::ofstream m_oOutPCFile;
 
-    //***for input point cloud topic***
-    //the m_oCloudSuber subscirber is to hear input point cloud topic
-    ros::Subscriber m_oCloudSuber;
-    //the name of input point cloud topic 
-    std::string m_sInCloudTopic; 
+    //***for input mesh topic***
+    //the m_oMeshSuber subscirber is to hear input mesh topic
+    ros::Subscriber m_oMeshSuber;
+    //the name of input mesh topic 
+    std::string m_sInMeshTopic; 
 
     //***for input odom topic***
     //the m_oOdomSuber subscirber is to hearinput  odometry topic
@@ -227,6 +229,7 @@ protected:
     // viewpoint and current frame for surfel fusion - multi-thread
     ProjectUpdater& m_oProjectUpdater;
     RayUpdater& m_oRayUpdater;
+    MeshUpdater& m_oMeshUpdater;
     RosPublishManager& m_oRpManager;
     virtual void UpdateOneFrame(const pcl::PointNormal& oViewPoint, pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud);
 
