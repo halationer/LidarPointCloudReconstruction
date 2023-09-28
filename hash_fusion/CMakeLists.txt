@@ -20,8 +20,8 @@ find_package(catkin REQUIRED COMPONENTS
              std_msgs
              nav_msgs
              tf
-             sensor_msgs
              filters
+             fusion_msgs
 )
 
 catkin_package(

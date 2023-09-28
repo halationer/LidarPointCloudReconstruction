@@ -20,6 +20,7 @@
 //polygon related
 #include <visualization_msgs/Marker.h>
 #include <shape_msgs/Mesh.h>
+#include <fusion_msgs/MeshArray.h>
 
 //project related
 #include "GHPR.h"
@@ -190,6 +191,7 @@ class FrameRecon{
   
   //explicit reconstruction
   ExplicitRec m_oExplicitBuilder;
+  ExplicitRec m_oMeshAlgoBuilder;
 
   //circle vector of odom
   CircularVector<RosTimePoint> m_vOdomHistory;

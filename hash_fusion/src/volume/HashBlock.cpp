@@ -52,6 +52,7 @@ void HashBlock::PointBelongBlockPos(const PointType & oPoint, HashPos & oBlockPo
 	oBlockPos.z = floor(oPoint.z * m_vBlockSizeInverse.z());
 }
 template void HashBlock::PointBelongBlockPos(const pcl::PointXYZ & oPoint, HashPos & oBlockPos) const;
+template void HashBlock::PointBelongBlockPos(const pcl::PointXYZI & oPoint, HashPos & oBlockPos) const;
 template void HashBlock::PointBelongBlockPos(const pcl::PointNormal & oPoint, HashPos & oBlockPos) const;
 
 

@@ -21,6 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
              tf
              sensor_msgs
              filters
+             fusion_msgs
 )
 
 find_package(CGAL QUIET COMPONENTS)

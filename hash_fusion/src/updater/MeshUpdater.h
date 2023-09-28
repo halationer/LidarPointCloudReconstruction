@@ -14,7 +14,28 @@
 #include "tools/HashPos.h"
 #include "tools/DebugManager.h"
 
+
 class MeshUpdater {
+
+private:
+    class Triangle {
+
+        public:
+            Eigen::Vector3f a, b, c;
+            Eigen::Vector3f ab, bc, ca;
+            pcl::PointXYZI formula;
+
+            pcl::Vector3fMap n() { return formula.getVector3fMap(); }
+            float& D() {return formula.intensity; }
+
+            Triangle(const Eigen::Vector3f& a, const Eigen::Vector3f& b, const Eigen::Vector3f& c):a(a),b(b),c(c) {
+                ab = b - a;
+                bc = c - b;
+                ca = a - c;
+                n() = ab.cross(bc).normalized();
+                D() = n().dot(-a);
+            }
+    };
 
 //singleton
 private:
@@ -29,11 +50,23 @@ public:
 
 
 public:
-    void MeshFusion(
+    // use ghpr-space to get in-or-out info
+    void MeshFusionV1(
         const pcl::PointNormal& oLidarPos, 
         pcl::PolygonMesh& oSingleMesh,
         VolumeBase& oVolume,
         bool bKeepVoxel);
+    
+    void MeshFusion(
+        const pcl::PointNormal& oLidarPos, 
+        std::vector<pcl::PolygonMesh>& vSingleMeshList,
+        VolumeBase& oVolume,
+        bool bKeepVoxel);
+
+    void GhprConvertCloud(
+        const pcl::PointXYZI & oCenter, 
+        const pcl::PointCloud<pcl::PointXYZI> & vCloud,
+        pcl::PointCloud<pcl::PointXYZI> & vResCloud);
 
 private:
 
@@ -42,6 +75,7 @@ protected:
     std::unordered_set<HashPos, HashFunc> m_vPosRecord;
 
     TimeDebugger m_oFuseTimer;
+    
 };
 
 #endif

@@ -720,31 +720,37 @@ void FramesFusion::SlideModeling(pcl::PolygonMesh & oResultMesh, const Eigen::Ve
 }
 
 
-void FramesFusion::HandleMesh(const shape_msgs::Mesh & vMeshRosData)
+void FramesFusion::HandleMesh(const fusion_msgs::MeshArray & vMeshRosData)
 {
 	++m_iFusionFrameNum;
 
 	fuse_timer.NewLine();
 
-	pcl::PolygonMesh::Ptr pFrameMesh(new pcl::PolygonMesh);
-	pcl::PointCloud<pcl::PointXYZ> oCloud;
-	for(auto&& point : vMeshRosData.vertices) {
-		oCloud.push_back(pcl::PointXYZ(point.x, point.y, point.z));
-	}
-	pcl::toPCLPointCloud2(oCloud, pFrameMesh->cloud);
-	for(auto&& triangle : vMeshRosData.triangles) {
-		pcl::Vertices oVertices;
-		oVertices.vertices.push_back(triangle.vertex_indices[0]);
-		oVertices.vertices.push_back(triangle.vertex_indices[1]);
-		oVertices.vertices.push_back(triangle.vertex_indices[2]);
-		pFrameMesh->polygons.push_back(oVertices);
+	std::vector<pcl::PolygonMesh> vSectorMeshList;
+	for(auto&& mesh : vMeshRosData.data) {
+		
+		pcl::PolygonMesh::Ptr pFrameMesh(new pcl::PolygonMesh);
+		pcl::PointCloud<pcl::PointXYZ> oCloud;
+		for(auto&& point : mesh.vertices) {
+			oCloud.push_back(pcl::PointXYZ(point.x, point.y, point.z));
+		}
+		pcl::toPCLPointCloud2(oCloud, pFrameMesh->cloud);
+		for(auto&& triangle : mesh.triangles) {
+			pcl::Vertices oVertices;
+			oVertices.vertices.push_back(triangle.vertex_indices[0]);
+			oVertices.vertices.push_back(triangle.vertex_indices[1]);
+			oVertices.vertices.push_back(triangle.vertex_indices[2]);
+			pFrameMesh->polygons.push_back(oVertices);
+		}
+
+		vSectorMeshList.push_back(*pFrameMesh);
 	}
 
 	fuse_timer.DebugTime("1_transfer_mesh");
 
 	// m_oProjectUpdater.SurfelFusionQuick(oViewPoint, *pFramePN, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
 	// m_oRayUpdater.RayFusion(oViewPoint, *pFramePN, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
-	m_oMeshUpdater.MeshFusion(pcl::PointNormal(), *pFrameMesh, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
+	m_oMeshUpdater.MeshFusion(pcl::PointNormal(), vSectorMeshList, *m_pVolume, m_bDynamicDebug || m_bKeepVoxel);
 
 	double frames_fusion_time = fuse_timer.DebugTime("2_main_fusion");
 	

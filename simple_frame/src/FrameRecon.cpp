@@ -46,7 +46,7 @@ void FrameRecon::LazyLoading() {
 
     m_oAdditionalPointPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sAdditionalPointTopic, 1, true); //发布补充的点云
 
-	m_oMeshAlgoPublisher = nodeHandle.advertise<shape_msgs::Mesh>(m_sOutMeshAlgoTopic, 1, true); // 用于后续处理的网格消息
+	m_oMeshAlgoPublisher = nodeHandle.advertise<fusion_msgs::MeshArray>(m_sOutMeshAlgoTopic, 1, true); // 用于后续处理的网格消息
 }
 
 /*************************************************
@@ -150,10 +150,12 @@ bool FrameRecon::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	//number of sectors
 	nodeHandle.param("sector_num", m_iSectorNum, 1);
 	m_oExplicitBuilder.HorizontalSectorSize(m_iSectorNum);
+	m_oMeshAlgoBuilder.HorizontalSectorSize(4);
 
 	bool bMultiThread;
 	nodeHandle.param("multi_thread", bMultiThread, true);
 	m_oExplicitBuilder.SetMultiThread(bMultiThread);
+	m_oMeshAlgoBuilder.SetMultiThread(true);
 
 	//count processed point cloud frame
 	m_iPCFrameCount = 0;
@@ -364,11 +366,15 @@ void FrameRecon::PublishMeshs(){
 
 void FrameRecon::PublishMeshForAlgorithm() {
 
-	shape_msgs::Mesh mesh;
+	fusion_msgs::MeshArray oMeshArray;
 
-	m_oExplicitBuilder.OutputAllMeshes(mesh);
+	for(int i = 0; i < m_oMeshAlgoBuilder.m_vAllSectorClouds.size(); ++i) {
+		shape_msgs::Mesh mesh;
+		m_oMeshAlgoBuilder.OutputSectorMesh(mesh, i);
+		oMeshArray.data.push_back(mesh);
+	}
 
-	m_oMeshAlgoPublisher.publish(mesh);
+	m_oMeshAlgoPublisher.publish(oMeshArray);
 }
 
 std::ostream& operator<<(std::ostream& out, const sensor_msgs::PointCloud2::_header_type& header) {
@@ -458,6 +464,10 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		m_oExplicitBuilder.setWorkingFrameCount(m_iPCFrameCount);
 		m_oExplicitBuilder.SetViewPoint(oCurrentViewP, m_fViewZOffset);
 		m_oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal, m_iLidarLineMin, m_iLidarLineMax);	//得到带法向的点云
+
+		m_oMeshAlgoBuilder.setWorkingFrameCount(m_iPCFrameCount);
+		m_oMeshAlgoBuilder.SetViewPoint(oCurrentViewP, m_fViewZOffset);
+		m_oMeshAlgoBuilder.OriginalReconstruction(*pSceneCloud);
 
 		// 添加中心视点，方便多帧进程识别
 		pcl::PointNormal oViewPoint;

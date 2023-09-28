@@ -16,6 +16,7 @@
 #include <ros/ros.h>
 #include <nav_msgs/Odometry.h>
 #include <shape_msgs/Mesh.h>
+#include <fusion_msgs/MeshArray.h>
 #include <geometry_msgs/PointStamped.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
@@ -99,7 +100,8 @@ public:
 
     //*************main function*************
     //handle the ground point clouds topic
-    void HandleMesh(const shape_msgs::Mesh & vMeshRosData);
+    // void HandleMesh(const shape_msgs::Mesh & vMeshRosData);
+    void HandleMesh(const fusion_msgs::MeshArray & vMeshRosData);
 
     //handle the trajectory information
     void HandleTrajectory(const nav_msgs::Odometry & oTrajectory);

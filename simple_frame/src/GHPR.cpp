@@ -419,7 +419,7 @@ Output: vModelHull - the index of the model surface vertices without face relati
 Function: output the index of each vertice on the model surface corresponding to the input point set in the world coordinate.
 Note that the output does not include the viewpoint
 ========================================*/
-std::vector<pcl::Vertices> GHPR::ConstructSurfaceIdx(){
+std::vector<pcl::Vertices> GHPR::ConstructSurfaceIdx(bool bRemoveViewPoint){
 
 	//convex hull includes the viewpoint
 	std::vector<pcl::Vertices> vModelHull;
@@ -446,7 +446,7 @@ std::vector<pcl::Vertices> GHPR::ConstructSurfaceIdx(){
 
 		}//end j
 
-		if (bNonViewPoint)
+		if (!bRemoveViewPoint || bNonViewPoint)
 			vModelHull.push_back(oOnePolyWorldIdx);
 
 	}//end i

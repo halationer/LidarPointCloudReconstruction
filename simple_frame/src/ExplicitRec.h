@@ -65,10 +65,12 @@ public:
 
 	//reconstruction of one frame scanning point cloud and ouput mesh normal
 	void FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud, pcl::PointCloud<pcl::PointNormal> & vScenePNormal, const int line_min = 0, const int line_max = 15);
+	void OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud);
 
 	//combine and output all vertices
 	void OutputAllMeshes(pcl::PolygonMesh & MeshModel);
 	//output shape_msg/Mesh for alogrithm
+	void OutputSectorMesh(shape_msgs::Mesh & MeshModel, int sectorId);
 	void OutputAllMeshes(shape_msgs::Mesh & mesh);
 	//reload, output all vertices in a point repeatable way using three-point arrangement
 	void OutputAllMeshes(pcl::PointCloud<pcl::PointXYZI> & vCloud);

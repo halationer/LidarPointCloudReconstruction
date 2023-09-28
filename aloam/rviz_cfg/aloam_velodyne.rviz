@@ -9,7 +9,7 @@ Panels:
         - /SLAM1/Odometry1
         - /FramesFusion1
         - /Debug1
-        - /Debug1/MeshNormal1
+        - /Debug1/corners1
       Splitter Ratio: 0.5
     Tree Height: 848
   - Class: rviz/Selection
@@ -30,7 +30,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: MeshBlockPoints
+    SyncSource: corners
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -249,7 +249,7 @@ Visualization Manager:
           Marker Topic: /frame_meshs
           Name: GHPRMesh
           Namespaces:
-            {}
+            "": true
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -280,7 +280,7 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: true
           Value: false
-      Enabled: false
+      Enabled: true
       Name: SingleFrame
     - Class: rviz/Group
       Displays:
@@ -560,19 +560,47 @@ Visualization Manager:
       Name: Poisson
     - Class: rviz/Group
       Displays:
-        - Class: rviz/MarkerArray
-          Enabled: true
-          Marker Topic: /mesh_normal_debug
-          Name: MeshNormal
-          Namespaces:
-            "": true
-          Queue Size: 100
-          Value: true
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
-            Max Value: 17.975303649902344
-            Min Value: -4.739991664886475
+            Max Value: 2
+            Min Value: -1
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz/PointCloud2
+          Color: 255; 255; 255
+          Color Transformer: RGB8
+          Decay Time: 0
+          Enabled: true
+          Invert Rainbow: false
+          Max Color: 239; 41; 41
+          Min Color: 0; 0; 0
+          Name: corners
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 3
+          Size (m): 1
+          Style: Flat Squares
+          Topic: /corner_is_free_debug
+          Unreliable: false
+          Use Fixed Frame: true
+          Use rainbow: false
+          Value: true
+        - Class: rviz/MarkerArray
+          Enabled: false
+          Marker Topic: /mesh_normal_debug
+          Name: MeshNormal
+          Namespaces:
+            {}
+          Queue Size: 100
+          Value: false
+        - Alpha: 1
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 21.869157791137695
+            Min Value: -4.605331897735596
             Value: true
           Axis: Z
           Channel Name: intensity
@@ -698,25 +726,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 75.9543228149414
+      Distance: 120.60659790039062
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -7.874408721923828
-        Y: -3.122556686401367
-        Z: -2.7028796466765925e-5
+        X: -13.411396026611328
+        Y: 7.913530349731445
+        Z: -2.3214099201140925e-5
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.36020928621292114
+      Pitch: 0.33520936965942383
       Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 5.588692665100098
+      Yaw: 0.9805028438568115
     Saved: ~
 Window Geometry:
   Displays:
