@@ -7,7 +7,7 @@ int main(int argc, char** argv){
   ros::init(argc, argv, "frames_fusion");
   ros::NodeHandle node;
   ros::NodeHandle privateNode("~");
- 
+
   int iFusionMode = 0;
   // privateNode.param("fusion_mode", iFusionMode, 0);
   std::unique_ptr<FramesFusion> pFramesFusion;

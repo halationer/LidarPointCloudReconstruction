@@ -10,6 +10,8 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 
+#include "tools/ThreadPool.h"
+
 /*************************************************
 Function: FramesFusion
 Description: constrcution function for FramesFusion class
@@ -27,7 +29,7 @@ FramesFusion::FramesFusion(ros::NodeHandle & node,
 					   m_dAverageFusionTime(0), m_dMaxFusionTime(0), m_iFusionFrameNum(0), m_OdomLoopRate(1),
 					   m_oProjectUpdater(ProjectUpdater::GetInstance()),
 					   m_oRayUpdater(RayUpdater::GetInstance()),
-					   m_oMeshUpdater(MeshUpdater::GetInstance()),
+					   m_oMeshUpdater(Updater::MeshUpdater::GetInstance()),
 					   m_oRpManager(RosPublishManager::GetInstance()) {
 
 	//read parameters
@@ -90,6 +92,22 @@ FramesFusion::~FramesFusion() {
     std::cout << std::endl;
     std::cout << std::endl;
     std::cout << "********************************************************************************" << std::endl;
+
+	// thread pool test;
+	Tools::ThreadPool pool(3);
+	std::vector<Tools::TaskPtr> tasks;
+	for(int i = 0; i < 100; i++) {
+		tasks.emplace_back(pool.AddTask([i](){
+			std::cout << "thread_id: " << i << std::endl;
+			this_thread::sleep_for(std::chrono::milliseconds(300));
+			std::cout << "thread finish: " << i << std::endl;
+		}));
+	};
+
+	for(auto& task : tasks) {
+		task->Join();
+	}
+	std::cout << output::format_purple << "thread_all finish" << output::format_white << std::endl;
 
 	//output point clouds with computed normals to the files when the node logs out
 	if(m_bOutputFiles) {

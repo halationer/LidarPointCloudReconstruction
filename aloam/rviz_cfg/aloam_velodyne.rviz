@@ -581,7 +581,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
-          Size (m): 1
+          Size (m): 0.30000001192092896
           Style: Flat Squares
           Topic: /corner_is_free_debug
           Unreliable: false
@@ -726,25 +726,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 120.60659790039062
+      Distance: 61.82809066772461
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -13.411396026611328
-        Y: 7.913530349731445
+        X: -2.7832345962524414
+        Y: -3.953721046447754
         Z: -2.3214099201140925e-5
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.33520936965942383
+      Pitch: 0.7152092456817627
       Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 0.9805028438568115
+      Yaw: 5.683684825897217
     Saved: ~
 Window Geometry:
   Displays:

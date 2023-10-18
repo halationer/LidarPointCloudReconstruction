@@ -231,7 +231,7 @@ protected:
     // viewpoint and current frame for surfel fusion - multi-thread
     ProjectUpdater& m_oProjectUpdater;
     RayUpdater& m_oRayUpdater;
-    MeshUpdater& m_oMeshUpdater;
+    Updater::MeshUpdater& m_oMeshUpdater;
     RosPublishManager& m_oRpManager;
     virtual void UpdateOneFrame(const pcl::PointNormal& oViewPoint, pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud);
 
