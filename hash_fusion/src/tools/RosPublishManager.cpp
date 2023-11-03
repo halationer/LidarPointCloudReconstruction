@@ -90,8 +90,9 @@ void RosPublishManager::PublishBlockSet(const HashPosSet& vBlockSet, const Eigen
 }
 
 void RosPublishManager::PublishNormalPoints(
-    const pcl::PointCloud<pcl::PointNormal> & vCloud,
+    pcl::PointCloud<pcl::PointNormal> & vCloud,
     const std::string & sTopicName,
+    const std::function<void(pcl::PointCloud<pcl::PointNormal>&)>& funcMakeCloud,
     const int iQueueSize
 ) {
     // check topic
@@ -101,6 +102,8 @@ void RosPublishManager::PublishNormalPoints(
         m_vPublishers[sTopicName].publish(visualization_msgs::MarkerArray());
     }
     if(!PublishCheck(sTopicName)) return;
+
+    funcMakeCloud(vCloud);
 
     visualization_msgs::MarkerArray oOutputPoints;
     constexpr int index = 1e5;

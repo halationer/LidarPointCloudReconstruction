@@ -19,6 +19,10 @@
 
 namespace Updater{
 
+inline double GetYaw(const Eigen::Vector3f& vDirection) {
+    return std::atan2((double)vDirection.y(), (double)vDirection.x());
+}
+
 class Triangle {
 
 public:
@@ -26,13 +30,9 @@ public:
     Eigen::Vector3f ab, bc, ca;
     pcl::PointXYZI formula;
     double minYaw, maxYaw;
-    bool searchSymbol = false;
 
     pcl::Vector3fMap n() { return formula.getVector3fMap(); }
     float& D() {return formula.intensity; }
-    static double GetYaw(const Eigen::Vector3f& vDirection) {
-        return std::atan2((double)vDirection.y(), (double)vDirection.x());
-    }
 
     Triangle(const Eigen::Vector3f& a, const Eigen::Vector3f& b, const Eigen::Vector3f& c):a(a),b(b),c(c) {
         ab = b - a;
@@ -59,6 +59,11 @@ class TriangleMesh {
 public:
     std::vector<Triangle> mesh;
     pcl::PointCloud<pcl::PointXYZI> cloud;
+    pcl::PointXYZ min, max;
+    std::vector<int> vTriangleMinYawIndex, vTriangleMaxYawIndex;
+
+    void GetAABB();
+    void GetYawSortedIndex();
 };
 
 typedef std::shared_ptr<TriangleMesh> TriangleMeshPtr;
@@ -100,6 +105,7 @@ private:
     RosPublishManager& m_oRpManager;
     std::unordered_set<HashPos, HashFunc> m_vPosRecord;
     SectorMeshFrames m_vFrameMeshes;
+    std::vector<pcl::PointCloud<pcl::PointXYZI>> m_vDebugOutClouds;
 
 public:
     static constexpr int m_iMaxFrameWindow = 5;
@@ -110,13 +116,18 @@ private:
     MeshUpdater():
         m_oRpManager(RosPublishManager::GetInstance()),
         m_vFrameMeshes(m_iMaxFrameWindow),
-        m_oThreadPool(4) {};
+        m_oThreadPool(4),
+        m_vDebugOutClouds(16, pcl::PointCloud<pcl::PointXYZI>()) {}
     MeshUpdater(MeshUpdater&)=delete;
+
 public:
     static MeshUpdater& GetInstance() {
         return instance;
     }
+    ~MeshUpdater(){ SaveDebugOutClouds(); }
 
+private:
+    void SaveDebugOutClouds();
 
 public:
     // use ghpr-space to get in-or-out info

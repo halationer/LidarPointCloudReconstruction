@@ -51,8 +51,9 @@ public:
     );
 
     void PublishNormalPoints(
-        const pcl::PointCloud<pcl::PointNormal> & vCloud,
+        pcl::PointCloud<pcl::PointNormal> & vCloud,
         const std::string & sTopicName,
+        const std::function<void(pcl::PointCloud<pcl::PointNormal>&)>& funcMakeCloud = [](pcl::PointCloud<pcl::PointNormal>&){},
         const int iQueueSize = 1
     );
 

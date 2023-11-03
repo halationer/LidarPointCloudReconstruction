@@ -126,7 +126,7 @@ public:
         struct timeval end;
         gettimeofday(&end, NULL);
         double dtime = (end.tv_sec - start.tv_sec) * 1000.0 +(end.tv_usec - start.tv_usec) * 0.001;
-        record[algo_name] = dtime;
+        record[algo_name] += dtime;
         current_line_time += dtime;
         gettimeofday(&start, NULL);
         return dtime;
@@ -135,6 +135,13 @@ public:
     double GetCurrentLineTime() {
         record["all"] = current_line_time;
         return current_line_time;
+    }
+
+    void CoutCurrentLine() {
+        for(auto && [name,time] : record) {
+            std::cout << name << ": " << time << " | ";
+        }
+        std::cout << "\n";
     }
 
 private:

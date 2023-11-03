@@ -94,20 +94,20 @@ FramesFusion::~FramesFusion() {
     std::cout << "********************************************************************************" << std::endl;
 
 	// thread pool test;
-	Tools::ThreadPool pool(3);
-	std::vector<Tools::TaskPtr> tasks;
-	for(int i = 0; i < 100; i++) {
-		tasks.emplace_back(pool.AddTask([i](){
-			std::cout << "thread_id: " << i << std::endl;
-			this_thread::sleep_for(std::chrono::milliseconds(300));
-			std::cout << "thread finish: " << i << std::endl;
-		}));
-	};
+	// Tools::ThreadPool pool(3);
+	// std::vector<Tools::TaskPtr> tasks;
+	// for(int i = 0; i < 100; i++) {
+	// 	tasks.emplace_back(pool.AddTask([i](){
+	// 		std::cout << "thread_id: " << i << std::endl;
+	// 		this_thread::sleep_for(std::chrono::milliseconds(300));
+	// 		std::cout << "thread finish: " << i << std::endl;
+	// 	}));
+	// };
 
-	for(auto& task : tasks) {
-		task->Join();
-	}
-	std::cout << output::format_purple << "thread_all finish" << output::format_white << std::endl;
+	// for(auto& task : tasks) {
+	// 	task->Join();
+	// }
+	// std::cout << output::format_purple << "thread_all finish" << output::format_white << std::endl;
 
 	//output point clouds with computed normals to the files when the node logs out
 	if(m_bOutputFiles) {
