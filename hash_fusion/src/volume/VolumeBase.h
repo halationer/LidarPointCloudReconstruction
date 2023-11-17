@@ -59,7 +59,9 @@ public:
 	
 	enum VolumeType {
 		HASH_VOXELER = 0,
-		HASH_BLOCK
+		HASH_BLOCK,
+		SIMPLE,
+		DISTANCE_IO,
 	};
 	
 
@@ -80,8 +82,14 @@ public:
 	static VolumeBase* CreateVolume(enum VolumeType volumeType);
 	static void GetCornerPoses(const HashPos & oVoxel, std::vector<HashPos> & vCornerPoses);
 	static void HashPosTo3DPos(const HashPos & oCornerPos, const Eigen::Vector3f & oVoxelLength, Eigen::Vector3f & oCorner3DPos);
-	virtual pcl::PointXYZ HashPosTo3DPos(const HashPos & oPos) const {
-        return pcl::PointXYZ(oPos.x * GetVoxelLength().x(), oPos.y * GetVoxelLength().y(), oPos.z * GetVoxelLength().z());
+	virtual Eigen::Vector3f HashPosTo3DPos(const HashPos & oPos) const {
+        return Eigen::Vector3f(oPos.x, oPos.y, oPos.z).cwiseProduct(GetVoxelLength());
+	}
+	template<class T> 
+	T HashPosTo3DPos(const HashPos& oPos) const {
+		T oPoint;
+		oPoint.getVector3fMap() = HashPosTo3DPos(oPos);
+		return oPoint;
 	}
 	virtual void DrawVolume(const HashVolume & vVolume, visualization_msgs::MarkerArray & oOutputVolume);
 

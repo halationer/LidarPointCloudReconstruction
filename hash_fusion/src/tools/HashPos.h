@@ -21,4 +21,8 @@ struct HashFunc {
     size_t operator()(const HashPos& pos) const; 
 };
 
+// align hash pos
+void AlignToStepFloor(HashPos& pos, size_t step);
+void AlignToStepCeil(HashPos& pos, size_t step);
+
 #endif

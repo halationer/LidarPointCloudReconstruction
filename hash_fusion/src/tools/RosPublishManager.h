@@ -10,6 +10,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <unordered_set>
+#include <unordered_map>
 
 #include "HashPos.h"
 
@@ -27,12 +28,14 @@ public:
     }
 
     typedef std::unordered_set<HashPos, HashFunc> HashPosSet;
+    typedef std::unordered_map<HashPos, int, HashFunc> HashPosDic;
 
 private:
     bool PublishCheck(const std::string& sTopicName) {
         return m_vPublishers[sTopicName].getNumSubscribers() > 0;
     }
     static void BlockSetMaker(const HashPosSet& vBlockList, const Eigen::Vector3f& vBlockSize, visualization_msgs::MarkerArray& oOutputVolume, int iIdOffset = 0); 
+    static void VoxelSetMaker(const HashPosDic& vVoxelList, const Eigen::Vector3f& vVoxelSize, visualization_msgs::MarkerArray& oOutputVolume); 
 
 public:
     template<class T>
@@ -58,6 +61,7 @@ public:
     );
 
     void PublishBlockSet(const HashPosSet& vBlockSet, const Eigen::Vector3f& vBlockSize, const std::string & sTopicName, const int iQueueSize = 1);
+    void PublishVoxelSet(const HashPosDic& vVoxelSet, const Eigen::Vector3f& vVoxelSize, const std::string & sTopicName);
 
     void HSVToRGB(float H, float S, float V, float& R, float& G, float& B);
     void HSVToRGB(float H, float S, float V, uint8_t& R, uint8_t& G, uint8_t& B);

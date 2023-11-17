@@ -4,16 +4,20 @@
 #include <numeric>
 #include <mutex>
 
+#include "volume/SimpleVolume.h"
+#include "volume/DistanceIoVolume.h"
+
 namespace Updater {
 
 MeshUpdater MeshUpdater::instance;
+std::mutex TriangleMesh::mSetPointIntensity;
 
-pcl::PointCloud<pcl::PointXYZI> GetSectorMeshCloud(SectorMeshPtr pMesh) {
+pcl::PointCloud<pcl::PointXYZI> SectorMeshFrames::GetSectorMeshCloud(SectorMeshPtr pMesh) {
     
     pcl::PointCloud<pcl::PointXYZI> vCloud;
     if(pMesh != nullptr) {
         int iMeshSize = 0;
-        for(TriangleMeshPtr mesh : *pMesh) {
+        for(TriangleMesh::Ptr mesh : *pMesh) {
             iMeshSize += mesh->mesh.size();
         }
         for(auto mesh : *pMesh) {
@@ -24,16 +28,16 @@ pcl::PointCloud<pcl::PointXYZI> GetSectorMeshCloud(SectorMeshPtr pMesh) {
     return vCloud;
 }
 
-TriangleMeshPtr ConvertToTriangleMesh(pcl::PolygonMesh& oSingleMesh) {
+TriangleMesh::Ptr TriangleMesh::GetFromPolygonMesh(pcl::PolygonMesh& oMesh) {
 
-    TriangleMeshPtr pTriangles(new TriangleMesh);
+    TriangleMesh::Ptr pTriangles(new TriangleMesh);
     pcl::MsgFieldMap field_map;
-    pcl::createMapping<pcl::PointXYZ>(oSingleMesh.cloud.fields, field_map);
-    pcl::fromPCLPointCloud2(oSingleMesh.cloud, pTriangles->cloud, field_map);
+    pcl::createMapping<pcl::PointXYZ>(oMesh.cloud.fields, field_map);
+    pcl::fromPCLPointCloud2(oMesh.cloud, pTriangles->cloud, field_map);
 
-    pTriangles->mesh.reserve(oSingleMesh.polygons.size());
+    pTriangles->mesh.reserve(oMesh.polygons.size());
     const Eigen::Vector3f& vCenter = pTriangles->cloud.back().getVector3fMap();
-    for(auto& polygon : oSingleMesh.polygons) {
+    for(auto& polygon : oMesh.polygons) {
         const Eigen::Vector3f& a = pTriangles->cloud[polygon.vertices[0]].getVector3fMap();
         const Eigen::Vector3f& b = pTriangles->cloud[polygon.vertices[1]].getVector3fMap();
         const Eigen::Vector3f& c = pTriangles->cloud[polygon.vertices[2]].getVector3fMap();
@@ -74,13 +78,9 @@ void TriangleMesh::GetYawSortedIndex() {
     });
 }
 
-std::mutex mPointMutex;
-
-void FindInnerOuter(
-    pcl::PointCloud<pcl::PointXYZI>& vStartCloud,
-    TriangleMeshPtr pTriangles) {
+void TriangleMesh::FindInnerOuter(pcl::PointCloud<pcl::PointXYZI>& vQueryCloud) {
     
-    TriangleMesh& oTriangles = *pTriangles;
+    TriangleMesh& oTriangles = *this;
 
     if(oTriangles.cloud.size() == 0) return;
     const Eigen::Vector3f& vCenter = oTriangles.cloud.back().getVector3fMap();
@@ -89,7 +89,7 @@ void FindInnerOuter(
     vPredictIndex.reserve(oTriangles.mesh.size());
     std::vector<Triangle>& vTriangles = oTriangles.mesh;
     
-    for(auto& oPoint : vStartCloud) {
+    for(auto& oPoint : vQueryCloud) {
 
         if(oPoint.x < oTriangles.min.x || oPoint.x > oTriangles.max.x) continue;
         if(oPoint.y < oTriangles.min.y || oPoint.y > oTriangles.max.y) continue;
@@ -122,7 +122,7 @@ void FindInnerOuter(
         //这个位置似乎能同时判断遮挡和穿透
         // O -- 2 -- 1.05 -- 1 -- 0.98 -- 0.9 ---
         constexpr float factors[] = {1.05f, 0.98f, 0.9f};
-        constexpr float dfactors[] = {0.5, -0.5f};
+        constexpr float dfactors[] = {0.2, -0.2f};
         // constexpr float factors[] = {1.03f, 0.98f, 0.95f};
         //为了消除地面的误判断，或许应该采用点到平面的真实距离，而不是射线的深度差
         // for(auto&& oTriangle : vTriangles) { 
@@ -140,7 +140,7 @@ void FindInnerOuter(
 
             // fIntersectDepth > 1 - Point在Mesh之内，即现在的Mesh穿透了之前的Point
             // fIntersectDepth < 1 - Point在Mesh之外，即现在的Mesh遮挡了之前的Point
-            std::unique_lock<std::mutex> lock(mPointMutex);
+            std::unique_lock<std::mutex> lock(TriangleMesh::mSetPointIntensity);
             int& intensity = reinterpret_cast<int&>(oPoint.intensity);
             // if(fIntersectDepth > factors[0]) intensity = (intensity << 2) | 3;     // conflict
             // else if(fIntersectDepth > factors[1]) intensity = (intensity << 2) | 1; // support
@@ -153,6 +153,135 @@ void FindInnerOuter(
     }
 }
 
+void TriangleMesh::FindInnerOuterSimple(pcl::PointCloud<pcl::PointXYZI>& vQueryCloud) {
+    
+    TriangleMesh& oTriangles = *this;
+
+    if(oTriangles.cloud.size() == 0) return;
+    const Eigen::Vector3f& vCenter = oTriangles.cloud.back().getVector3fMap();
+
+    std::vector<int> vPredictIndex;
+    vPredictIndex.reserve(oTriangles.mesh.size());
+    std::vector<Triangle>& vTriangles = oTriangles.mesh;
+    
+    for(auto& oPoint : vQueryCloud) {
+
+        if(oPoint.x < oTriangles.min.x || oPoint.x > oTriangles.max.x) continue;
+        if(oPoint.y < oTriangles.min.y || oPoint.y > oTriangles.max.y) continue;
+        if(oPoint.z < oTriangles.min.z || oPoint.z > oTriangles.max.z) continue;
+        Eigen::Vector3f vCenterToPoint = oPoint.getVector3fMap() - vCenter;
+
+        // search
+        std::vector<char> searchSymbol(vTriangles.size(), false);
+        double yaw = GetYaw(vCenterToPoint);
+        int left = 0, right = oTriangles.vTriangleMinYawIndex.size();
+        while(left < right) {
+            int mid = (left + right) >> 1;
+            if(vTriangles[oTriangles.vTriangleMinYawIndex[mid]].minYaw <= yaw) left = mid + 1;
+            else right = mid;
+        }
+        for(int i = 0; i < left; ++i) searchSymbol[oTriangles.vTriangleMinYawIndex[i]] = true;
+
+        left = 0;
+        right = oTriangles.vTriangleMaxYawIndex.size() - 1;
+        while(left < right) {
+            int mid = (left + right) >> 1;
+            if(vTriangles[oTriangles.vTriangleMaxYawIndex[mid]].maxYaw < yaw) left = mid + 1;
+            else right = mid;
+        }
+        vPredictIndex.clear();
+        for(int i = left; i < oTriangles.vTriangleMaxYawIndex.size(); ++i)
+            if(searchSymbol[oTriangles.vTriangleMaxYawIndex[i]])
+                vPredictIndex.push_back(oTriangles.vTriangleMaxYawIndex[i]);
+
+        //这个位置似乎能同时判断遮挡和穿透
+        // O -- 2 -- 1.05 -- 1 -- 0.98 -- 0.9 ---
+        constexpr float factors[] = {1.05f, 0.98f, 0.9f};
+        constexpr float dfactors[] = {0.2, -0.2f};
+        // constexpr float factors[] = {1.03f, 0.98f, 0.95f};
+        //为了消除地面的误判断，或许应该采用点到平面的真实距离，而不是射线的深度差
+        // for(auto&& oTriangle : vTriangles) { 
+        for(auto&& oTriangleIndex : vPredictIndex) {
+            Triangle& oTriangle = vTriangles[oTriangleIndex];
+            float fIntersectDepth = -(vCenter.dot(oTriangle.n()) + oTriangle.D()) / vCenterToPoint.dot(oTriangle.n());
+            if(fIntersectDepth < 1) continue;
+
+            Eigen::Vector3f oIntersectPoint = vCenter + fIntersectDepth * vCenterToPoint;
+            if(oTriangle.ab.cross(oIntersectPoint - oTriangle.a).dot(oTriangle.n()) < 0) continue;
+            if(oTriangle.bc.cross(oIntersectPoint - oTriangle.b).dot(oTriangle.n()) < 0) continue;
+            if(oTriangle.ca.cross(oIntersectPoint - oTriangle.c).dot(oTriangle.n()) < 0) continue;
+
+            float fDistance = - oPoint.getVector3fMap().dot(oTriangle.n()) - oTriangle.D();
+            std::unique_lock<std::mutex> lock(TriangleMesh::mSetPointIntensity);
+            oPoint.intensity = 1.0;
+            break;
+        }
+    }
+}
+
+void TriangleMesh::FindInnerOuterSimple(DistanceIoVoxel& oQueryPoint) {
+    
+    TriangleMesh& oTriangles = *this;
+
+    if(oTriangles.cloud.size() == 0) return;
+    const Eigen::Vector3f& vCenter = oTriangles.cloud.back().getVector3fMap();
+
+    std::vector<int> vPredictIndex;
+    vPredictIndex.reserve(oTriangles.mesh.size());
+    std::vector<Triangle>& vTriangles = oTriangles.mesh;
+    
+    if(oQueryPoint.point.x < oTriangles.min.x || oQueryPoint.point.x > oTriangles.max.x) return;
+    if(oQueryPoint.point.y < oTriangles.min.y || oQueryPoint.point.y > oTriangles.max.y) return;
+    if(oQueryPoint.point.z < oTriangles.min.z || oQueryPoint.point.z > oTriangles.max.z) return;
+    Eigen::Vector3f vCenterToQueryPoint = oQueryPoint.point.getVector3fMap() - vCenter;
+
+    // search
+    std::vector<char> searchSymbol(vTriangles.size(), false);
+    double yaw = GetYaw(vCenterToQueryPoint);
+    int left = 0, right = oTriangles.vTriangleMinYawIndex.size();
+    while(left < right) {
+        int mid = (left + right) >> 1;
+        if(vTriangles[oTriangles.vTriangleMinYawIndex[mid]].minYaw <= yaw) left = mid + 1;
+        else right = mid;
+    }
+    for(int i = 0; i < left; ++i) searchSymbol[oTriangles.vTriangleMinYawIndex[i]] = true;
+
+    left = 0;
+    right = oTriangles.vTriangleMaxYawIndex.size() - 1;
+    while(left < right) {
+        int mid = (left + right) >> 1;
+        if(vTriangles[oTriangles.vTriangleMaxYawIndex[mid]].maxYaw < yaw) left = mid + 1;
+        else right = mid;
+    }
+    vPredictIndex.clear();
+    for(int i = left; i < oTriangles.vTriangleMaxYawIndex.size(); ++i)
+        if(searchSymbol[oTriangles.vTriangleMaxYawIndex[i]])
+            vPredictIndex.push_back(oTriangles.vTriangleMaxYawIndex[i]);
+
+    //这个位置似乎能同时判断遮挡和穿透
+    // O -- 2 -- 1.05 -- 1 -- 0.98 -- 0.9 ---
+    constexpr float factors[] = {1.05f, 0.98f, 0.9f};
+    constexpr float dfactors[] = {0.2, -0.2f};
+    // constexpr float factors[] = {1.03f, 0.98f, 0.95f};
+    //为了消除地面的误判断，或许应该采用点到平面的真实距离，而不是射线的深度差
+    // for(auto&& oTriangle : vTriangles) { 
+    for(auto&& oTriangleIndex : vPredictIndex) {
+        Triangle& oTriangle = vTriangles[oTriangleIndex];
+        float fIntersectDepth = -(vCenter.dot(oTriangle.n()) + oTriangle.D()) / vCenterToQueryPoint.dot(oTriangle.n());
+        if(fIntersectDepth < 1) continue;
+
+        Eigen::Vector3f oIntersectPoint = vCenter + fIntersectDepth * vCenterToQueryPoint;
+        if(oTriangle.ab.cross(oIntersectPoint - oTriangle.a).dot(oTriangle.n()) < 0) continue;
+        if(oTriangle.bc.cross(oIntersectPoint - oTriangle.b).dot(oTriangle.n()) < 0) continue;
+        if(oTriangle.ca.cross(oIntersectPoint - oTriangle.c).dot(oTriangle.n()) < 0) continue;
+
+        float fDistance = - oQueryPoint.point.getVector3fMap().dot(oTriangle.n()) - oTriangle.D();
+        std::unique_lock<std::mutex> lock(TriangleMesh::mSetPointIntensity);
+        oQueryPoint.io = 1.0;
+        break;
+    }
+}
+
 void MeshUpdater::MeshFusion(
     const pcl::PointNormal& oLidarPos,
     std::vector<pcl::PolygonMesh>& vSingleMeshList,
@@ -161,27 +290,238 @@ void MeshUpdater::MeshFusion(
 {
     m_oFuseTimer.NewLine();
 
-    HashBlock* pHashBlockVolume = dynamic_cast<HashBlock*>(&oVolume);
-    if(pHashBlockVolume == nullptr) {
-        ROS_ERROR("[updater/MeshUpdater] The volume type is not HashBlock!");
+    DistanceIoVolume* pDistanceIoVolume = dynamic_cast<DistanceIoVolume*>(&oVolume);
+    if(pDistanceIoVolume == nullptr) {
+        ROS_ERROR("[updater/MeshUpdater] The volume type is not DistanceIoVolume!");
+        return;
+    }
+
+    std::unordered_map<HashPos, pcl::PointXYZI, HashFunc> vHashCorner;
+    SectorMeshPtr pSectorMesh(new SectorMesh);
+    m_vFrameMeshes.FrameEnqueue(pSectorMesh);
+
+	std::vector<Tools::TaskPtr> tasks;
+    std::vector<std::shared_ptr<std::vector<DistanceIoVoxel::Ptr>>> corners;
+
+    for(auto && oSingleMesh : vSingleMeshList) {
+
+        // triangle mesh init
+        TriangleMesh::Ptr pTriangles = TriangleMesh::GetFromPolygonMesh(oSingleMesh);
+        pTriangles->GetAABB();
+        pTriangles->GetYawSortedIndex();
+        pSectorMesh->push_back(pTriangles);
+        m_oFuseTimer.DebugTime("convert_mesh");
+
+        // /*
+        // 更新主函数就在这里
+        // 0. 创建一个对齐的空Volume(局部)，开始计算
+        // 1. 生成Corner矩阵 -> 获取Corner矩阵(如果原本的Corner不在其中，则生成新的Corner)
+        // 2. 计算本层 -> 并行计算本层
+        // 3. 遍历下层7倍节点 -> 获取下层7倍节点(如果原本的Corner不在其中，则生成新的Corner)
+        // 3.. 细分的逻辑不够严谨需要修改
+        // 4. 并行计算下层 -> 并行计算下层
+        // 4.. 7倍顶点合并为新的Corners进行计算
+        // 5. 结束 -> 转为递归或者循环
+        // 6. 将更新后的Volume结果回传给全局Volume
+        std::shared_ptr<std::vector<DistanceIoVoxel::Ptr>> pCorners(new std::vector<DistanceIoVoxel::Ptr>(move( 
+            pDistanceIoVolume->CreateAndGetCorners(pTriangles->min.getVector3fMap(), pTriangles->max.getVector3fMap(), 0))));
+        corners.push_back(pCorners);
+        m_oFuseTimer.DebugTime("get_corners");
+        // ROS_INFO_PURPLE("%d %d %d %d", lenx, leny, lenz, lenx*leny*lenz);
+
+        // 由于计算下一层之前，必须先计算出上一层的内容，因此只能做到分层并行，这里暂时把并行去掉
+        // tasks.emplace_back(m_oThreadPool.AddTask([&,pTriangles,pCorners](){
+
+        for(DistanceIoVoxel::Ptr pVoxel : *pCorners) {
+            pTriangles->FindInnerOuterSimple(*pVoxel);
+        }
+        // }));
+        m_oFuseTimer.DebugTime("judge_points");
+        // */
+    }
+    
+    // wait for task ending
+	// for(auto& task : tasks) {
+	// 	task->Join();
+	// }
+
+    pcl::PointCloud<pcl::PointNormal> vAllCorners;
+    std::vector<float> associate;
+    for(int i = 0; i < corners.size(); ++i) {
+        for(auto&& point : *corners[i]) {
+            if(point->io == 1.0) {
+                vAllCorners.push_back(point->point);
+                associate.push_back(point->io * 0.4f);
+            }
+        }
+        // vAllCorners += *corners[i];
+        // associate.insert(associate.end(), corners[i]->size(), (i % 8 ? 1 : 0) * 0.4);
+    }
+    ROS_INFO_PURPLE("corner size: %d", vAllCorners.size());
+    
+    m_oFuseTimer.DebugTime("voxelize");
+    m_oRpManager.PublishPointCloud(vAllCorners, associate, "/corner_is_free_debug");
+
+    m_oFuseTimer.CoutCurrentLine();
+}
+
+void MeshUpdater::MeshFusionV4(
+    const pcl::PointNormal& oLidarPos,
+    std::vector<pcl::PolygonMesh>& vSingleMeshList,
+    VolumeBase& oVolume,
+    bool bKeepVoxel)
+{
+    m_oFuseTimer.NewLine();
+
+    DistanceIoVolume* pDistanceIoVolume = dynamic_cast<DistanceIoVolume*>(&oVolume);
+    if(pDistanceIoVolume == nullptr) {
+        ROS_ERROR("[updater/MeshUpdater] The volume type is not DistanceIoVolume!");
+        return;
+    }
+
+    std::unordered_map<HashPos, pcl::PointXYZI, HashFunc> vHashCorner;
+    SectorMeshPtr pSectorMesh(new SectorMesh);
+    m_vFrameMeshes.FrameEnqueue(pSectorMesh);
+
+	std::vector<Tools::TaskPtr> tasks;
+    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> corners;
+    
+    for(auto && oSingleMesh : vSingleMeshList) {
+
+        // triangle mesh init
+        TriangleMesh::Ptr pTriangles = TriangleMesh::GetFromPolygonMesh(oSingleMesh);
+        pTriangles->GetAABB();
+        pTriangles->GetYawSortedIndex();
+        pSectorMesh->push_back(pTriangles);
+        m_oFuseTimer.DebugTime("convert_mesh");
+
+        constexpr int expand = 1;
+        pcl::PointCloud<pcl::PointXYZI>::Ptr pCorners(new pcl::PointCloud<pcl::PointXYZI>());
+        int lenx = 0, leny = 0, lenz = 0;
+        for(float x = pTriangles->min.x - expand; x <= pTriangles->max.x + 1 + expand; x += pDistanceIoVolume->GetVoxelLength().x()) {
+            lenx++; leny = 0;
+        for(float y = pTriangles->min.y - expand; y <= pTriangles->max.y + 1 + expand; y += pDistanceIoVolume->GetVoxelLength().y()) {
+            leny++; lenz = 0;
+        for(float z = pTriangles->min.z - expand; z <= pTriangles->max.z + 1 + expand; z += pDistanceIoVolume->GetVoxelLength().z()) {
+            lenz++;
+            pcl::PointXYZI oPoint;
+            oPoint.getVector3fMap() = Eigen::Vector3f(x, y, z);
+            oPoint.intensity = 0.0f;
+            pCorners->push_back(oPoint);
+        }}}
+        corners.push_back(pCorners);
+        // ROS_INFO_PURPLE("%d %d %d %d", lenx, leny, lenz, lenx*leny*lenz);
+
+        // 由于计算下一层之前，必须先计算出上一层的内容，因此只能做到分层并行，这里暂时把并行去掉
+        // tasks.emplace_back(m_oThreadPool.AddTask([&,pTriangles,pCorners](){
+
+            // find points is inner or outof the mesh
+            pTriangles->FindInnerOuterSimple(*pCorners);
+        // }));
+
+        Eigen::Vector3f sub_offset[7] = {
+            {0.5, 0.5, 0.5}, // center
+            {0  , 0.5, 0.5}, {0.5, 0  , 0.5}, {0.5, 0.5, 0  }, // face
+            {0.5, 0  , 0  }, {0  , 0.5, 0  }, {0  , 0  , 0.5}, // edge
+        };
+        int index_offset[] = {
+            0, 
+            1, 
+            lenz, 
+            lenz * leny, 
+            1 + lenz, 
+            1 + lenz * leny, 
+            lenz + lenz * leny, 
+            1 + lenz + lenz * leny
+        };
+        for(int i = 0; i < 7; ++i) {
+            pcl::PointCloud<pcl::PointXYZI>::Ptr pSubCorners(new pcl::PointCloud<pcl::PointXYZI>(*pCorners));
+            // 前三行代表x,y,z, 每一列是一个点，进行平移。
+            pSubCorners->getMatrixXfMap().topRows(3).colwise() += pDistanceIoVolume->GetVoxelLength().cwiseProduct(sub_offset[i]);
+            corners.push_back(pSubCorners);
+
+            // 删除非细分的点
+            int delete_count = 0;
+            for(int k = 0; k < pSubCorners->size()-delete_count; ++k) {
+                int mask = 0;
+                for(int j = 0; j < 8; ++j) {
+                    int query_index = k + index_offset[j];
+                    mask = mask << 1;
+                    if(query_index >= pCorners->size()) continue;
+                    mask |= pCorners->at(query_index).intensity == 1.0f? 1 : 0;
+                }
+                bool subdivision = mask > 0 && mask < 0xff;
+                if(!subdivision) {
+                    ++delete_count;
+                    std::swap(pSubCorners->at(k), pSubCorners->at(pSubCorners->size()-delete_count));
+                }
+            }
+            pSubCorners->erase(pSubCorners->end()-delete_count, pSubCorners->end());
+            ROS_INFO_PURPLE("delete_count: %d/%d->%d", delete_count, pCorners->size(), pSubCorners->size());
+
+            tasks.emplace_back(m_oThreadPool.AddTask([&,pTriangles,pSubCorners](){
+
+                // find points is inner or outof the mesh
+                pTriangles->FindInnerOuterSimple(*pSubCorners);
+            }));
+        }
+    }
+    
+    // wait for task ending
+	for(auto& task : tasks) {
+		task->Join();
+	}
+    m_oFuseTimer.DebugTime("judge points");
+
+    pcl::PointCloud<pcl::PointXYZI> vAllCorners;
+    std::vector<float> associate;
+    for(int i = 0; i < corners.size(); ++i) {
+        for(auto point : *corners[i]) {
+            if(point.intensity == 1.0) {
+                vAllCorners.push_back(point);
+                associate.push_back((i % 8 ? 1 : 0) * 0.4);
+            }
+        }
+        // vAllCorners += *corners[i];
+        // associate.insert(associate.end(), corners[i]->size(), (i % 8 ? 1 : 0) * 0.4);
+    }
+    ROS_INFO_PURPLE("corner size: %d", vAllCorners.size());
+    
+    m_oFuseTimer.DebugTime("voxelize");
+    m_oRpManager.PublishPointCloud(vAllCorners, associate, "/corner_is_free_debug");
+
+    m_oFuseTimer.CoutCurrentLine();
+}
+
+/////////////////////////////////////////////////////////////////////
+// 思路：使用前后帧对比的方法，将点云和网格记录到队列中，判断内外使用二分+射线方法
+void MeshUpdater::MeshFusionV3(
+    const pcl::PointNormal& oLidarPos,
+    std::vector<pcl::PolygonMesh>& vSingleMeshList,
+    VolumeBase& oVolume,
+    bool bKeepVoxel)
+{
+    m_oFuseTimer.NewLine();
+
+    SimpleVolume* pSimpleVolume = dynamic_cast<SimpleVolume*>(&oVolume);
+    if(pSimpleVolume == nullptr) {
+        ROS_ERROR("[updater/MeshUpdater] The volume type is not SimpleVolume!");
         return;
     }
 
     std::unordered_map<HashPos, pcl::PointXYZI, HashFunc> vHashCorner;
     pcl::PointCloud<pcl::PointNormal> oMeshCenters;
-    RosPublishManager::HashPosSet vUpdatedPos;
     SectorMeshPtr pSectorMesh(new SectorMesh);
     m_vFrameMeshes.FrameEnqueue(pSectorMesh);
 
     SectorMeshPtr pStartMesh = m_vFrameMeshes.GetStartFrame();
-    // pcl::PointCloud<pcl::PointXYZI> vStartCloud = GetSectorMeshCloud(pStartMesh);
 
 	std::vector<Tools::TaskPtr> tasks;
 
     for(auto && oSingleMesh : vSingleMeshList) {
 
         // triangle mesh init
-        TriangleMeshPtr pTriangles = ConvertToTriangleMesh(oSingleMesh);
+        TriangleMesh::Ptr pTriangles = TriangleMesh::GetFromPolygonMesh(oSingleMesh);
         pTriangles->GetAABB();
         pTriangles->GetYawSortedIndex();
         pSectorMesh->push_back(pTriangles);
@@ -196,22 +536,21 @@ void MeshUpdater::MeshFusion(
             tasks.emplace_back(m_oThreadPool.AddTask([&,pTriangles](){
 
                 // find points is inner or outof the mesh
-                FindInnerOuter(pStartSector->cloud, pTriangles);
+                pTriangles->FindInnerOuter(pStartSector->cloud);
             }));
         }
-
     }
 
     if(pStartMesh != nullptr) {
 
-        for(TriangleMeshPtr& pTriangles : *pStartMesh) {
+        for(TriangleMesh::Ptr& pTriangles : *pStartMesh) {
 
             for(auto& pCurrentSector : *pSectorMesh) {
                 
                 tasks.emplace_back(m_oThreadPool.AddTask([&,pTriangles](){
 
                     // find points is inner or outof the mesh
-                    FindInnerOuter(pCurrentSector->cloud, pTriangles);
+                    pTriangles->FindInnerOuter(pCurrentSector->cloud);
                 }));
             }
 
@@ -224,8 +563,6 @@ void MeshUpdater::MeshFusion(
 	}
     m_oFuseTimer.DebugTime("judge points");
 
-
-    m_oRpManager.PublishBlockSet(vUpdatedPos, pHashBlockVolume->m_vBlockSize, "/mesh_block_debug");
     m_oRpManager.PublishNormalPoints(oMeshCenters, "/mesh_normal_debug", [pSectorMesh](pcl::PointCloud<pcl::PointNormal>& oMeshCenters) {
         for(auto& sector : *pSectorMesh) {
             for(auto& triangle : sector->mesh) {
@@ -245,20 +582,24 @@ void MeshUpdater::MeshFusion(
         for(auto&& oPoint : pStartSector->cloud) {
             vAllCorners.push_back(oPoint);
             const int& intensity = reinterpret_cast<int&>(oPoint.intensity);
-            associate.push_back(intensity == 11 || intensity == 14 ? 0.4 : -1);
+            // associate.push_back(intensity == 11 || intensity == 14 ? 0.4 : -1);
             // associate.push_back(intensity == 15 ? 1 : -1);
+            associate.push_back(intensity == 5 ? 1 : -1);
             if(intensity >= 0 && intensity < 16)
                 m_vDebugOutClouds[intensity].push_back(oPoint);
         }
+        pSimpleVolume->VoxelizePointsAndFusion(pStartSector->cloud);
     }
+    m_oFuseTimer.DebugTime("voxelize");
 
-    // 把所有情况列出，添加到不同的点云，然后分别保存
-
+    pSimpleVolume->PublishType();
     m_oRpManager.PublishPointCloud(vAllCorners, associate, "/corner_is_free_debug");
 
     m_oFuseTimer.CoutCurrentLine();
 }
 
+////////////////////////////////////////////////////////////////
+// 思路：对于每个Sector，更新其内部空间的体素角点，判断内外使用遍历射线方法
 void MeshUpdater::MeshFusionV2(
     const pcl::PointNormal& oLidarPos,
     std::vector<pcl::PolygonMesh>& vSingleMeshList,
@@ -401,6 +742,8 @@ void MeshUpdater::MeshFusionV2(
     m_oFuseTimer.CoutCurrentLine();
 }
 
+/////////////////////////////////////////////////////////////////////////
+// 思路：对于每个Sector，更新其内部空间的体素角点，判断内外使用GHPR反投影，遍历内外法
 void MeshUpdater::MeshFusionV1(
     const pcl::PointNormal& oLidarPos, 
     pcl::PolygonMesh& oSingleMesh,

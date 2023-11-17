@@ -483,7 +483,7 @@ void HashBlock::RebuildUnionSetCore(HashVolume & vVolumeCopy, const float fStric
 		// 面片连通性 Ax + By + Cz + D = 0 (+法向限制）
 		float normal_dot_ref = m_pUpdateStrategy->IsSoftDynamic(oPoint.data_c[1]) ? fStrictDotRef : fSoftDotRef;
 		// 找到左下角角点
-		pcl::PointXYZ oPosPoint = HashPosTo3DPos(oPos);
+		pcl::PointXYZ oPosPoint = HashPosTo3DPos<pcl::PointXYZ>(oPos);
 
 		// 计算面相交
 		oIntersection->Reset(oPoint, GetVoxelLength(), oPosPoint.getVector3fMap());
@@ -506,7 +506,7 @@ void HashBlock::RebuildUnionSetCore(HashVolume & vVolumeCopy, const float fStric
 			if(connect_neg[iAxisId] && vVolumeCopy.count(oNearPos)) {
 
 				pcl::PointNormal& oNearPoint = vVolumeCopy[oNearPos];
-				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
+				pcl::PointXYZ oPosPoint = HashPosTo3DPos<pcl::PointXYZ>(oNearPos);
 
 				// 物体若置信度相似，且更新时间相似，说明是连在一起的
 				int current_confidence = oNearPoint.data_n[3] / fConfidenceLevelLength;
@@ -543,7 +543,7 @@ VoxelBase* HashBlock::GetVoxelPtr(const HashPos & oPos) {
 
 	HashPos oBlockPos;
 	int iVoxelIndex;
-	pcl::PointXYZ oVoxelBase = HashPosTo3DPos(oPos);
+	pcl::PointXYZ oVoxelBase = HashPosTo3DPos<pcl::PointXYZ>(oPos);
 	oVoxelBase.getVector3fMap() += m_vVoxelHalfSize;
 	PointBelongVoxelIndex(oVoxelBase, oBlockPos, iVoxelIndex);
 	if(m_vBlockVolume.count(oBlockPos) && m_vBlockVolume[oBlockPos]->size() > iVoxelIndex)
@@ -626,12 +626,13 @@ void HashBlock::DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet) {
 
 			for(auto && oPosInSet : oPosList) {
 
-				auto o3DPos = HashPosTo3DPos(oPosInSet);
+				auto o3DPos = HashPosTo3DPos(oPosInSet) + GetVoxelLength() / 2;
 				
 				geometry_msgs::Point point;
-				point.x = o3DPos.x + GetVoxelLength().x() / 2;
-				point.y = o3DPos.y + GetVoxelLength().y() / 2;
-				point.z = o3DPos.z + GetVoxelLength().z() / 2;
+				
+				point.x = o3DPos.x();
+				point.y = o3DPos.y();
+				point.z = o3DPos.z();
 				oCurrentSet.points.push_back(point);
 			}
 

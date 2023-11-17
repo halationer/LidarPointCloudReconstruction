@@ -139,8 +139,6 @@ public:
 
 	// calcualte corner poses
 	static void GetCornerPoses(const HashPos & oVoxelPos, std::vector<HashPos> & vCornerPoses);
-	static void HashPosTo3DPos(const HashPos & oCornerPos, const pcl::PointXYZ & oVoxelLength, Eigen::Vector3f & oCorner3DPos);
-	pcl::PointXYZ HashPosTo3DPos(const HashPos & oPos) const;
 };
 
 

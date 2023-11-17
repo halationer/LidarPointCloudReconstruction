@@ -434,7 +434,7 @@ void HashVoxeler::RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, con
 		Eigen::Vector3f vNormal(oPoint.normal_x, oPoint.normal_y, oPoint.normal_z);
 		float A = oPoint.normal_x, B = oPoint.normal_y, C = oPoint.normal_z;
 		float neg_D = A * oPoint.x + B * oPoint.y + C * oPoint.z;
-		pcl::PointXYZ oPosPoint = HashPosTo3DPos(oPos);
+		pcl::PointXYZ oPosPoint = HashPosTo3DPos<pcl::PointXYZ>(oPos);
 		int cross_x0 = A ? (neg_D - B * oPosPoint.y - C * oPosPoint.z) / A - oPosPoint.x : -1;
 		int cross_y0 = B ? (neg_D - A * oPosPoint.x - C * oPosPoint.z) / B - oPosPoint.y : -1;
 		int cross_z0 = C ? (neg_D - A * oPosPoint.x - B * oPosPoint.y) / C - oPosPoint.z : -1;
@@ -464,7 +464,7 @@ void HashVoxeler::RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, con
 
 				float A = oNearPoint.normal_x, B = oNearPoint.normal_y, C = oNearPoint.normal_z;
 				float neg_D = A * oNearPoint.x + B * oNearPoint.y + C * oNearPoint.z;
-				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
+				pcl::PointXYZ oPosPoint = HashPosTo3DPos<pcl::PointXYZ>(oNearPos);
 				int cross_y3 = B ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - C * oPosPoint.z) / B - oPosPoint.y : -1;
 				int cross_y2 = B ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - C * (oPosPoint.z + m_oVoxelLength.z)) / B - oPosPoint.y : -1;
 				int cross_z1 = C ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - B * oPosPoint.y) / C - oPosPoint.z : -1;
@@ -491,7 +491,7 @@ void HashVoxeler::RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, con
 
 				float A = oNearPoint.normal_x, B = oNearPoint.normal_y, C = oNearPoint.normal_z;
 				float neg_D = A * oNearPoint.x + B * oNearPoint.y + C * oNearPoint.z;
-				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
+				pcl::PointXYZ oPosPoint = HashPosTo3DPos<pcl::PointXYZ>(oNearPos);
 				int cross_z3 = C ? (neg_D - A * oPosPoint.x - B * (oPosPoint.y + m_oVoxelLength.y)) / C - oPosPoint.z : -1;
 				int cross_z2 = C ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - B * (oPosPoint.y + m_oVoxelLength.y)) / C - oPosPoint.z : -1;
 				int cross_x1 = A ? (neg_D - B * (oPosPoint.y + m_oVoxelLength.y) - C * oPosPoint.z) / A - oPosPoint.x : -1;
@@ -518,7 +518,7 @@ void HashVoxeler::RebuildUnionSetCore(HashVoxeler::HashVolume & vVolumeCopy, con
 
 				float A = oNearPoint.normal_x, B = oNearPoint.normal_y, C = oNearPoint.normal_z;
 				float neg_D = A * oNearPoint.x + B * oNearPoint.y + C * oNearPoint.z;
-				pcl::PointXYZ oPosPoint = HashPosTo3DPos(oNearPos);
+				pcl::PointXYZ oPosPoint = HashPosTo3DPos<pcl::PointXYZ>(oNearPos);
 				int cross_y1 = B ? (neg_D - A * oPosPoint.x - C * (oPosPoint.z + m_oVoxelLength.z)) / B - oPosPoint.y : -1;
 				int cross_y2 = B ? (neg_D - A * (oPosPoint.x + m_oVoxelLength.x) - C * (oPosPoint.z + m_oVoxelLength.z)) / B - oPosPoint.y : -1;
 				int cross_x3 = A ? (neg_D - B * oPosPoint.y - C * (oPosPoint.z + m_oVoxelLength.z)) / A - oPosPoint.x : -1;
@@ -569,11 +569,12 @@ void HashVoxeler::DrawVolume(const HashVolume & vVolume, visualization_msgs::Mar
 
 	for(auto && [oPos, _] : vVolume) {
 
-		auto o3DPos = HashPosTo3DPos(oPos);
+		auto o3DPos = HashPosTo3DPos(oPos) + m_oVoxelLength.getVector3fMap() / 2;
+
 		geometry_msgs::Point point;
-		point.x = o3DPos.x + m_oVoxelLength.x / 2;
-		point.y = o3DPos.y + m_oVoxelLength.y / 2;
-		point.z = o3DPos.z + m_oVoxelLength.z / 2;
+		point.x = o3DPos.x();
+		point.y = o3DPos.y();
+		point.z = o3DPos.z();
 		oVolumeMarker.points.push_back(point);
 	}
 
@@ -622,11 +623,11 @@ void HashVoxeler::DrawUnionSet(visualization_msgs::MarkerArray& oOutputUnionSet)
 
 			for(auto && oPosInSet : oPosList) {
 
-				auto o3DPos = HashPosTo3DPos(oPosInSet);
+				auto o3DPos = HashPosTo3DPos(oPosInSet) + m_oVoxelLength.getVector3fMap() / 2;
 				geometry_msgs::Point point;
-				point.x = o3DPos.x + m_oVoxelLength.x / 2;
-				point.y = o3DPos.y + m_oVoxelLength.y / 2;
-				point.z = o3DPos.z + m_oVoxelLength.z / 2;
+				point.x = o3DPos.x();
+				point.y = o3DPos.y();
+				point.z = o3DPos.z();
 				oCurrentSet.points.push_back(point);
 			}
 
@@ -874,30 +875,4 @@ void HashVoxeler::GetCornerPoses(const HashPos & oVoxel, std::vector<HashPos> & 
 	vCornerPoses.emplace_back(oVoxel.x, 		oVoxel.y + 1, 	oVoxel.z + 1);
 	vCornerPoses.emplace_back(oVoxel.x + 1,		oVoxel.y + 1,	oVoxel.z + 1);
 	vCornerPoses.emplace_back(oVoxel.x + 1, 	oVoxel.y,	 	oVoxel.z + 1);
-}
-
-/*=======================================
-HashPosTo3DPos(static)
-Input: 	oCornerPos - the 3d index of a voxel cube corner
-		oVoxelLength - the edge length of a voxel cube
-Output: oCorner3DPos - the 3d gt position of the corner point 
-Function: transfer a HashPos variable to 3d gt position (eigen styled)
-========================================*/
-void HashVoxeler::HashPosTo3DPos(const HashPos & oCornerPos, const pcl::PointXYZ & oVoxelLength, Eigen::Vector3f & oCorner3DPos) {
-	
-	oCorner3DPos.x() = oCornerPos.x * oVoxelLength.x;
-	oCorner3DPos.y() = oCornerPos.y * oVoxelLength.y;
-	oCorner3DPos.z() = oCornerPos.z * oVoxelLength.z;
-}
-
-
-/*=======================================
-HashPosTo3DPos
-Input: 	oPos - the 3d index of a voxel cube corner
-Output: pcl::PointXYZ - the 3d gt position of the corner point
-Function: transfer a HashPos variable to 3d gt position (pcl styled)
-========================================*/
-pcl::PointXYZ HashVoxeler::HashPosTo3DPos(const HashPos & oPos) const {
-
-	return pcl::PointXYZ(oPos.x * m_oVoxelLength.x, oPos.y * m_oVoxelLength.y, oPos.z * m_oVoxelLength.z);
 }

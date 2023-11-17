@@ -560,6 +560,14 @@ Visualization Manager:
       Name: Poisson
     - Class: rviz/Group
       Displays:
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /mesh_voxel_debug
+          Name: VoxelTypeDebug
+          Namespaces:
+            {}
+          Queue Size: 100
+          Value: true
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -581,7 +589,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.10000000149011612
+          Size (m): 0.20000000298023224
           Style: Flat Squares
           Topic: /corner_is_free_debug
           Unreliable: false
@@ -726,25 +734,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 11.734390258789062
+      Distance: 144.13441467285156
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -2.7832345962524414
-        Y: -3.953721046447754
+        X: -3.1037063598632812
+        Y: 5.832992076873779
         Z: -2.3214099201140925e-5
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5252094864845276
+      Pitch: 0.470209538936615
       Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 3.8886680603027344
+      Yaw: 5.588681221008301
     Saved: ~
 Window Geometry:
   Displays:

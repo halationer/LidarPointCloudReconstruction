@@ -1,7 +1,8 @@
 #include "VolumeBase.h"
 #include "HashBlock.h"
 #include "HashVoxeler.h"
-
+#include "SimpleVolume.h"
+#include "DistanceIoVolume.h"
 
 unsigned int VoxelBase::TypeByQueue() {
 
@@ -15,6 +16,8 @@ VolumeBase* VolumeBase::CreateVolume(enum VolumeType volumeType) {
     switch(volumeType) {
         case HASH_VOXELER: return new HashVoxeler;
         case HASH_BLOCK: return new HashBlock;
+		case SIMPLE: return new SimpleVolume;
+		case DISTANCE_IO: return new DistanceIoVolume;
         default: return nullptr;
     }
 }
@@ -76,12 +79,12 @@ void VolumeBase::DrawVolume(const HashVolume & vVolume, visualization_msgs::Mark
 
 	for(auto && [oPos, _] : vVolume) {
 
-		pcl::PointXYZ o3DPos = HashPosTo3DPos(oPos);
+		auto o3DPos = HashPosTo3DPos(oPos) + GetVoxelLength() / 2;
 
 		geometry_msgs::Point point;
-		point.x = o3DPos.x + GetVoxelLength().x() / 2;
-		point.y = o3DPos.y + GetVoxelLength().y() / 2;
-		point.z = o3DPos.z + GetVoxelLength().z() / 2;
+		point.x = o3DPos.x();
+		point.y = o3DPos.y();
+		point.z = o3DPos.z();
 		oVolumeMarker.points.push_back(point);
 	}
 

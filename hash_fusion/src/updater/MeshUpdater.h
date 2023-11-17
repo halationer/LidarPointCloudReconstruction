@@ -11,6 +11,8 @@
 
 #include "volume/VolumeBase.h"
 #include "volume/HashBlock.h"
+#include "volume/DistanceIoVolume.h"
+
 #include "tools/PointCloudOperation.h"
 #include "tools/RosPublishManager.h"
 #include "tools/HashPos.h"
@@ -57,6 +59,8 @@ public:
 class TriangleMesh {
 
 public:
+    typedef std::shared_ptr<TriangleMesh> Ptr;
+
     std::vector<Triangle> mesh;
     pcl::PointCloud<pcl::PointXYZI> cloud;
     pcl::PointXYZ min, max;
@@ -64,10 +68,16 @@ public:
 
     void GetAABB();
     void GetYawSortedIndex();
+    void FindInnerOuter(pcl::PointCloud<pcl::PointXYZI>& vQueryCloud);
+    void FindInnerOuterSimple(pcl::PointCloud<pcl::PointXYZI>& vQueryCloud);
+    void FindInnerOuterSimple(DistanceIoVoxel& oQueryPoint);
+
+    static Ptr GetFromPolygonMesh(pcl::PolygonMesh& oMesh);
+private:
+    static std::mutex mSetPointIntensity;
 };
 
-typedef std::shared_ptr<TriangleMesh> TriangleMeshPtr;
-typedef std::vector<TriangleMeshPtr> SectorMesh;
+typedef std::vector<TriangleMesh::Ptr> SectorMesh;
 typedef std::shared_ptr<SectorMesh> SectorMeshPtr;
 
 class SectorMeshFrames {
@@ -95,6 +105,8 @@ public:
         if(m_iFrameStart < 0) return nullptr;
         return m_vFrames[m_iFrameStart];
     }
+    
+    static pcl::PointCloud<pcl::PointXYZI> GetSectorMeshCloud(SectorMeshPtr pMesh);
 };
 
 class MeshUpdater {
@@ -103,7 +115,6 @@ private:
     Tools::ThreadPool m_oThreadPool;
     TimeDebugger m_oFuseTimer;
     RosPublishManager& m_oRpManager;
-    std::unordered_set<HashPos, HashFunc> m_vPosRecord;
     SectorMeshFrames m_vFrameMeshes;
     std::vector<pcl::PointCloud<pcl::PointXYZI>> m_vDebugOutClouds;
 
@@ -124,7 +135,7 @@ public:
     static MeshUpdater& GetInstance() {
         return instance;
     }
-    ~MeshUpdater(){ SaveDebugOutClouds(); }
+    // ~MeshUpdater(){ SaveDebugOutClouds(); }
 
 private:
     void SaveDebugOutClouds();
@@ -139,6 +150,18 @@ public:
     
     // use ray-mesh to update corner occupancy
     void MeshFusionV2(
+        const pcl::PointNormal& oLidarPos, 
+        std::vector<pcl::PolygonMesh>& vSingleMeshList,
+        VolumeBase& oVolume,
+        bool bKeepVoxel);
+
+    void MeshFusionV3(
+        const pcl::PointNormal& oLidarPos, 
+        std::vector<pcl::PolygonMesh>& vSingleMeshList,
+        VolumeBase& oVolume,
+        bool bKeepVoxel);
+
+    void MeshFusionV4(
         const pcl::PointNormal& oLidarPos, 
         std::vector<pcl::PolygonMesh>& vSingleMeshList,
         VolumeBase& oVolume,

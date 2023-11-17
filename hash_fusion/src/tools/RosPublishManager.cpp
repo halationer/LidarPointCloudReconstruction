@@ -89,6 +89,15 @@ void RosPublishManager::PublishBlockSet(const HashPosSet& vBlockSet, const Eigen
     });
 }
 
+void RosPublishManager::PublishVoxelSet(const HashPosDic& vVoxelSet, const Eigen::Vector3f& vVoxelSize, const std::string & sTopicName) {
+    
+    visualization_msgs::MarkerArray oOutputVoxels;
+    PublishMarkerArray(oOutputVoxels, sTopicName, [&](visualization_msgs::MarkerArray& oMarkerArray){
+        std::cout << output::format_purple << " Voxel Num: " << vVoxelSet.size()  << output::format_white << std::endl;
+        RosPublishManager::VoxelSetMaker(vVoxelSet, vVoxelSize, oMarkerArray);
+    });
+}
+
 void RosPublishManager::PublishNormalPoints(
     pcl::PointCloud<pcl::PointNormal> & vCloud,
     const std::string & sTopicName,
@@ -261,4 +270,56 @@ void RosPublishManager::BlockSetMaker(const HashPosSet& vBlockList, const Eigen:
 	}
 
 	oOutputVolume.markers.push_back(oVolumeMarker);
+}
+
+void RosPublishManager::VoxelSetMaker(const HashPosDic& vVoxelList, const Eigen::Vector3f& vVoxelSize, visualization_msgs::MarkerArray& oOutputVolume) {
+ 
+    constexpr int index = 3e4;
+
+    for(int iIdOffset = 0; iIdOffset < 2; ++iIdOffset) {
+
+        // make blocks
+        visualization_msgs::Marker oVolumeMarker;
+        oVolumeMarker.header.frame_id = "map";
+        oVolumeMarker.header.stamp = ros::Time::now();
+        oVolumeMarker.type = visualization_msgs::Marker::CUBE_LIST;
+        oVolumeMarker.action = visualization_msgs::Marker::MODIFY;
+        oVolumeMarker.id = index + 2 * iIdOffset; 
+
+        oVolumeMarker.scale.x = vVoxelSize.x();
+        oVolumeMarker.scale.y = vVoxelSize.y();
+        oVolumeMarker.scale.z = vVoxelSize.z();
+
+        oVolumeMarker.pose.position.x = 0.0;
+        oVolumeMarker.pose.position.y = 0.0;
+        oVolumeMarker.pose.position.z = 0.0;
+
+        oVolumeMarker.pose.orientation.x = 0.0;
+        oVolumeMarker.pose.orientation.y = 0.0;
+        oVolumeMarker.pose.orientation.z = 0.0;
+        oVolumeMarker.pose.orientation.w = 1.0;
+
+        oVolumeMarker.color.a = std::min(0.3 * (iIdOffset + 1), 1.0);
+        oVolumeMarker.color.r = 0.8 - 0.6 * iIdOffset;
+        oVolumeMarker.color.g = 0.2;
+        oVolumeMarker.color.b = 0.2;
+
+        for(auto&& [oPos,influence] : vVoxelList) {
+
+            if(influence != iIdOffset) continue;
+
+            Eigen::Vector3f oPoint(oPos.x, oPos.y, oPos.z);
+            oPoint = oPoint.cwiseProduct(vVoxelSize);
+            oPoint += 0.5 * vVoxelSize;
+
+            geometry_msgs::Point point;
+            point.x = oPoint.x();
+            point.y = oPoint.y();
+            point.z = oPoint.z();
+            oVolumeMarker.points.push_back(point);
+        }
+
+        oOutputVolume.markers.push_back(oVolumeMarker);
+    }
+   
 }
