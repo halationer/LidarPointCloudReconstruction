@@ -1,6 +1,7 @@
 #include "RosPublishManager.h"
 
 #include "tools/OutputUtils.h"
+#include "volume/DistanceIoVolume.h"
 
 #include <iostream>
 #include <pcl_conversions/pcl_conversions.h>
@@ -62,6 +63,7 @@ void RosPublishManager::PublishPointCloud(
 template void RosPublishManager::PublishPointCloud(const pcl::PointCloud<pcl::PointNormal> & vCloud, const std::vector<float> & vFeatures, const std::string & sTopicName, const int iQueueSize);
 template void RosPublishManager::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures, const std::string & sTopicName, const int iQueueSize);
 template void RosPublishManager::PublishPointCloud(const pcl::PointCloud<pcl::PointXYZI> & vCloud, const std::vector<float> & vFeatures, const std::string & sTopicName, const int iQueueSize);
+template void RosPublishManager::PublishPointCloud(const pcl::PointCloud<pcl::DistanceIoVoxel> & vCloud, const std::vector<float> & vFeatures, const std::string & sTopicName, const int iQueueSize);
 
 
 void RosPublishManager::PublishMarkerArray(

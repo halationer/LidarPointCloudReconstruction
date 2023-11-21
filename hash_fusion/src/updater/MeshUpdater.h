@@ -70,7 +70,8 @@ public:
     void GetYawSortedIndex();
     void FindInnerOuter(pcl::PointCloud<pcl::PointXYZI>& vQueryCloud);
     void FindInnerOuterSimple(pcl::PointCloud<pcl::PointXYZI>& vQueryCloud);
-    void FindInnerOuterSimple(DistanceIoVoxel& oQueryPoint);
+    void FindInnerOuterSimple(pcl::DistanceIoVoxel& oQueryPoint);
+    void FindInnerOuterSimple(pcl::PointCloud<pcl::DistanceIoVoxel>& oQueryCloud);
 
     static Ptr GetFromPolygonMesh(pcl::PolygonMesh& oMesh);
 private:

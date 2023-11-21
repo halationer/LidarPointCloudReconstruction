@@ -20,6 +20,7 @@ private:
     friend class ThreadPool;
     std::function<void(void)> main;
     std::promise<void> result;
+    std::atomic<bool> finished = false;
 
 public:
     Task(std::function<void(void)> func){
@@ -29,7 +30,9 @@ public:
         };
     }
     void Join() {
+        if(finished) return;
         result.get_future().wait();
+        finished = true;
     }
 };
 

@@ -36,6 +36,7 @@ namespace pcl {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
 
+  struct DistanceIoVoxel;
   PCL_EXPORTS std::ostream& operator << (std::ostream& os, const DistanceIoVoxel& p);
 
   struct DistanceIoVoxel : public _PointDistanceIo
@@ -51,7 +52,7 @@ namespace pcl {
       x = y = z = 0.0f;
       data[3] = 1.0f;
       normal_x = normal_y = normal_z = data_n[3] = 0.0f;
-      weight = distance = io = data_c[4] = 0.0f;
+      weight = distance = io = data_c[3] = 0.0f;
     }
     void Update(float distance, bool in, float weight = 1.0) {
         float sum_weight = this->weight + weight;
@@ -60,6 +61,29 @@ namespace pcl {
         this->weight = sum_weight;
     }
     friend std::ostream& operator << (std::ostream& os, const DistanceIoVoxel& p);
+  };
+
+  struct _VoxelIndex {
+    union{
+        struct{
+            size_t arr_index;
+            size_t cloud_index;
+        };
+        size_t index[2];
+    };
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  };
+
+  struct VoxelIndex : _VoxelIndex {
+    inline VoxelIndex(){
+        index[0] = index[1] = 0;
+    }
+    inline VoxelIndex(size_t arr_index, size_t cloud_index) {
+        index[0] = arr_index; index[1] = cloud_index;
+    }
+    VoxelIndex(const _VoxelIndex& vi) {
+        index[0] = vi.arr_index; index[1] = vi.cloud_index;
+    }
   };
 }
 
@@ -85,8 +109,10 @@ class DistanceIoVolume : public VolumeBase{
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    typedef std::unordered_map<HashPos, pcl::DistanceIoVoxel, HashFunc> Volume;
+    typedef std::unordered_map<HashPos, pcl::VoxelIndex, HashFunc> Volume;
+    typedef std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>> VolumeData;
     Volume m_vVolume;
+    VolumeData m_vVolumeData;
 
 public:
     void InitLog() const override { std::cout << "Load DistanceIoVolume.." << std::endl; }
@@ -108,13 +134,15 @@ public:
 
 // main octree
 public:
-    pcl::PointCloud<DistanceIoVoxel> CreateAndGetCorners(const Eigen::Vector3f& vMin, const Eigen::Vector3f& vMax, size_t iLevel);
-    pcl::PointCloud<DistanceIoVoxel> CreateAndGetSubdivideCorners(const pcl::PointCloud<DistanceIoVoxel>& vCorners, size_t iLevel);
+    pcl::PointCloud<pcl::DistanceIoVoxel> CreateAndGetCorners(const Eigen::Vector3f& vMin, const Eigen::Vector3f& vMax, size_t iLevel);
+    std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> CreateAndGetSubdivideCorners(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel);
     void Fuse(const DistanceIoVolume& oLocal);
+    void Update(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners);
 
 private:
-    DistanceIoVoxel CreateAndGetVoxel(HashPos& oPos);
+    pcl::DistanceIoVoxel& CreateAndGetVoxel(HashPos& oPos);
     std::array<HashPos, 8> GetCornerPoses(const HashPos& oPos, size_t iLevel);
+    void VolumeDataMoveNext(size_t capacity = 1e6) {m_vVolumeData.emplace_back(); m_vVolumeData.back().reserve(capacity);}
 
 private:
 	Eigen::Vector3f m_vVoxelSize; 
