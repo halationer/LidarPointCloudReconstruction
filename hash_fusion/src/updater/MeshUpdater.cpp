@@ -295,9 +295,9 @@ void TriangleMesh::FindInnerOuterSimple(pcl::PointCloud<pcl::DistanceIoVoxel>& v
     
     for(pcl::DistanceIoVoxel& oPoint : vQueryCloud) {
 
-        if(oPoint.x < oTriangles.min.x || oPoint.x > oTriangles.max.x) continue;
-        if(oPoint.y < oTriangles.min.y || oPoint.y > oTriangles.max.y) continue;
-        if(oPoint.z < oTriangles.min.z || oPoint.z > oTriangles.max.z) continue;
+        // if(oPoint.x < oTriangles.min.x || oPoint.x > oTriangles.max.x) continue;
+        // if(oPoint.y < oTriangles.min.y || oPoint.y > oTriangles.max.y) continue;
+        // if(oPoint.z < oTriangles.min.z || oPoint.z > oTriangles.max.z) continue;
         Eigen::Vector3f vCenterToPoint = oPoint.getVector3fMap() - vCenter;
 
         // search
@@ -323,17 +323,12 @@ void TriangleMesh::FindInnerOuterSimple(pcl::PointCloud<pcl::DistanceIoVoxel>& v
             if(searchSymbol[oTriangles.vTriangleMaxYawIndex[i]])
                 vPredictIndex.push_back(oTriangles.vTriangleMaxYawIndex[i]);
 
-        //这个位置似乎能同时判断遮挡和穿透
-        // O -- 2 -- 1.05 -- 1 -- 0.98 -- 0.9 ---
-        constexpr float factors[] = {1.05f, 0.98f, 0.9f};
-        constexpr float dfactors[] = {0.2, -0.2f};
-        // constexpr float factors[] = {1.03f, 0.98f, 0.95f};
-        //为了消除地面的误判断，或许应该采用点到平面的真实距离，而不是射线的深度差
-        // for(auto&& oTriangle : vTriangles) { 
+        //遍历三角形并判断内外
         for(auto&& oTriangleIndex : vPredictIndex) {
             Triangle& oTriangle = vTriangles[oTriangleIndex];
             float fIntersectDepth = -(vCenter.dot(oTriangle.n()) + oTriangle.D()) / vCenterToPoint.dot(oTriangle.n());
-            if(fIntersectDepth < 1) continue;
+
+            if(fIntersectDepth <= 0) continue;
 
             Eigen::Vector3f oIntersectPoint = vCenter + fIntersectDepth * vCenterToPoint;
             if(oTriangle.ab.cross(oIntersectPoint - oTriangle.a).dot(oTriangle.n()) < 0) continue;
@@ -341,16 +336,62 @@ void TriangleMesh::FindInnerOuterSimple(pcl::PointCloud<pcl::DistanceIoVoxel>& v
             if(oTriangle.ca.cross(oIntersectPoint - oTriangle.c).dot(oTriangle.n()) < 0) continue;
 
             float fDistance = - oPoint.getVector3fMap().dot(oTriangle.n()) - oTriangle.D();
+
             std::unique_lock<std::mutex> lock(TriangleMesh::mSetPointIntensity);
-            oPoint.io = 1.0;
+            oPoint.distance = std::max(oPoint.distance, abs(fDistance));
+            if(fIntersectDepth >= 1) oPoint.io = 1.0;
+
             break;
         }
     }
 }
 
-void UpdateVolume(const SectorMesh& oSectorMesh, const DistanceIoVolume* pDistanceIoVolume, int iLevel) {
+void MeshUpdater::UpdateVolume(
+    const SectorMesh& oSectorMesh, 
+    DistanceIoVolume* const pDistanceIoVolume, 
+    std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
+    size_t iLevel) {
 
+	std::vector<Tools::TaskPtr> tasks;
+    std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> vNewCorners;
     
+    // first level
+    if(vCorners.size() == 0) {
+        for(auto& pTriangles : oSectorMesh) {
+            vCorners.emplace_back(new pcl::PointCloud<pcl::DistanceIoVoxel>(std::move( 
+                pDistanceIoVolume->CreateAndGetCorners(pTriangles->min.getVector3fMap(), pTriangles->max.getVector3fMap(), iLevel))));
+            auto pCorners = vCorners.back();
+            tasks.emplace_back(m_oThreadPool.AddTask([&,pTriangles,pCorners](){
+                pTriangles->FindInnerOuterSimple(*pCorners);
+                pDistanceIoVolume->Update(*pCorners);
+            }));
+        }
+    }
+    // other level
+    else {
+        std::mutex mCornerCombine;
+        // assert vCorners.size() == oSectorMesh.size()
+        for(int i = 0; i < vCorners.size(); ++i) {
+            auto sub_corners = pDistanceIoVolume->CreateAndGetSubdivideCorners(*vCorners[i], iLevel);
+            vNewCorners.emplace_back(new pcl::PointCloud<pcl::DistanceIoVoxel>(*vCorners[i]));
+            auto pNewCorner = vNewCorners.back();
+            for(auto sub_corner : sub_corners) {
+                tasks.emplace_back(m_oThreadPool.AddTask([&,i,sub_corner,pNewCorner](){
+                    oSectorMesh.at(i)->FindInnerOuterSimple(*sub_corner);
+                    pDistanceIoVolume->Update(*sub_corner);
+                    std::unique_lock<std::mutex> lock(mCornerCombine);
+                    *pNewCorner += *sub_corner;
+                }));
+            }
+        }
+    }
+
+    // wait tasks finish
+    for(auto& task : tasks) task->Join();
+
+    // recursive
+    if(vNewCorners.size()) vCorners.assign(vNewCorners.begin(), vNewCorners.end());
+    if(iLevel > 0) UpdateVolume(oSectorMesh, pDistanceIoVolume, vCorners, iLevel-1);
 }
 
 void MeshUpdater::MeshFusion(
@@ -374,92 +415,85 @@ void MeshUpdater::MeshFusion(
 	std::vector<Tools::TaskPtr> tasks;
     std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> corners;
 
-    pDistanceIoVolume = new DistanceIoVolume;
-    pcl::PointXYZ oLength(oVolume.GetVoxelLength().x(), oVolume.GetVoxelLength().y(), oVolume.GetVoxelLength().z());
-    pDistanceIoVolume->SetResolution(oLength);
     for(auto && oSingleMesh : vSingleMeshList) {
-
         // triangle mesh init
         TriangleMesh::Ptr pTriangles = TriangleMesh::GetFromPolygonMesh(oSingleMesh);
         pTriangles->GetAABB();
         pTriangles->GetYawSortedIndex();
         pSectorMesh->push_back(pTriangles);
         m_oFuseTimer.DebugTime("convert_mesh");
-
-        // /*
-        // 更新主函数就在这里
-        // 0. 创建一个对齐的空Volume(局部)，开始计算
-        // 1. 生成Corner矩阵 -> 获取Corner矩阵(如果原本的Corner不在其中，则生成新的Corner)
-        // 2. 计算本层 -> 并行计算本层
-        // 3. 遍历下层7倍节点 -> 获取下层7倍节点(如果原本的Corner不在其中，则生成新的Corner)
-        // 3.. 细分的逻辑不够严谨需要修改
-        // 4. 并行计算下层 -> 并行计算下层
-        // 4.. 7倍顶点合并为新的Corners进行计算
-        // 5. 结束 -> 转为递归或者循环
-        // 6. 将更新后的Volume结果回传给全局Volume
-        pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr pCorners(new pcl::PointCloud<pcl::DistanceIoVoxel>(std::move( 
-            pDistanceIoVolume->CreateAndGetCorners(pTriangles->min.getVector3fMap(), pTriangles->max.getVector3fMap(), 1))));
-        corners.push_back(pCorners);
-        m_oFuseTimer.DebugTime("get_corners");
-        // ROS_INFO_PURPLE("%d %d %d %d", lenx, leny, lenz, lenx*leny*lenz);
-
-        // 由于计算下一层之前，必须先计算出上一层的内容，因此只能做到分层并行，这里暂时把并行去掉
-        tasks.emplace_back(m_oThreadPool.AddTask([&,pTriangles,pCorners](){
-
-            pTriangles->FindInnerOuterSimple(*pCorners);
-            pDistanceIoVolume->Update(*pCorners);
-        }));
-
-
-        m_oFuseTimer.DebugTime("judge_points");
-        // */
     }
-    
-    // wait for task ending
-	for(auto& task : tasks) {
-		task->Join();
-	}
 
-    int corners_size = corners.size();
-    for(int i = 0; i < corners_size; ++i) {
-        auto sub_corners = pDistanceIoVolume->CreateAndGetSubdivideCorners(*corners[i], 1);
-        for(auto sub_corner : sub_corners) {
-            corners.push_back(sub_corner);
-            tasks.emplace_back(m_oThreadPool.AddTask([&,i,sub_corner](){
-                pSectorMesh->at(i)->FindInnerOuterSimple(*sub_corner);
-            }));
+    // Search For sdf of points
+    pcl::PointCloud<pcl::PointXYZI> vSearchedPoints;
+    std::vector<float> vSearchedAssociation;
+    for(auto && pTriangle : *pSectorMesh) {
+        auto& vPoints = pTriangle->cloud;
+        for(auto& oPoint : vPoints) {
+            oPoint.intensity = pDistanceIoVolume->SearchSdf(oPoint.getVector3fMap());
+            vSearchedPoints.push_back(oPoint);
+            // vSearchedAssociation.push_back(std::min(oPoint.intensity + 0.4f, 1.0f));
+            vSearchedAssociation.push_back(oPoint.intensity > 0.5f ? 1.0f: 0.4f);
         }
     }
+    m_oRpManager.PublishPointCloud(vSearchedPoints, vSearchedAssociation, "/searched_point_cloud");
+    m_oFuseTimer.DebugTime("search_io");
 
-	for(auto& task : tasks) {
-		task->Join();
-	}
+    // update local volume
+    std::unique_ptr<DistanceIoVolume> pLocalVolume(new DistanceIoVolume);
+    pcl::PointXYZ oLength;
+    oLength.getVector3fMap() = oVolume.GetVoxelLength();
+    pLocalVolume->SetResolution(oLength);
+    UpdateVolume(*pSectorMesh, pLocalVolume.get(), corners, 3);
+    m_oFuseTimer.DebugTime("single_io");
 
+    // sector 分布
+    // 2 | 1
+    // 3 | 0
+    // show local voxel results
     pcl::PointCloud<pcl::DistanceIoVoxel> vAllCorners;
     std::vector<float> associate;
     for(int i = 0; i < corners.size(); ++i) {
         for(auto point : *corners[i]) {
-            // if(point.io == 1.0) {
-                vAllCorners.push_back(point);
-                // associate.push_back((i>=4?1:0) * 0.4f);
-                associate.push_back(point.io * 0.4);
-            // }
+            if(point.io == 0.0) continue;
+            if(point.distance > 1.5f) continue;
+            HashPos oPos;
+            pLocalVolume->PointBelongVoxelPos(point, oPos);
+            const pcl::DistanceIoVoxel* pVoxel = pLocalVolume->GetVoxel(oPos);
+            if(pVoxel == nullptr) continue;
+            vAllCorners.push_back(*pVoxel);
+            associate.push_back(std::min(pVoxel->distance * 0.5f + 0.4f, 1.0f));
         }
-        // for(auto point : pDistanceIoVolume->m_vVolumeData.back()) {
-        //     if(point.io == 1.0) {
-        //         vAllCorners.push_back(point);
-        //         associate.push_back(0.4f);
-        //     }
-        // }
     }
     ROS_INFO_PURPLE("corner size: %d, volume point: %d,%d", vAllCorners.size(), 
-        pDistanceIoVolume->m_vVolumeData.size(), pDistanceIoVolume->m_vVolumeData.back().size());
-    
-    m_oFuseTimer.DebugTime("voxelize");
+        pLocalVolume->m_vVolumeData.size(), pLocalVolume->m_vVolumeData.back().size());
     m_oRpManager.PublishPointCloud(vAllCorners, associate, "/corner_is_free_debug");
+    
+    // local to global
+    pDistanceIoVolume->Fuse(*pLocalVolume);
+    m_oFuseTimer.DebugTime("voxelize");
+
+    // show global voxel result
+    vAllCorners.clear();
+    associate.clear();
+    for(auto&& vVoxelList : pDistanceIoVolume->m_vVolumeData) {
+        for(auto&& oVoxel : vVoxelList) {
+            if(oVoxel.io == 0.0) continue;
+            if(oVoxel.distance > 1.5f) continue;
+            vAllCorners.push_back(oVoxel);
+            associate.push_back(std::min(oVoxel.distance + 0.4f, 1.0f));
+            // associate.push_back(std::min(oVoxel.io + 0.4f, 1.0f));
+        }
+    }
+    ROS_INFO_PURPLE("global size: %d, volume point: %d,%d", vAllCorners.size(), 
+        pDistanceIoVolume->m_vVolumeData.size(), pDistanceIoVolume->m_vVolumeData.back().size());
+    m_oRpManager.PublishPointCloud(vAllCorners, associate, "/global_volume");
 
     m_oFuseTimer.CoutCurrentLine();
 }
+
+#define HISTORY_VERSION_MESHUPDATER
+#ifndef HISTORY_VERSION_MESHUPDATER
 
 void MeshUpdater::MeshFusionV4(
     const pcl::PointNormal& oLidarPos,
@@ -712,7 +746,7 @@ void MeshUpdater::MeshFusionV2(
 
     std::unordered_map<HashPos, pcl::PointXYZI, HashFunc> vHashCorner;
     pcl::PointCloud<pcl::PointNormal> oMeshCenters;
-    RosPublishManager::HashPosSet vUpdatedPos;
+    HashPosSet vUpdatedPos;
 
     for(auto && oSingleMesh : vSingleMeshList) {
 
@@ -876,7 +910,7 @@ void MeshUpdater::MeshFusionV1(
     ROS_INFO_PURPLE("AABB: (%f, %f, %f) - (%f, %f, %f)", min_x, min_y, min_z, max_x, max_y, max_z);
 
     // Get Updated Blocks
-    RosPublishManager::HashPosSet vUpdatedPos;
+    HashPosSet vUpdatedPos;
     HashPos oMinPos, oMaxPos;
     pHashBlockVolume->PointBelongBlockPos(vMin, oMinPos);
     pHashBlockVolume->PointBelongBlockPos(vMax, oMaxPos);
@@ -965,6 +999,7 @@ void MeshUpdater::MeshFusionV1(
     m_oFuseTimer.CoutCurrentLine();
 }
 
+
 void MeshUpdater::GhprConvertCloud(const pcl::PointXYZI & oCenter, const pcl::PointCloud<pcl::PointXYZI> & vCloud, pcl::PointCloud<pcl::PointXYZI> & vResCloud){
 
 	vResCloud.clear();
@@ -1002,4 +1037,5 @@ void MeshUpdater::SaveDebugOutClouds(){
     }
 }
 
+#endif
 }

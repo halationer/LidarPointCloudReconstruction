@@ -108,14 +108,15 @@ namespace pcl {
 class DistanceIoVolume : public VolumeBase{
 
 public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    typedef std::unordered_map<HashPos, pcl::VoxelIndex, HashFunc> Volume;
-    typedef std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>> VolumeData;
-    Volume m_vVolume;
-    VolumeData m_vVolumeData;
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  typedef std::unordered_map<HashPos, pcl::VoxelIndex, HashFunc> Volume;
+  typedef std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>> VolumeData;
+  Volume m_vVolume;
+  VolumeData m_vVolumeData;
+  std::mutex m_mVolumeDataMutex;
 
 public:
-    void InitLog() const override { std::cout << "Load DistanceIoVolume.." << std::endl; }
+  void InitLog() const override { std::cout << "Load DistanceIoVolume.." << std::endl; }
 	Eigen::Vector3f GetVoxelLength() const override {return m_vVoxelSize;}
 
 	// voxelize the points and fuse them
@@ -126,23 +127,28 @@ public:
 	virtual void PointBelongVoxelPos(const pcl::PointNormal & oPoint, HashPos & oPos) const override;
 
 public:
-    template<class PointType>
-    void PointBelongVoxelPos(const PointType & oPoint, HashPos & oVoxelPos) const;
-    void PointBelongVoxelPos(const Eigen::Vector3f & vPoint, HashPos & oVoxelPos) const;
-    void SetResolution(pcl::PointXYZ & oLength);
+  template<class PointType>
+  void PointBelongVoxelPos(const PointType & oPoint, HashPos & oVoxelPos) const;
+  void PointBelongVoxelPos(const Eigen::Vector3f & vPoint, HashPos & oVoxelPos) const;
+  void SetResolution(pcl::PointXYZ & oLength);
 	void VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointXYZI> & vCloud);
 
 // main octree
 public:
-    pcl::PointCloud<pcl::DistanceIoVoxel> CreateAndGetCorners(const Eigen::Vector3f& vMin, const Eigen::Vector3f& vMax, size_t iLevel);
-    std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> CreateAndGetSubdivideCorners(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel);
-    void Fuse(const DistanceIoVolume& oLocal);
-    void Update(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners);
+  pcl::PointCloud<pcl::DistanceIoVoxel> CreateAndGetCorners(const Eigen::Vector3f& vMin, const Eigen::Vector3f& vMax, size_t iLevel);
+  std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> CreateAndGetSubdivideCorners(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel);
+  void Fuse(DistanceIoVolume& oLocal);
+  void Update(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners);
+  float SearchSdf(const Eigen::Vector3f& vPoint);
+  const pcl::DistanceIoVoxel* GetVoxel(const HashPos& oPos);
 
 private:
-    pcl::DistanceIoVoxel& CreateAndGetVoxel(HashPos& oPos);
-    std::array<HashPos, 8> GetCornerPoses(const HashPos& oPos, size_t iLevel);
-    void VolumeDataMoveNext(size_t capacity = 1e6) {m_vVolumeData.emplace_back(); m_vVolumeData.back().reserve(capacity);}
+  pcl::DistanceIoVoxel& CreateAndGetVoxel(const HashPos& oPos);
+  std::array<HashPos, 8> GetCornerPoses(const HashPos& oPos, size_t iLevel);
+  float InterpolateCorners(const HashPos& oPos, const Eigen::Vector3f& vPoint, size_t iLevel);
+  float GetSdf(const pcl::DistanceIoVoxel& oVoxel) const;
+  void VolumeDataMoveNext(size_t capacity = 1e6) {m_vVolumeData.emplace_back(); m_vVolumeData.back().reserve(capacity);}
+  pcl::DistanceIoVoxel& GetVoxelData(const pcl::VoxelIndex& oIndex) {return m_vVolumeData[oIndex.arr_index][oIndex.cloud_index];}
 
 private:
 	Eigen::Vector3f m_vVoxelSize; 

@@ -66,7 +66,7 @@ void SimpleVolume::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointXYZI> & vCl
 
 void SimpleVolume::PublishType(int intensity) {
 
-    RosPublishManager::HashPosDic vTypePoses;
+    HashPosDic vTypePoses;
     for(auto&& [oPos, pVoxel] : m_vVolume) {
         int influence = pVoxel->GetStatus(intensity);
         if(influence > 0) {
@@ -79,7 +79,7 @@ void SimpleVolume::PublishType(int intensity) {
 
 void SimpleVolume::PublishType() {
 
-    RosPublishManager::HashPosDic vTypePoses;
+    HashPosDic vTypePoses;
     for(auto&& [oPos, pVoxel] : m_vVolume) {
         int influence5 = pVoxel->GetStatus(5);
 

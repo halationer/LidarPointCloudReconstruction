@@ -27,9 +27,6 @@ public:
         return instance;
     }
 
-    typedef std::unordered_set<HashPos, HashFunc> HashPosSet;
-    typedef std::unordered_map<HashPos, int, HashFunc> HashPosDic;
-
 private:
     bool PublishCheck(const std::string& sTopicName) {
         return m_vPublishers[sTopicName].getNumSubscribers() > 0;

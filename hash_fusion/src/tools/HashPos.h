@@ -2,6 +2,8 @@
 #define __HASH_POS__
 
 #include <iostream>
+#include <unordered_map>
+#include <unordered_set>
 #include <Eigen/Core>
 
 // 3d index of voxel(or corner)
@@ -13,6 +15,8 @@ struct HashPos {
 };
 // operator funcs
 bool operator == (const HashPos & a, const HashPos & b);
+HashPos operator +(const HashPos & a, const HashPos & b);
+HashPos operator *(const HashPos & a, int i);
 std::ostream & operator << (std::ostream & out, const HashPos & pos);
 
 
@@ -24,5 +28,10 @@ struct HashFunc {
 // align hash pos
 void AlignToStepFloor(HashPos& pos, size_t step);
 void AlignToStepCeil(HashPos& pos, size_t step);
+bool IsAlignedToStep(const HashPos& pos, size_t step);
+bool IsAlignedToLevel(const HashPos& pos, size_t level);
+
+typedef std::unordered_set<HashPos, HashFunc> HashPosSet;
+typedef std::unordered_map<HashPos, int, HashFunc> HashPosDic;
 
 #endif

@@ -97,77 +97,70 @@ pcl::PointCloud<pcl::DistanceIoVoxel> DistanceIoVolume::CreateAndGetCorners(cons
     return vCorners;
 }
 
-static Eigen::Vector3f sub_offset[7] = {
-    {0.5, 0.5, 0.5}, // center
-    {0  , 0.5, 0.5}, {0.5, 0  , 0.5}, {0.5, 0.5, 0  }, // face
-    {0.5, 0  , 0  }, {0  , 0.5, 0  }, {0  , 0  , 0.5}, // edge
+static HashPos sub_pos[19] = {
+    {1, 1, 1},
+    {0, 1, 1}, {1, 0, 1}, {1, 1, 0}, {2, 1, 1}, {1, 2, 1}, {1, 1, 2},
+    {1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {2, 0, 1}, {2, 1, 0}, {1, 2, 0}, {0, 2, 1}, {1, 0, 2}, {0, 1, 2}, {1, 2, 2}, {2, 1, 2}, {2, 2, 1},
 };
-
-// static Eigen::Vector3f 
 
 std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> DistanceIoVolume::CreateAndGetSubdivideCorners(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel){
 
     size_t step = 1 << iLevel;
+    ++iLevel;
 
     std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> corners;
     corners.reserve(7);
 
-    for(int i = 0; i < 7; ++i) {
-        pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr pSubCorners(new pcl::PointCloud<pcl::DistanceIoVoxel>);
-        pSubCorners->points.assign(vCorners.points.begin(), vCorners.points.end());
-        // 前三行代表x,y,z, 每一列是一个点，进行平移。
-        // std::cout << pSubCorners->back().getVector3fMap() << " ";
-        pSubCorners->getMatrixXfMap().topRows(3).colwise() += GetVoxelLength().cwiseProduct(sub_offset[i] * step);
-        // std::cout << pSubCorners->back().getVector3fMap() << "\n";
-        corners.push_back(pSubCorners);
-
-        // 删除非细分的点
-        int delete_count = 0;
-        for(int k = 0; k < pSubCorners->size()-delete_count; ++k) {
-            int mask = 0;
-            HashPos oPos;
-            PointBelongVoxelPos(pSubCorners->at(k), oPos);
-            AlignToStepFloor(oPos, step);
-            std::array<HashPos, 8> vCornerPoses = GetCornerPoses(oPos, iLevel);
-            for(int j = 0; j < 8; ++j) {
-                HashPos& oCornerPos = vCornerPoses[j];
-                mask = mask << 1;
-                if(m_vVolume.count(oCornerPos)) {
-                    pcl::DistanceIoVoxel& vCornerPoint = CreateAndGetVoxel(oCornerPos);
-                    if(vCornerPoint.io == 1.0f) mask |= 1;
-                } else {
-                    mask = 0;
-                    break;
-                }
-            }
-            bool subdivision = mask > 0 && mask < 0xff;
-            if(!subdivision) {
-                ++delete_count;
-                std::swap(pSubCorners->at(k), pSubCorners->at(pSubCorners->size()-delete_count));
-                --k;
+    // record subdivide corners
+    HashPosSet poses;
+    for(auto&& oCorner : vCorners) {
+        HashPos oPos;
+        PointBelongVoxelPos(oCorner, oPos);
+        size_t mask = 0;
+        std::array<HashPos, 8> vCornerPoses = GetCornerPoses(oPos, iLevel);
+        for(int j = 0; j < 8; ++j) {
+            HashPos& oCornerPos = vCornerPoses[j];
+            mask = mask << 1;
+            if(m_vVolume.count(oCornerPos)) {
+                pcl::DistanceIoVoxel& vCornerPoint = CreateAndGetVoxel(oCornerPos);
+                if(vCornerPoint.io == 1.0f) mask |= 1;
+            } else {
+                mask = 0;
+                break;
             }
         }
-        pSubCorners->erase(pSubCorners->end()-delete_count, pSubCorners->end());
+        if(mask > 0 && mask < 0xff) {
+            for(auto&& pos : sub_pos) {
+                poses.emplace(oPos + pos * step);
+            }
+        }
+    }
 
-        // ROS_INFO_PURPLE("sub_divide: %d->%d", delete_count, vCorners.size(), pSubCorners->size());
+    // init corners vector
+    for(int i = 0; i < 7; ++i) 
+        corners.emplace_back(new pcl::PointCloud<pcl::DistanceIoVoxel>);
+
+    // take corner
+    int index = 0;
+    for(auto&& pose : poses) {
+        corners[++index%7]->push_back(CreateAndGetVoxel(pose));
     }
 
     return corners;
 }
 
-std::mutex m_mVolumeDataMutex;
 void DistanceIoVolume::Update(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners) {
 
     for(auto& oCorner : vCorners) {
         HashPos oPos;
         PointBelongVoxelPos(oCorner, oPos);
-        if(oCorner.io == 1.0f) {
+        // if(oCorner.io == 1.0f) {
             auto& oVoxel = CreateAndGetVoxel(oPos);
-            m_mVolumeDataMutex.lock();
-            // fuse code
-            oVoxel.io++;
-            m_mVolumeDataMutex.unlock();
-        }
+            // combine code
+            std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
+            if(oCorner.io == 1.0f) oVoxel.io = 1.0f;
+            oVoxel.distance = std::max(oVoxel.distance, oCorner.distance);
+        // }
     }
 }
 
@@ -175,25 +168,68 @@ void DistanceIoVolume::Update(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorn
  * @brief fuse local to global, use weight strategy
  * @param oLocal local volume object
 */
-void DistanceIoVolume::Fuse(const DistanceIoVolume& oLocal) {
+void DistanceIoVolume::Fuse(DistanceIoVolume& oLocal) {
 
+    // first time to fuse
+    if(m_vVolume.size() == 0) {
+        ROS_INFO_PURPLE("[DistanceIoVolume]: First Time Fuse. %d", oLocal.m_vVolume.size());
+        m_vVolume = std::move(oLocal.m_vVolume);
+        m_vVolumeData = std::move(oLocal.m_vVolumeData);
+        return;
+    }
 
+    // fuse
+    // 对于一种情况似乎需要特殊处理，当一个位置之前是细分区域，
+    // 而这个位置在当前帧是非细分区域，这时的更新就要下放到低层级，这一步似乎非常拖慢速度
+    // lazy 标记或许是一种方法?
+    for(auto&& [oPos,oVoxelIndex] : oLocal.m_vVolume) {
+        const pcl::DistanceIoVoxel& oLocalVoxel = oLocal.GetVoxelData(oVoxelIndex);
+        pcl::DistanceIoVoxel& oGlobalVoxel = CreateAndGetVoxel(oPos);
+        oGlobalVoxel.Update(oLocalVoxel.distance, oLocalVoxel.io);
+    }
 }
 
 /**
  * 
 */
-pcl::DistanceIoVoxel& DistanceIoVolume::CreateAndGetVoxel(HashPos& oPos) {
+float DistanceIoVolume::SearchSdf(const Eigen::Vector3f& vPoint) {
+
+    HashPos oPos;
+    PointBelongVoxelPos(vPoint, oPos);
+    // AlignToStepFloor(oPos, 1);
+    for(int level = 0; level <= 3; ++level) {
+        int res = InterpolateCorners(oPos, vPoint, level);
+        if(res != -1) return res;
+    }
+
+    return -1;
+}
+
+/**
+ * 
+*/
+pcl::DistanceIoVoxel& DistanceIoVolume::CreateAndGetVoxel(const HashPos& oPos) {
     
     if(!m_vVolume.count(oPos)) {
-        if(m_vVolumeData.size() == 0 || m_vVolumeData.back().size() == m_vVolumeData.back().points.capacity()) {
-            VolumeDataMoveNext();
+        std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
+        if(!m_vVolume.count(oPos)) {
+            if(m_vVolumeData.size() == 0 || m_vVolumeData.back().size() == m_vVolumeData.back().points.capacity()) {
+                VolumeDataMoveNext();
+            }
+            m_vVolumeData.back().push_back(HashPosTo3DPos<pcl::DistanceIoVoxel>(oPos));
+            m_vVolume.insert(std::make_pair(oPos, pcl::VoxelIndex(m_vVolumeData.size()-1, m_vVolumeData.back().size()-1)));
         }
-        m_vVolumeData.back().push_back(HashPosTo3DPos<pcl::DistanceIoVoxel>(oPos));
-        m_vVolume.insert(std::make_pair(oPos, pcl::VoxelIndex(m_vVolumeData.size()-1, m_vVolumeData.back().size()-1)));
     }
+
     pcl::VoxelIndex& index = m_vVolume[oPos];
-    return m_vVolumeData[index.arr_index][index.cloud_index];
+    return GetVoxelData(index);
+}
+
+const pcl::DistanceIoVoxel* DistanceIoVolume::GetVoxel(const HashPos& oPos) {
+
+    if(!m_vVolume.count(oPos)) return nullptr;
+    pcl::VoxelIndex& index = m_vVolume[oPos];
+    return &GetVoxelData(index);
 }
 
 
@@ -202,17 +238,44 @@ std::array<HashPos, 8> DistanceIoVolume::GetCornerPoses(const HashPos& oPos, siz
     int step = 1 << iLevel;
 
     std::array<HashPos, 8> vCornerPoses {
-        HashPos(oPos.x, 		    oPos.y, 		oPos.z),
-        HashPos(oPos.x, 		    oPos.y + step,	oPos.z),
-        HashPos(oPos.x + step, 	    oPos.y + step, 	oPos.z),
-        HashPos(oPos.x + step,	    oPos.y, 		oPos.z),
-        HashPos(oPos.x, 		    oPos.y, 		oPos.z + step),
-        HashPos(oPos.x, 		    oPos.y + step, 	oPos.z + step),
-        HashPos(oPos.x + step,	    oPos.y + step,	oPos.z + step),
-        HashPos(oPos.x + step, 	    oPos.y,	 	    oPos.z + step),
+        HashPos(oPos.x, 		oPos.y, 		oPos.z),
+        HashPos(oPos.x + step,  oPos.y,	        oPos.z),
+        HashPos(oPos.x, 	    oPos.y + step, 	oPos.z),
+        HashPos(oPos.x + step,	oPos.y + step, 	oPos.z),
+        HashPos(oPos.x, 		oPos.y, 		oPos.z + step),
+        HashPos(oPos.x + step,  oPos.y, 	    oPos.z + step),
+        HashPos(oPos.x,	        oPos.y + step,	oPos.z + step),
+        HashPos(oPos.x + step, 	oPos.y + step,	oPos.z + step),
     };
 
     return vCornerPoses;
+}
+
+float DistanceIoVolume::GetSdf(const pcl::DistanceIoVoxel& oVoxel) const {
+
+    return (oVoxel.io > 0.0f ? 1 : -1) * oVoxel.distance;
+}
+
+float DistanceIoVolume::InterpolateCorners(const HashPos& oPos, const Eigen::Vector3f& vPoint, size_t iLevel) {
+
+    auto vCorners = GetCornerPoses(oPos, iLevel);
+    std::vector<const pcl::DistanceIoVoxel*> pVoxels;
+    for(auto&& oCorner : vCorners) {
+        if(!m_vVolume.count(oCorner))
+            return -1;
+        else pVoxels.emplace_back(GetVoxel(oCorner));
+    }
+
+    float sum = 0;
+    int step = 1 << iLevel;
+    Eigen::Vector3f oRef = (vPoint - pVoxels[0]->getVector3fMap()).cwiseProduct(m_vVoxelSizeInverse) / step;
+    float a = GetSdf(*pVoxels[0]) * (1 - oRef.x()) + GetSdf(*pVoxels[1]) * oRef.x();
+    float b = GetSdf(*pVoxels[2]) * (1 - oRef.x()) + GetSdf(*pVoxels[3]) * oRef.x();
+    float c = GetSdf(*pVoxels[4]) * (1 - oRef.x()) + GetSdf(*pVoxels[5]) * oRef.x();
+    float d = GetSdf(*pVoxels[6]) * (1 - oRef.x()) + GetSdf(*pVoxels[7]) * oRef.x();
+    float e = a * (1 - oRef.y()) + b * oRef.y();
+    float f = c * (1 - oRef.y()) + d * oRef.y();
+    return e * (1 - oRef.z()) + f * oRef.z();
 }
 
 namespace pcl {

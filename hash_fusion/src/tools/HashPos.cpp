@@ -4,6 +4,14 @@ bool operator == (const HashPos & a, const HashPos & b) {
 	return a.x == b.x && a.y == b.y && a.z == b.z;
 }
 
+HashPos operator + (const HashPos & a, const HashPos & b) {
+	return HashPos(a.x + b.x, a.y + b.y, a.z + b.z);
+}
+
+HashPos operator * (const HashPos & a, int i) {
+	return HashPos(a.x * i, a.y * i, a.z * i);
+}
+
 std::ostream & operator << (std::ostream & out, const HashPos & pos) {
 	out << "(" << pos.x << "," << pos.y << "," << pos.z << ")";
 	return out;
@@ -21,6 +29,16 @@ void AlignToStepCeil(HashPos& pos, size_t step) {
     pos.x = ceil(pos.x / (float)step) * step;
     pos.y = ceil(pos.y / (float)step) * step;
     pos.z = ceil(pos.z / (float)step) * step;
+}
+
+bool IsAlignedToStep(const HashPos& pos, size_t step) {
+
+	return pos.x % step == 0 && pos.y % step == 0 && pos.z % step == 0;
+}
+
+bool IsAlignedToLevel(const HashPos& pos, size_t level) {
+
+	return IsAlignedToStep(pos, 1u << level);
 }
 
 size_t HashFunc::operator()(const HashPos& pos) const {

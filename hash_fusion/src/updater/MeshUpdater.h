@@ -140,6 +140,11 @@ public:
 
 private:
     void SaveDebugOutClouds();
+    void UpdateVolume(
+        const SectorMesh& oSectorMesh, 
+        DistanceIoVolume* const pDistanceIoVolume, 
+        std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
+        size_t iLevel);
 
 public:
     // use ghpr-space to get in-or-out info
