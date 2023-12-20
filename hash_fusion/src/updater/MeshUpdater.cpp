@@ -299,6 +299,9 @@ void TriangleMesh::FindInnerOuterSimple(pcl::PointCloud<pcl::DistanceIoVoxel>& v
         // if(oPoint.y < oTriangles.min.y || oPoint.y > oTriangles.max.y) continue;
         // if(oPoint.z < oTriangles.min.z || oPoint.z > oTriangles.max.z) continue;
         Eigen::Vector3f vCenterToPoint = oPoint.getVector3fMap() - vCenter;
+        
+        // init distance
+        oPoint.distance = -1;
 
         // search
         std::vector<char> searchSymbol(vTriangles.size(), false);
@@ -359,7 +362,7 @@ void MeshUpdater::UpdateVolume(
     if(vCorners.size() == 0) {
         for(auto& pTriangles : oSectorMesh) {
             vCorners.emplace_back(new pcl::PointCloud<pcl::DistanceIoVoxel>(std::move( 
-                pDistanceIoVolume->CreateAndGetCorners(pTriangles->min.getVector3fMap(), pTriangles->max.getVector3fMap(), iLevel))));
+                pDistanceIoVolume->CreateAndGetCornersAABB(pTriangles->min.getVector3fMap(), pTriangles->max.getVector3fMap(), iLevel))));
             auto pCorners = vCorners.back();
             tasks.emplace_back(m_oThreadPool.AddTask([&,pTriangles,pCorners](){
                 pTriangles->FindInnerOuterSimple(*pCorners);
@@ -394,6 +397,41 @@ void MeshUpdater::UpdateVolume(
     if(iLevel > 0) UpdateVolume(oSectorMesh, pDistanceIoVolume, vCorners, iLevel-1);
 }
 
+void MeshUpdater::UpdateVisibleVolume(
+    const SectorMesh& oSectorMesh, 
+    DistanceIoVolume* const pDistanceIoVolume,
+    std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
+    size_t iLevel)
+{
+    const size_t step = 1 << iLevel;
+
+	std::vector<Tools::TaskPtr> tasks;
+
+    HashPos oPos;
+    for(const TriangleMesh::Ptr& pTriangles : oSectorMesh) {
+
+        // 1. 提取mesh中的点云, 对于每个点，找到对应level的体素
+        HashPosSet vVoxelPoses;
+        for(const pcl::PointXYZI& oPoints : pTriangles->cloud) {
+            if(oPoints.intensity > pDistanceIoVolume->GetStaticExpandDistance()) continue;
+            pDistanceIoVolume->PointBelongVoxelPos(oPoints, oPos);
+            AlignToStepFloor(oPos, step);
+            vVoxelPoses.emplace(oPos);
+        }
+
+        // 2. 根据mesh更新所有对应体素的角点
+        auto pCornerPoints = pDistanceIoVolume->CreateAndGetCornersByPos(vVoxelPoses, iLevel);
+        vCorners.emplace_back(pCornerPoints);
+        tasks.emplace_back(m_oThreadPool.AddTask([&, pTriangles, pCornerPoints](){
+            pTriangles->FindInnerOuterSimple(*pCornerPoints);
+            pDistanceIoVolume->UpdateLimitDistance(*pCornerPoints, iLevel);
+        }));
+    }
+
+    // wait for task finish
+    for(auto& task : tasks) task->Join();
+}
+
 void MeshUpdater::MeshFusion(
     const pcl::PointNormal& oLidarPos,
     std::vector<pcl::PolygonMesh>& vSingleMeshList,
@@ -410,10 +448,9 @@ void MeshUpdater::MeshFusion(
 
     std::unordered_map<HashPos, pcl::PointXYZI, HashFunc> vHashCorner;
     SectorMeshPtr pSectorMesh(new SectorMesh);
-    m_vFrameMeshes.FrameEnqueue(pSectorMesh);
+    // m_vFrameMeshes.FrameEnqueue(pSectorMesh);
 
-	std::vector<Tools::TaskPtr> tasks;
-    std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> corners;
+	// std::vector<Tools::TaskPtr> tasks;
 
     for(auto && oSingleMesh : vSingleMeshList) {
         // triangle mesh init
@@ -433,7 +470,7 @@ void MeshUpdater::MeshFusion(
             oPoint.intensity = pDistanceIoVolume->SearchSdf(oPoint.getVector3fMap());
             vSearchedPoints.push_back(oPoint);
             // vSearchedAssociation.push_back(std::min(oPoint.intensity + 0.4f, 1.0f));
-            vSearchedAssociation.push_back(oPoint.intensity > 0.5f ? 1.0f: 0.4f);
+            vSearchedAssociation.push_back(oPoint.intensity > pDistanceIoVolume->GetStaticExpandDistance() ? 1.0f: 0.4f);
         }
     }
     m_oRpManager.PublishPointCloud(vSearchedPoints, vSearchedAssociation, "/searched_point_cloud");
@@ -441,10 +478,12 @@ void MeshUpdater::MeshFusion(
 
     // update local volume
     std::unique_ptr<DistanceIoVolume> pLocalVolume(new DistanceIoVolume);
+    std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> corners;
     pcl::PointXYZ oLength;
     oLength.getVector3fMap() = oVolume.GetVoxelLength();
     pLocalVolume->SetResolution(oLength);
     UpdateVolume(*pSectorMesh, pLocalVolume.get(), corners, 3);
+    UpdateVisibleVolume(*pSectorMesh, pLocalVolume.get(), corners);
     m_oFuseTimer.DebugTime("single_io");
 
     // sector 分布
@@ -452,7 +491,7 @@ void MeshUpdater::MeshFusion(
     // 3 | 0
     // show local voxel results
     pcl::PointCloud<pcl::DistanceIoVoxel> vAllCorners;
-    std::vector<float> associate;
+    std::vector<float> associate, associate2;
     for(int i = 0; i < corners.size(); ++i) {
         for(auto point : *corners[i]) {
             if(point.io == 0.0) continue;
@@ -478,16 +517,17 @@ void MeshUpdater::MeshFusion(
     associate.clear();
     for(auto&& vVoxelList : pDistanceIoVolume->m_vVolumeData) {
         for(auto&& oVoxel : vVoxelList) {
-            if(oVoxel.io == 0.0) continue;
+            // if(oVoxel.io == 0.0) continue;
             if(oVoxel.distance > 1.5f) continue;
             vAllCorners.push_back(oVoxel);
             associate.push_back(std::min(oVoxel.distance + 0.4f, 1.0f));
-            // associate.push_back(std::min(oVoxel.io + 0.4f, 1.0f));
+            associate2.push_back(oVoxel.io > 0.5f ? 0.8f : -1.0f);
         }
     }
     ROS_INFO_PURPLE("global size: %d, volume point: %d,%d", vAllCorners.size(), 
         pDistanceIoVolume->m_vVolumeData.size(), pDistanceIoVolume->m_vVolumeData.back().size());
-    m_oRpManager.PublishPointCloud(vAllCorners, associate, "/global_volume");
+    m_oRpManager.PublishPointCloud(vAllCorners, associate, "/global_distance_volume");
+    m_oRpManager.PublishPointCloud(vAllCorners, associate2, "/global_io_volume");
 
     m_oFuseTimer.CoutCurrentLine();
 }

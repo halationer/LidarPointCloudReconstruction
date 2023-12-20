@@ -14,6 +14,7 @@ void DistanceIoVolume::SetResolution(pcl::PointXYZ & oLength) {
 	m_vVoxelSize = oLength.getVector3fMap(); 
 	m_vVoxelHalfSize = m_vVoxelSize * 0.5f;
 	m_vVoxelSizeInverse = m_vVoxelSize.cwiseInverse();
+    m_fStaticExpandDistance = m_vVoxelHalfSize.maxCoeff();
 }
 
 /**
@@ -71,7 +72,7 @@ void DistanceIoVolume::VoxelizePointsAndFusion(pcl::PointCloud<pcl::PointXYZI> &
  * @param vMax bounding box max point
  * @param iLevel level of the octree, from bottom to top: 0 - k
 */
-pcl::PointCloud<pcl::DistanceIoVoxel> DistanceIoVolume::CreateAndGetCorners(const Eigen::Vector3f& vMin, const Eigen::Vector3f& vMax, size_t iLevel){
+pcl::PointCloud<pcl::DistanceIoVoxel> DistanceIoVolume::CreateAndGetCornersAABB(const Eigen::Vector3f& vMin, const Eigen::Vector3f& vMax, size_t iLevel){
 
     HashPos oMinPos, oMaxPos;
     PointBelongVoxelPos(vMin, oMinPos);
@@ -95,6 +96,27 @@ pcl::PointCloud<pcl::DistanceIoVoxel> DistanceIoVolume::CreateAndGetCorners(cons
     }}}
 
     return vCorners;
+}
+
+/**
+ * @brief create voxel corners by voxel poses
+ * @param vVoxelPoses - poses of the voxels that ready to be updated
+ * @param iLevel - the level of octree, larger means bigger voxel
+*/
+pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr DistanceIoVolume::CreateAndGetCornersByPos(const HashPosSet& vVoxelPoses, size_t iLevel){
+
+    HashPosSet vCornerPoses;
+    for(const HashPos& oVoxelPos : vVoxelPoses) {
+        auto vPoses = GetCornerPoses(oVoxelPos, iLevel);
+        for(const HashPos& oPos : vPoses) vCornerPoses.emplace(oPos);
+    }
+
+    pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr pCornerPoints(new pcl::PointCloud<pcl::DistanceIoVoxel>());
+    for(const HashPos& oCornerPos : vCornerPoses) {
+        pCornerPoints->push_back(CreateAndGetVoxel(oCornerPos));
+    }
+
+    return pCornerPoints;
 }
 
 static HashPos sub_pos[19] = {
@@ -154,13 +176,31 @@ void DistanceIoVolume::Update(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorn
     for(auto& oCorner : vCorners) {
         HashPos oPos;
         PointBelongVoxelPos(oCorner, oPos);
-        // if(oCorner.io == 1.0f) {
+        if(oCorner.distance >= 0.0f) {
             auto& oVoxel = CreateAndGetVoxel(oPos);
             // combine code
             std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
             if(oCorner.io == 1.0f) oVoxel.io = 1.0f;
             oVoxel.distance = std::max(oVoxel.distance, oCorner.distance);
-        // }
+        }
+    }
+}
+
+void DistanceIoVolume::UpdateLimitDistance(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel) {
+
+    const float limit_distance = m_fStaticExpandDistance * 2 * (1 << iLevel);
+
+    for(auto& oCorner : vCorners) {
+        HashPos oPos;
+        PointBelongVoxelPos(oCorner, oPos);
+        if(oCorner.distance >= 0.0f) {
+            auto& oVoxel = CreateAndGetVoxel(oPos);
+            // combine code
+            std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
+            if(oCorner.io == 1.0f) oVoxel.io = 1.0f;
+            oVoxel.distance = std::max(oVoxel.distance, oCorner.distance);
+            oVoxel.distance = std::min(oVoxel.distance, limit_distance);
+        }
     }
 }
 
@@ -184,6 +224,7 @@ void DistanceIoVolume::Fuse(DistanceIoVolume& oLocal) {
     // lazy 标记或许是一种方法?
     for(auto&& [oPos,oVoxelIndex] : oLocal.m_vVolume) {
         const pcl::DistanceIoVoxel& oLocalVoxel = oLocal.GetVoxelData(oVoxelIndex);
+        if(oLocalVoxel.distance < 0) continue;
         pcl::DistanceIoVoxel& oGlobalVoxel = CreateAndGetVoxel(oPos);
         oGlobalVoxel.Update(oLocalVoxel.distance, oLocalVoxel.io);
     }
@@ -253,7 +294,7 @@ std::array<HashPos, 8> DistanceIoVolume::GetCornerPoses(const HashPos& oPos, siz
 
 float DistanceIoVolume::GetSdf(const pcl::DistanceIoVoxel& oVoxel) const {
 
-    return (oVoxel.io > 0.0f ? 1 : -1) * oVoxel.distance;
+    return (oVoxel.io > 0.5f ? 1 : -1) * oVoxel.distance;
 }
 
 float DistanceIoVolume::InterpolateCorners(const HashPos& oPos, const Eigen::Vector3f& vPoint, size_t iLevel) {

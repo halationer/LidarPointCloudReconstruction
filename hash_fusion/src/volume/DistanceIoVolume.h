@@ -135,12 +135,15 @@ public:
 
 // main octree
 public:
-  pcl::PointCloud<pcl::DistanceIoVoxel> CreateAndGetCorners(const Eigen::Vector3f& vMin, const Eigen::Vector3f& vMax, size_t iLevel);
+  pcl::PointCloud<pcl::DistanceIoVoxel> CreateAndGetCornersAABB(const Eigen::Vector3f& vMin, const Eigen::Vector3f& vMax, size_t iLevel);
+  pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr CreateAndGetCornersByPos(const HashPosSet& vVoxelPoses, size_t iLevel);
   std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> CreateAndGetSubdivideCorners(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel);
   void Fuse(DistanceIoVolume& oLocal);
   void Update(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners);
+  void UpdateLimitDistance(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel);
   float SearchSdf(const Eigen::Vector3f& vPoint);
   const pcl::DistanceIoVoxel* GetVoxel(const HashPos& oPos);
+  float GetStaticExpandDistance() const { return m_fStaticExpandDistance; } 
 
 private:
   pcl::DistanceIoVoxel& CreateAndGetVoxel(const HashPos& oPos);
@@ -154,6 +157,7 @@ private:
 	Eigen::Vector3f m_vVoxelSize; 
 	Eigen::Vector3f m_vVoxelHalfSize;
 	Eigen::Vector3f m_vVoxelSizeInverse;
+  float m_fStaticExpandDistance;
 };
 
 

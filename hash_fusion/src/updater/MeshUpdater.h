@@ -145,6 +145,11 @@ private:
         DistanceIoVolume* const pDistanceIoVolume, 
         std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
         size_t iLevel);
+    void UpdateVisibleVolume(
+        const SectorMesh& oSectorMesh, 
+        DistanceIoVolume* const pDistanceIoVolume,
+        std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
+        size_t iLevel = 0);
 
 public:
     // use ghpr-space to get in-or-out info
