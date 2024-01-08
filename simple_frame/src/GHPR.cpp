@@ -140,10 +140,11 @@ void GHPR::ConvertCloud(const pcl::PointCloud<pcl::PointXYZI>::Ptr & pCloud){
 
 	//
 	for (size_t i = 0; i != m_pTransCloud->points.size(); i++){
-		float numerator = 2 * (m_fRadius - vNormEachPoint[i]);
-		m_pTransCloud->points[i].x = m_pTransCloud->points[i].x + numerator*m_pTransCloud->points[i].x / vNormEachPoint[i];
-		m_pTransCloud->points[i].y = m_pTransCloud->points[i].y + numerator*m_pTransCloud->points[i].y / vNormEachPoint[i];
-		m_pTransCloud->points[i].z = m_pTransCloud->points[i].z + numerator*m_pTransCloud->points[i].z / vNormEachPoint[i];
+		// float numerator = 2 * (m_fRadius - vNormEachPoint[i]);
+		// m_pTransCloud->points[i].x = m_pTransCloud->points[i].x + numerator*m_pTransCloud->points[i].x / vNormEachPoint[i];
+		// m_pTransCloud->points[i].y = m_pTransCloud->points[i].y + numerator*m_pTransCloud->points[i].y / vNormEachPoint[i];
+		// m_pTransCloud->points[i].z = m_pTransCloud->points[i].z + numerator*m_pTransCloud->points[i].z / vNormEachPoint[i];
+		m_pTransCloud->points[i].getVector3fMap() = 100 * m_pTransCloud->points[i].getVector3fMap().normalized();
 	}
 
 	//set the viewpoint at the original value

@@ -110,7 +110,8 @@ public:
 
     // Build surface models based on new points that received from ros
     virtual void SlideModeling(pcl::PolygonMesh & oResultMesh, const Eigen::Vector3f& vCenter, const int iFrameId);
-    
+    void GenerateHotMap(const Eigen::Vector3f& vCenter, const int iFrameId, const ros::Time oTimeStamp);
+    void ExtractSdfMaps(const Eigen::Vector3f& vCenter, const int iFrameId, const ros::Time oTimeStamp);
 
 ////////////
     void SamplePoints(const pcl::PointCloud<pcl::PointXYZ> & vCloud, pcl::PointCloud<pcl::PointXYZ> & vNewCloud, int iSampleNum, bool bIntervalSamp = true);
@@ -179,6 +180,12 @@ protected:
     std::string m_sOutMeshTFId;
     //polygon publisher for test
     ros::Publisher m_oMeshPublisher;
+
+
+    //***for output gridmap***
+    std::string m_sOutHotMapTopic;
+    std::string m_sOutHotMapTFId;
+    ros::Publisher m_oHotMapPublisher;
 
     //nearby length
     float m_fNearLengths;

@@ -88,7 +88,7 @@ void RosPublishManager::PublishBlockSet(const HashPosSet& vBlockSet, const Eigen
     PublishMarkerArray(oOutputBlocks, sTopicName, [&](visualization_msgs::MarkerArray& oMarkerArray){
         std::cout << output::format_purple << " Block Num: " << vBlockSet.size()  << output::format_white << std::endl;
         RosPublishManager::BlockSetMaker(vBlockSet, vBlockSize, oMarkerArray);
-    });
+    }, iQueueSize);
 }
 
 void RosPublishManager::PublishVoxelSet(const HashPosDic& vVoxelSet, const Eigen::Vector3f& vVoxelSize, const std::string & sTopicName) {
@@ -97,6 +97,15 @@ void RosPublishManager::PublishVoxelSet(const HashPosDic& vVoxelSet, const Eigen
     PublishMarkerArray(oOutputVoxels, sTopicName, [&](visualization_msgs::MarkerArray& oMarkerArray){
         std::cout << output::format_purple << " Voxel Num: " << vVoxelSet.size()  << output::format_white << std::endl;
         RosPublishManager::VoxelSetMaker(vVoxelSet, vVoxelSize, oMarkerArray);
+    });
+}
+
+void RosPublishManager::PublishBoundingBoxList(const std::vector<tools::BoundingBox> vBoundingBoxList, const std::string & sTopicName, const int iIdOffset) {
+
+    visualization_msgs::MarkerArray oOutputLines;
+    PublishMarkerArray(oOutputLines, sTopicName, [&](visualization_msgs::MarkerArray& oMarkerArray){
+        std::cout << output::format_purple << " Cluster Num: " << vBoundingBoxList.size()  << output::format_white << std::endl;
+        RosPublishManager::BoundingBoxMaker(vBoundingBoxList, oMarkerArray, iIdOffset);
     });
 }
 
@@ -324,4 +333,56 @@ void RosPublishManager::VoxelSetMaker(const HashPosDic& vVoxelList, const Eigen:
         oOutputVolume.markers.push_back(oVolumeMarker);
     }
    
+}
+
+static const Eigen::Vector3i line_list[] = {
+    {0, 1, 2}, {4, 1, 2}, {4, 1, 2}, {4, 5, 2}, {4, 5, 2}, {0, 5, 2}, {0, 5, 2}, {0, 1, 2},
+    {0, 1, 2}, {0, 1, 6}, {4, 1, 2}, {4, 1, 6}, {4, 5, 2}, {4, 5, 6}, {0, 5, 2}, {0, 5, 6},
+    {0, 1, 6}, {4, 1, 6}, {4, 1, 6}, {4, 5, 6}, {4, 5, 6}, {0, 5, 6}, {0, 5, 6}, {0, 1, 6},
+};
+
+void RosPublishManager::BoundingBoxMaker(const std::vector<tools::BoundingBox>& vBoundingBoxList, visualization_msgs::MarkerArray& oOutputLines, int iIdOffset) {
+ 
+    constexpr int index = 4e4;
+
+    // clear boxes out of time
+    visualization_msgs::Marker oLineMarker;
+    oLineMarker.header.frame_id = "map";
+    oLineMarker.header.stamp = ros::Time::now();
+    oLineMarker.type = visualization_msgs::Marker::LINE_LIST;
+    oLineMarker.action = visualization_msgs::Marker::DELETEALL;
+    oOutputLines.markers.push_back(oLineMarker);
+
+    // make boxes
+    for(int i = 0; i < vBoundingBoxList.size(); ++i) {
+
+        visualization_msgs::Marker oLineMarker;
+        oLineMarker.header.frame_id = "map";
+        oLineMarker.header.stamp = ros::Time::now();
+        oLineMarker.type = visualization_msgs::Marker::LINE_LIST;
+        oLineMarker.action = visualization_msgs::Marker::MODIFY;
+        oLineMarker.id = index + iIdOffset + i; 
+
+        oLineMarker.scale.x = 0.05;
+        oLineMarker.pose.orientation.w = 1.0;
+
+        oLineMarker.color.a = 1.0f;
+        oLineMarker.color.r = 1.0f;
+        oLineMarker.color.g = 0.0f;
+        oLineMarker.color.b = 0.0f;
+
+        auto& oBoundingBox = vBoundingBoxList[i];
+
+        for(auto&& oLineIndex : line_list) {
+            
+            geometry_msgs::Point oPoint;
+            oPoint.x = oBoundingBox.data[oLineIndex.x()]; 
+            oPoint.y = oBoundingBox.data[oLineIndex.y()]; 
+            oPoint.z = oBoundingBox.data[oLineIndex.z()];
+
+            oLineMarker.points.push_back(oPoint);
+        }
+
+        oOutputLines.markers.push_back(oLineMarker);
+    }
 }

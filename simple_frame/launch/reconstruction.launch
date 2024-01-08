@@ -47,6 +47,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="polygonoutopic" default="/frame_meshs" />
 
     <arg name="mesh_algo_topic" default="/frame_mesh_algo" />
+    <arg name="mesh_algo_view_topic" default="/frame_mesh_algo_view" />
 
     <arg name="outcloudtfid" default="map"/>
 
@@ -89,6 +90,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <param name="polygon_out_topic" type="string" value="$(arg polygonoutopic)" />
 
         <param name="mesh_algo_topic" type="string" value="$(arg mesh_algo_topic)" />
+        <param name="mesh_alog_view_topic" type="string" value="$(arg mesh_algo_view_topic)" />
 		
         <!-- frame id related-->
 	    <param name="sample_pcframe_num" type="int" value="$(arg samplepcframenum)" />

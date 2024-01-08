@@ -136,9 +136,11 @@ void ExplicitRec::RemovePseudoFaces(const pcl::PointCloud<pcl::PointXYZI> & vCen
 		vFaceWeight[i] = oToCenterVec.dot(oMatNormal.row(i));
 		//cospin value
 		vFaceWeight[i] = vFaceWeight[i] / oToCenterVec.norm();
+		//abs
+		vFaceWeight[i] = fabs(vFaceWeight[i]);
 
 		//if it is close to be vertical
-		if (fabs(vFaceWeight[i]) < m_fPseudoFaceThr)
+		if (vFaceWeight[i] < m_fPseudoFaceThr)
 			vTrueFaceStatus[i] = false;
 
 		//	float  fVert = oHorPlanN.dot(oMatNormal.row(i));
@@ -357,7 +359,7 @@ void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vS
 			vScenePNormal.points.push_back(vCombinedNormalList[i].points[j]);
 }
 
-void ExplicitRec::OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud) {
+void ExplicitRec::OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud, const int line_min, const int line_max) {
 
 	//******Sector division******
 	//point index for each sector
@@ -375,6 +377,12 @@ void ExplicitRec::OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> &
 	//triangular face in each sector
 	m_vAllSectorFaces.clear();
 	m_vAllSectorFaces.resize(vPointSecIdxs.size());
+
+	//weight of the face
+	m_vFaceWeight.clear();
+	m_vFaceWeight.resize(vPointSecIdxs.size());
+	m_vMatNormal.clear();
+	m_vMatNormal.resize(vPointSecIdxs.size());
 
 	//多线程分离Normal
 	std::vector<pcl::PointCloud<pcl::PointNormal>> vCombinedNormalList;
@@ -422,9 +430,62 @@ void ExplicitRec::OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> &
 				std::vector<pcl::Vertices> vOneFaces;
 				vOneFaces = hpdhpr.ConstructSurfaceIdx(false);
 
+				//new a mesh operation object
+				MeshOperation oMeshOper;
+
+				//center point of each faces
+				pcl::PointCloud<pcl::PointXYZI>::Ptr pCenterPoints(new pcl::PointCloud<pcl::PointXYZI>);
+				//compute the centerpoint of each faces
+				//The centerpoint re-represents its face
+				oMeshOper.ComputeCenterPoint(*pSectorCloud, vOneFaces, *pCenterPoints);
+
+				//face normals
+				Eigen::MatrixXf& oMatNormal = m_vMatNormal[i];
+				//face parameters d
+				Eigen::VectorXf vfDParam;
+				//compute the normal vector of each face for its centerpoint
+				//the normal vector will be facing away from the viewpoint
+				oMeshOper.ComputeAllFaceParams(m_oViewPoint, *pSectorCloud, vOneFaces, oMatNormal, vfDParam);
+
+				//face status - whether the face is wrong
+				std::vector<bool> vTrueFaceStatus(vOneFaces.size(), true);
+				//face weight, e.g., confidence for each face
+				//the confidence is higher, if the laser beam is orthophoto the surface 
+				std::vector<float>& vFaceWeight = m_vFaceWeight[i];
+				vFaceWeight.resize(vOneFaces.size(), 0.0f);
+				//Remove pseudo triangles according to scanning rules of LiDAR
+				RemovePseudoFaces(*pCenterPoints, vOneFaces, oMatNormal, vTrueFaceStatus, vFaceWeight);
+
 				//collect the vertices and faces in each sector
+				pSectorCloud->push_back(m_oViewPoint);
+
+				//for each face
+				for (int j = 0; j < vOneFaces.size(); ++j){
+
+					bool bCenterMeshFlag = false;
+					int bTopOrBottomToken = false;
+
+					//for each face vertex id
+					for (int k = 0; k < vOneFaces[j].vertices.size(); ++k){
+
+						//vertex id in each sector
+						int iVertexSectorIdx = vOneFaces[j].vertices[k];
+
+						//vertex id in all data
+						if(iVertexSectorIdx == pSectorCloud->size()-1) {
+							bCenterMeshFlag = true;
+						}
+						else if(pSectorCloud->at(iVertexSectorIdx).intensity <= line_min || pSectorCloud->at(iVertexSectorIdx).intensity >= line_max) {
+							bTopOrBottomToken |= 1 << k;
+						}
+
+					}//end k
+
+					vFaceWeight[j] *= bCenterMeshFlag || bTopOrBottomToken == 7 ? 0 : 1;
+
+				}//end j
+
 				m_vAllSectorClouds[i] = pSectorCloud;
-				m_vAllSectorClouds[i]->push_back(m_oViewPoint);
 				m_vAllSectorFaces[i] = vOneFaces;
 				
 			}else{
@@ -434,6 +495,9 @@ void ExplicitRec::OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> &
 
 				std::vector<pcl::Vertices> vOneNewFaces;
 				m_vAllSectorFaces[i] = vOneNewFaces;
+
+				std::vector<float> vFaceWeight;
+				m_vFaceWeight[i] = vFaceWeight;
 			
 			}//end if vPointSecIdxs[i].size() > m_iSectorMinPNum
 		};
@@ -660,6 +724,7 @@ void ExplicitRec::OutputAllMeshes(pcl::PointCloud<pcl::PointXYZI> & vCloud){
 
 				//vertex id in all data
 				vCloud.points.push_back(m_vAllSectorClouds[i]->points[iVertexSectorIdx]);
+				vCloud.points.back().intensity = m_vFaceWeight[i][j];
 
 			}//end k
 

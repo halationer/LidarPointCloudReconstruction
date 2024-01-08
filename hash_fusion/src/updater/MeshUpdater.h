@@ -32,6 +32,7 @@ public:
     Eigen::Vector3f ab, bc, ca;
     pcl::PointXYZI formula;
     double minYaw, maxYaw;
+    float confidence = 1.0f;
 
     pcl::Vector3fMap n() { return formula.getVector3fMap(); }
     float& D() {return formula.intensity; }
@@ -72,8 +73,13 @@ public:
     void FindInnerOuterSimple(pcl::PointCloud<pcl::PointXYZI>& vQueryCloud);
     void FindInnerOuterSimple(pcl::DistanceIoVoxel& oQueryPoint);
     void FindInnerOuterSimple(pcl::PointCloud<pcl::DistanceIoVoxel>& oQueryCloud);
+    void SetTriangleConfidence(const std::vector<float>& vConfidenceList);
 
     static Ptr GetFromPolygonMesh(pcl::PolygonMesh& oMesh);
+
+private:
+    void RayUpdateVoxel(const Eigen::Vector3f& vRayStart, pcl::DistanceIoVoxel& oQueryPoint);
+
 private:
     static std::mutex mSetPointIntensity;
 };
@@ -110,6 +116,7 @@ public:
     static pcl::PointCloud<pcl::PointXYZI> GetSectorMeshCloud(SectorMeshPtr pMesh);
 };
 
+// main class
 class MeshUpdater {
 
 private:
@@ -151,6 +158,8 @@ private:
         std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
         size_t iLevel = 0);
 
+    void MakeDynamicObject(const DistanceIoVolume* pDistanceIoVolume, const pcl::PointCloud<pcl::PointXYZI>& vDynamicPoints);
+
 public:
     // use ghpr-space to get in-or-out info
     void MeshFusionV1(
@@ -181,6 +190,7 @@ public:
     void MeshFusion(
         const pcl::PointNormal& oLidarPos, 
         std::vector<pcl::PolygonMesh>& vSingleMeshList,
+        std::vector<std::vector<float>>& vMeshConfidence,
         VolumeBase& oVolume,
         bool bKeepVoxel);
 

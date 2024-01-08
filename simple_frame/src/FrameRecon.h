@@ -104,6 +104,7 @@ class FrameRecon{
   //publish meshes
   void PublishMeshs();
   void PublishMeshForAlgorithm();
+  void PublishViewMeshForAlgorithm();
 
   //*******odom related*******
   //Trajectory line interpolation
@@ -165,8 +166,11 @@ class FrameRecon{
   //polygon publisher for test
   ros::Publisher m_oMeshPublisher;
 
+  // mesh algo for multiframe update
   std::string m_sOutMeshAlgoTopic;
   ros::Publisher m_oMeshAlgoPublisher;
+  std::string m_sViewMeshAlgoTopic;
+  ros::Publisher m_oViewMeshAlgoPublisher;
 
   //displayed point topic
   std::string m_sAdditionalPointTopic = "/additional_points";

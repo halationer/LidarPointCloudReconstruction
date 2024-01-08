@@ -174,33 +174,35 @@ std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> DistanceIoVolume::Create
 void DistanceIoVolume::Update(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners) {
 
     for(auto& oCorner : vCorners) {
+        
+        if(oCorner.io == 0.0f) continue;
         HashPos oPos;
         PointBelongVoxelPos(oCorner, oPos);
-        if(oCorner.distance >= 0.0f) {
-            auto& oVoxel = CreateAndGetVoxel(oPos);
-            // combine code
-            std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
-            if(oCorner.io == 1.0f) oVoxel.io = 1.0f;
-            oVoxel.distance = std::max(oVoxel.distance, oCorner.distance);
-        }
+        auto& oVoxel = CreateAndGetVoxel(oPos);
+        
+        // combine code
+        std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
+        oVoxel.io = oVoxel.io == 0.0f ? oCorner.io : std::max(oVoxel.io, oCorner.io);
+        oVoxel.distance = std::max(oVoxel.distance, oCorner.distance);
     }
 }
 
 void DistanceIoVolume::UpdateLimitDistance(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel) {
 
-    const float limit_distance = m_fStaticExpandDistance * 2 * (1 << iLevel);
+    const float limit_distance = m_fStaticExpandDistance * (1 << iLevel);
 
     for(auto& oCorner : vCorners) {
+
+        if(oCorner.io == 0.0f) continue;
         HashPos oPos;
         PointBelongVoxelPos(oCorner, oPos);
-        if(oCorner.distance >= 0.0f) {
-            auto& oVoxel = CreateAndGetVoxel(oPos);
-            // combine code
-            std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
-            if(oCorner.io == 1.0f) oVoxel.io = 1.0f;
-            oVoxel.distance = std::max(oVoxel.distance, oCorner.distance);
-            oVoxel.distance = std::min(oVoxel.distance, limit_distance);
-        }
+        auto& oVoxel = CreateAndGetVoxel(oPos);
+
+        // combine code
+        std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
+        oVoxel.io = oVoxel.io == 0.0f ? oCorner.io : std::max(oVoxel.io, oCorner.io);
+        oVoxel.distance = std::max(oVoxel.distance, oCorner.distance);
+        oVoxel.distance = std::min(oVoxel.distance, limit_distance);
     }
 }
 
@@ -210,23 +212,15 @@ void DistanceIoVolume::UpdateLimitDistance(const pcl::PointCloud<pcl::DistanceIo
 */
 void DistanceIoVolume::Fuse(DistanceIoVolume& oLocal) {
 
-    // first time to fuse
-    if(m_vVolume.size() == 0) {
-        ROS_INFO_PURPLE("[DistanceIoVolume]: First Time Fuse. %d", oLocal.m_vVolume.size());
-        m_vVolume = std::move(oLocal.m_vVolume);
-        m_vVolumeData = std::move(oLocal.m_vVolumeData);
-        return;
-    }
-
     // fuse
     // 对于一种情况似乎需要特殊处理，当一个位置之前是细分区域，
     // 而这个位置在当前帧是非细分区域，这时的更新就要下放到低层级，这一步似乎非常拖慢速度
     // lazy 标记或许是一种方法?
     for(auto&& [oPos,oVoxelIndex] : oLocal.m_vVolume) {
         const pcl::DistanceIoVoxel& oLocalVoxel = oLocal.GetVoxelData(oVoxelIndex);
-        if(oLocalVoxel.distance < 0) continue;
+        if(oLocalVoxel.io == 0.0f) continue;
         pcl::DistanceIoVoxel& oGlobalVoxel = CreateAndGetVoxel(oPos);
-        oGlobalVoxel.Update(oLocalVoxel.distance, oLocalVoxel.io);
+        oGlobalVoxel.Update(oLocalVoxel.distance, oLocalVoxel.io == 1.0f);
     }
 }
 
@@ -238,12 +232,14 @@ float DistanceIoVolume::SearchSdf(const Eigen::Vector3f& vPoint) {
     HashPos oPos;
     PointBelongVoxelPos(vPoint, oPos);
     // AlignToStepFloor(oPos, 1);
+
+    std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
     for(int level = 0; level <= 3; ++level) {
-        int res = InterpolateCorners(oPos, vPoint, level);
-        if(res != -1) return res;
+        float res = InterpolateCorners(oPos, vPoint, level);
+        if(res != -INFINITY) return res;
     }
 
-    return -1;
+    return -INFINITY;
 }
 
 /**
@@ -278,15 +274,18 @@ std::array<HashPos, 8> DistanceIoVolume::GetCornerPoses(const HashPos& oPos, siz
 
     int step = 1 << iLevel;
 
+    HashPos oBaseCorner(oPos);
+    AlignToStepFloor(oBaseCorner, step);
+
     std::array<HashPos, 8> vCornerPoses {
-        HashPos(oPos.x, 		oPos.y, 		oPos.z),
-        HashPos(oPos.x + step,  oPos.y,	        oPos.z),
-        HashPos(oPos.x, 	    oPos.y + step, 	oPos.z),
-        HashPos(oPos.x + step,	oPos.y + step, 	oPos.z),
-        HashPos(oPos.x, 		oPos.y, 		oPos.z + step),
-        HashPos(oPos.x + step,  oPos.y, 	    oPos.z + step),
-        HashPos(oPos.x,	        oPos.y + step,	oPos.z + step),
-        HashPos(oPos.x + step, 	oPos.y + step,	oPos.z + step),
+        HashPos(oBaseCorner.x, 		    oBaseCorner.y, 		    oBaseCorner.z),
+        HashPos(oBaseCorner.x + step,   oBaseCorner.y,	        oBaseCorner.z),
+        HashPos(oBaseCorner.x, 	        oBaseCorner.y + step, 	oBaseCorner.z),
+        HashPos(oBaseCorner.x + step,	oBaseCorner.y + step, 	oBaseCorner.z),
+        HashPos(oBaseCorner.x, 		    oBaseCorner.y, 		    oBaseCorner.z + step),
+        HashPos(oBaseCorner.x + step,   oBaseCorner.y, 	        oBaseCorner.z + step),
+        HashPos(oBaseCorner.x,	        oBaseCorner.y + step,	oBaseCorner.z + step),
+        HashPos(oBaseCorner.x + step, 	oBaseCorner.y + step,	oBaseCorner.z + step),
     };
 
     return vCornerPoses;
@@ -303,7 +302,7 @@ float DistanceIoVolume::InterpolateCorners(const HashPos& oPos, const Eigen::Vec
     std::vector<const pcl::DistanceIoVoxel*> pVoxels;
     for(auto&& oCorner : vCorners) {
         if(!m_vVolume.count(oCorner))
-            return -1;
+            return -INFINITY;
         else pVoxels.emplace_back(GetVoxel(oCorner));
     }
 

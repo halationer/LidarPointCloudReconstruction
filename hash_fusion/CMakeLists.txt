@@ -22,6 +22,8 @@ find_package(catkin REQUIRED COMPONENTS
              tf
              filters
              fusion_msgs
+             grid_map_msgs
+             grid_map_ros
 )
 
 catkin_package(

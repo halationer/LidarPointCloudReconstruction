@@ -47,6 +47,8 @@ void FrameRecon::LazyLoading() {
     m_oAdditionalPointPublisher = nodeHandle.advertise<sensor_msgs::PointCloud2>(m_sAdditionalPointTopic, 1, true); //发布补充的点云
 
 	m_oMeshAlgoPublisher = nodeHandle.advertise<fusion_msgs::MeshArray>(m_sOutMeshAlgoTopic, 1, true); // 用于后续处理的网格消息
+
+	m_oViewMeshAlgoPublisher = nodeHandle.advertise<visualization_msgs::Marker>(m_sViewMeshAlgoTopic, 1, true); // 用于后续处理的网格可视化消息
 }
 
 /*************************************************
@@ -128,6 +130,7 @@ bool FrameRecon::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	//input mesh topic
 	nodeHandle.param("polygon_out_topic", m_sOutMeshTopic, std::string("/frame_meshs"));
 	nodeHandle.param("mesh_algo_topic", m_sOutMeshAlgoTopic, std::string("/frame_mesh_algo"));
+	nodeHandle.param("mesh_algo_view_topic", m_sViewMeshAlgoTopic, std::string("/frame_mesh_algo_view"));
 
 	//input point cloud topic
 	nodeHandle.param("polygon_tf_id", m_sOutMeshTFId, std::string("camera_init"));
@@ -369,12 +372,76 @@ void FrameRecon::PublishMeshForAlgorithm() {
 	fusion_msgs::MeshArray oMeshArray;
 
 	for(int i = 0; i < m_oMeshAlgoBuilder.m_vAllSectorClouds.size(); ++i) {
+
 		shape_msgs::Mesh mesh;
 		m_oMeshAlgoBuilder.OutputSectorMesh(mesh, i);
 		oMeshArray.data.push_back(mesh);
+
+		fusion_msgs::TokenArray arr;
+		arr.tokens = m_oMeshAlgoBuilder.m_vFaceWeight[i];
+		oMeshArray.pseudo_tokens.push_back(arr);
 	}
 
 	m_oMeshAlgoPublisher.publish(oMeshArray);
+}
+
+void FrameRecon::PublishViewMeshForAlgorithm() {
+
+	  	//new a visual message
+	visualization_msgs::Marker oMeshMsgs;
+	
+	//define header of message
+	oMeshMsgs.header.frame_id = m_sOutMeshTFId;
+	oMeshMsgs.header.stamp = ros::Time::now();
+	oMeshMsgs.type = visualization_msgs::Marker::TRIANGLE_LIST;
+	oMeshMsgs.action = visualization_msgs::Marker::ADD;
+
+	oMeshMsgs.scale.x = 1.0;
+	oMeshMsgs.scale.y = 1.0;
+	oMeshMsgs.scale.z = 1.0;
+
+	oMeshMsgs.pose.position.x = 0.0;
+	oMeshMsgs.pose.position.y = 0.0;
+	oMeshMsgs.pose.position.z = 0.0;
+
+	oMeshMsgs.pose.orientation.x = 0.0;
+	oMeshMsgs.pose.orientation.y = 0.0;
+	oMeshMsgs.pose.orientation.z = 0.0;
+	oMeshMsgs.pose.orientation.w = 1.0;
+
+	std_msgs::ColorRGBA color;
+	color.a = 1.0f;
+	color.r = 0.2f;
+	color.g = 1.0f;
+	color.b = 1.0f;
+	oMeshMsgs.color = color;
+
+	//repeatable vertices
+	pcl::PointCloud<pcl::PointXYZI> vMeshVertices;
+
+	//get the reconstruted mesh
+	m_oMeshAlgoBuilder.OutputAllMeshes(vMeshVertices);
+
+	//convert to publishable message
+	for (int k = 0; k < vMeshVertices.points.size(); ++k){
+
+		//temp point
+    	geometry_msgs::Point oPTemp;
+        oPTemp.x = vMeshVertices.points[k].x;
+        oPTemp.y = vMeshVertices.points[k].y;
+        oPTemp.z = vMeshVertices.points[k].z;
+
+        //color
+		// if(vMeshVertices.points[k].intensity == 0) continue;
+		std_msgs::ColorRGBA color_temp = color;
+		color_temp.b = clamp(vMeshVertices.points[k].intensity, 0.f, 0.1f) * 10;
+		color_temp.g = clamp(0.1f - vMeshVertices.points[k].intensity, 0.f, 0.1f) * 10;
+		oMeshMsgs.colors.push_back(color_temp);
+		oMeshMsgs.points.push_back(oPTemp);
+
+	}//end k
+
+	m_oViewMeshAlgoPublisher.publish(oMeshMsgs);
 }
 
 std::ostream& operator<<(std::ostream& out, const sensor_msgs::PointCloud2::_header_type& header) {
@@ -467,7 +534,7 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 
 		m_oMeshAlgoBuilder.setWorkingFrameCount(m_iPCFrameCount);
 		m_oMeshAlgoBuilder.SetViewPoint(oCurrentViewP, m_fViewZOffset);
-		m_oMeshAlgoBuilder.OriginalReconstruction(*pSceneCloud);
+		m_oMeshAlgoBuilder.OriginalReconstruction(*pSceneCloud, m_iLidarLineMin, m_iLidarLineMax); // 得到带权重的mesh
 
 		// 添加中心视点，方便多帧进程识别
 		pcl::PointNormal oViewPoint;
@@ -488,6 +555,7 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		// publish
 		PublishMeshs();	//发布 m_oExplicitBuilder 中建立的 mesh
 		PublishMeshForAlgorithm();
+		PublishViewMeshForAlgorithm();
 		PublishPointCloud(*pFramePNormal);
 
 		timer.DebugTime("6_publish");

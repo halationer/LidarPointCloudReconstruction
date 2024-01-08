@@ -5,11 +5,15 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /SLAM1
-        - /SLAM1/Odometry1
+        - /SLAM1/mappingPath1
+        - /SingleFrame1
+        - /SingleFrame1/AlgoMesh1
         - /FramesFusion1
-        - /Debug1
-      Splitter Ratio: 0.5
+        - /FramesFusion1/SdfLayers1
+        - /FramesFusion1/SdfLayers1/GridMap1
+        - /FramesFusion1/Dynamics1/DynaCluster1
+        - /Debug1/point_searched1
+      Splitter Ratio: 0.5083333253860474
     Tree Height: 848
   - Class: rviz/Selection
     Name: Selection
@@ -248,7 +252,15 @@ Visualization Manager:
           Marker Topic: /frame_meshs
           Name: GHPRMesh
           Namespaces:
-            "": true
+            {}
+          Queue Size: 100
+          Value: true
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /frame_mesh_algo_view
+          Name: AlgoMesh
+          Namespaces:
+            {}
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -279,10 +291,143 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: true
           Value: false
-      Enabled: true
+      Enabled: false
       Name: SingleFrame
     - Class: rviz/Group
       Displays:
+        - Class: rviz/Group
+          Displays:
+            - Alpha: 0.5
+              Autocompute Intensity Bounds: false
+              Class: grid_map_rviz_plugin/GridMap
+              Color: 52; 101; 164
+              Color Layer: free
+              Color Transformer: FlatColor
+              Enabled: false
+              Height Layer: free
+              Height Transformer: Layer
+              History Length: 1
+              Invert Rainbow: false
+              Max Color: 138; 226; 52
+              Max Intensity: 2
+              Min Color: 52; 101; 164
+              Min Intensity: 0
+              Name: Free
+              Show Grid Lines: true
+              Topic: /hotmap3d
+              Unreliable: false
+              Use Rainbow: false
+              Value: false
+            - Alpha: 0.5
+              Autocompute Intensity Bounds: false
+              Class: grid_map_rviz_plugin/GridMap
+              Color: 52; 101; 164
+              Color Layer: free
+              Color Transformer: FlatColor
+              Enabled: false
+              Height Layer: start
+              Height Transformer: Layer
+              History Length: 1
+              Invert Rainbow: false
+              Max Color: 138; 226; 52
+              Max Intensity: 2
+              Min Color: 52; 101; 164
+              Min Intensity: 0
+              Name: Start
+              Show Grid Lines: true
+              Topic: /hotmap3d
+              Unreliable: false
+              Use Rainbow: false
+              Value: false
+            - Alpha: 0.5
+              Autocompute Intensity Bounds: false
+              Class: grid_map_rviz_plugin/GridMap
+              Color: 52; 101; 164
+              Color Layer: free
+              Color Transformer: FlatColor
+              Enabled: false
+              Height Layer: occ
+              Height Transformer: Layer
+              History Length: 1
+              Invert Rainbow: false
+              Max Color: 138; 226; 52
+              Max Intensity: 2
+              Min Color: 52; 101; 164
+              Min Intensity: 0
+              Name: Occ
+              Show Grid Lines: true
+              Topic: /hotmap3d
+              Unreliable: false
+              Use Rainbow: false
+              Value: false
+            - Alpha: 0.5
+              Autocompute Intensity Bounds: false
+              Class: grid_map_rviz_plugin/GridMap
+              Color: 52; 101; 164
+              Color Layer: sdf
+              Color Transformer: IntensityLayer
+              Enabled: false
+              Height Layer: occ
+              Height Transformer: Flat
+              History Length: 1
+              Invert Rainbow: false
+              Max Color: 138; 226; 52
+              Max Intensity: 2
+              Min Color: 52; 101; 164
+              Min Intensity: 0
+              Name: HorizontalSdf
+              Show Grid Lines: true
+              Topic: /hotmap3d
+              Unreliable: false
+              Use Rainbow: false
+              Value: false
+          Enabled: false
+          Name: HotMap
+        - Class: rviz/Group
+          Displays:
+            - Alpha: 1
+              Autocompute Intensity Bounds: true
+              Class: grid_map_rviz_plugin/GridMap
+              Color: 200; 200; 200
+              Color Layer: sdf_0
+              Color Transformer: IntensityLayer
+              Enabled: true
+              Height Layer: sdf_0
+              Height Transformer: Flat
+              History Length: 1
+              Invert Rainbow: false
+              Max Color: 255; 255; 255
+              Max Intensity: 10
+              Min Color: 0; 0; 0
+              Min Intensity: 0
+              Name: GridMap
+              Show Grid Lines: true
+              Topic: /hotmap3d
+              Unreliable: false
+              Use Rainbow: true
+              Value: true
+          Enabled: true
+          Name: SdfLayers
+        - Class: rviz/Group
+          Displays:
+            - Class: rviz/MarkerArray
+              Enabled: true
+              Marker Topic: /dynamic_voxels
+              Name: DynaVoxel
+              Namespaces:
+                "": true
+              Queue Size: 100
+              Value: true
+            - Class: rviz/MarkerArray
+              Enabled: true
+              Marker Topic: /dynamic_clusters
+              Name: DynaCluster
+              Namespaces:
+                "": true
+              Queue Size: 100
+              Value: true
+          Enabled: true
+          Name: Dynamics
         - Class: rviz/Marker
           Enabled: false
           Marker Topic: /surrounding_meshes
@@ -292,13 +437,13 @@ Visualization Manager:
           Queue Size: 100
           Value: false
         - Class: rviz/MarkerArray
-          Enabled: true
+          Enabled: false
           Marker Topic: /surrounding_meshes
           Name: CubeMeshArray
           Namespaces:
             {}
           Queue Size: 100
-          Value: true
+          Value: false
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -588,7 +733,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.20000000298023224
+          Size (m): 0.10000000149011612
           Style: Flat Squares
           Topic: /searched_point_cloud
           Unreliable: false
@@ -607,7 +752,7 @@ Visualization Manager:
           Color: 255; 255; 255
           Color Transformer: RGB8
           Decay Time: 0
-          Enabled: true
+          Enabled: false
           Invert Rainbow: false
           Max Color: 255; 255; 255
           Min Color: 0; 0; 0
@@ -622,7 +767,7 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
-          Value: true
+          Value: false
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -793,7 +938,7 @@ Visualization Manager:
   Global Options:
     Background Color: 255; 255; 255
     Default Light: true
-    Fixed Frame: camera_init
+    Fixed Frame: map
     Frame Rate: 30
   Name: root
   Tools:
@@ -817,25 +962,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 63.751190185546875
+      Distance: 83.88629913330078
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -2.75052547454834
-        Y: 2.075465202331543
-        Z: -4.585078568197787e-5
+        X: 4.791684150695801
+        Y: 1.8381190299987793
+        Z: 4.258443004800938e-5
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5802091360092163
+      Pitch: 0.5847967863082886
       Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 6.020040035247803
+      Yaw: 0.6169153451919556
     Saved: ~
 Window Geometry:
   Displays:
