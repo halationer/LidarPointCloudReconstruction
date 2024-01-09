@@ -445,6 +445,7 @@ void MeshUpdater::UpdateVisibleVolume(
     for(auto& task : tasks) task->Join();
 }
 
+
 const static HashPos vNeighborDirs[] = {
     {1, 0, 0}, {0, 1, 0}, {0, 0, 1},
     {-1, 0, 0}, {0, -1, 0}, {0, 0, -1}, // 6-neighbor
@@ -476,7 +477,6 @@ void MeshUpdater::MakeDynamicObject(const DistanceIoVolume* pDistanceIoVolume, c
             HashPos oNeighborPos = oPos + vNeighborDirs[i];
             if(vDynamicVoxels.count(oNeighborPos)) {
                 oDynamicSetMaker.Union(oPos, oNeighborPos);
-    void MakeDynamicObject(const pcl::PointCloud<pcl::PointXYZI>& vDynamicPoints);
             }
         }
     }
@@ -503,6 +503,7 @@ void MeshUpdater::MakeDynamicObject(const DistanceIoVolume* pDistanceIoVolume, c
     m_oRpManager.PublishBoundingBoxList(vBoundingBoxList, "/dynamic_clusters", 0);
     m_oFuseTimer.DebugTime("dynamic_cluster");
 }
+
 
 void MeshUpdater::MeshFusion(
     const pcl::PointNormal& oLidarPos,
