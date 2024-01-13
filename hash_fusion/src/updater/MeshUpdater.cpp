@@ -14,6 +14,114 @@ namespace Updater {
 MeshUpdater MeshUpdater::instance;
 std::mutex TriangleMesh::mSetPointIntensity;
 
+/////////////////////////////////////////////////////////
+/////////////////// Object Manager //////////////////////
+/////////////////////////////////////////////////////////
+void ObjectManager::ReceiveClustersAndUpdate(const std::vector<tools::BoundingBox>& vClusterList, const int& iFrameStamp) {
+
+    for(auto&& oCluster : vClusterList) {
+
+        Eigen::Vector3f vCenter = (oCluster.GetMaxBound() + oCluster.GetMinBound()) * 0.5f;
+        float fRadius = (oCluster.GetMaxBound() - oCluster.GetMinBound()).sum() / 3.0f;
+        SequenceIter pSeq = FindCorrespondingSequence(vCenter, fRadius, iFrameStamp);
+        UpdateObjectSequence(pSeq, vCenter, fRadius, iFrameStamp);
+    }
+}
+
+ObjectManager::SequenceIter ObjectManager::FindCorrespondingSequence(const Eigen::Vector3f& vCenter, const float& fRadius, const int& iFrameStamp) {
+
+    float fMinDistance = INFINITY;
+    SequenceIter pCorrespondSeq = m_vObjectSequenceList.end();
+
+    for(SequenceIter pSeq = m_vObjectSequenceList.begin(); pSeq != m_vObjectSequenceList.end(); pSeq++) {
+        
+        // if not element in seq, the object is deleted
+        if(pSeq->empty()) continue;
+
+        // calculate corespondence
+        const Eigen::Vector3f& vLastPosition = pSeq->back().GetPosition();
+        float distance = (vLastPosition - vCenter).norm();
+        int delta_frame = iFrameStamp - (int)pSeq->back().framestamp;
+        float velocity = distance / delta_frame;
+
+        // judge if the object belong the seq
+        constexpr float velocity_threshold = 0.5f;
+        if(velocity <= velocity_threshold && distance < fMinDistance) {
+            pCorrespondSeq = pSeq;
+            fMinDistance = distance;
+        }
+    }
+
+    return pCorrespondSeq;
+}
+
+void ObjectManager::UpdateObjectSequence(SequenceIter pSequence, const Eigen::Vector3f& vCenter, const float& fRadius, const int& iFrameStamp) {
+
+    // if no correspondence
+    if(pSequence == m_vObjectSequenceList.end()) {
+        CreateObjectSequence(vCenter, fRadius, iFrameStamp);
+        return;
+    }
+
+    // make object
+    tools::Object oObject;
+    oObject.GetPosition() = vCenter;
+    oObject.GetVelocity() = (vCenter - pSequence->back().GetPosition()).normalized();
+    oObject.inited = true;
+    oObject.radius = fRadius;
+    oObject.framestamp = iFrameStamp;
+    oObject.timestamp = ros::Time::now().toSec();
+
+    // push object into sequence
+    pSequence->push_back(oObject);
+}
+
+void ObjectManager::CreateObjectSequence(const Eigen::Vector3f& vCenter, const float& fRadius, const int& iFrameStamp) {
+    
+    // make object
+    tools::Object oObject;
+    oObject.GetPosition() = vCenter;
+    oObject.GetVelocity() = Eigen::Vector3f::UnitY();
+    oObject.inited = true;
+    oObject.radius = fRadius;
+    oObject.framestamp = iFrameStamp;
+    oObject.timestamp = ros::Time::now().toSec();
+
+    // find a sequence
+    SequenceIter pSequenceContianer = m_vObjectSequenceList.end();
+    for(SequenceIter pSeq = m_vObjectSequenceList.begin(); pSeq != m_vObjectSequenceList.end(); pSeq++) {
+        if(pSeq->size() == 0) {
+            pSequenceContianer = pSeq;
+            break;
+        }
+    }
+
+    // if find failed, create a new sequence
+    if(pSequenceContianer == m_vObjectSequenceList.end()) {
+        m_vObjectSequenceList.emplace_back();
+        pSequenceContianer = m_vObjectSequenceList.end()-1;
+    }
+
+    // put the object into sequence
+    pSequenceContianer->push_back(oObject);
+}
+
+std::vector<tools::Object> ObjectManager::GetActivedObjects(const int& iFrameStamp) {
+
+    std::vector<tools::Object> vObjectList;
+    for(auto&& oObject : m_vObjectSequenceList) {
+        if( oObject.size() > 3 && 
+            oObject.back().framestamp == iFrameStamp && 
+            (oObject.end()-2)->framestamp == iFrameStamp-1) {
+            vObjectList.push_back(oObject.back());
+        }
+    }
+    return vObjectList;
+}
+
+/////////////////////////////////////////////////////////
+/////////////////// Sector Mesh Cloud ///////////////////
+/////////////////////////////////////////////////////////
 pcl::PointCloud<pcl::PointXYZI> SectorMeshFrames::GetSectorMeshCloud(SectorMeshPtr pMesh) {
     
     pcl::PointCloud<pcl::PointXYZI> vCloud;
@@ -30,6 +138,9 @@ pcl::PointCloud<pcl::PointXYZI> SectorMeshFrames::GetSectorMeshCloud(SectorMeshP
     return vCloud;
 }
 
+/////////////////////////////////////////////////////////
+/////////////////// Triangle Mesh ///////////////////////
+/////////////////////////////////////////////////////////
 TriangleMesh::Ptr TriangleMesh::GetFromPolygonMesh(pcl::PolygonMesh& oMesh) {
 
     TriangleMesh::Ptr pTriangles(new TriangleMesh);
@@ -303,7 +414,7 @@ void TriangleMesh::FindInnerOuterSimple(pcl::PointCloud<pcl::DistanceIoVoxel>& v
         RayUpdateVoxel(vCenter, oPoint);
 
         // update point
-        RayUpdateVoxel(vCenter+Eigen::Vector3f(0, 0, 5.0f), oPoint);
+        RayUpdateVoxelOnlyDistance(vCenter+Eigen::Vector3f(0, 0, 5.0f), oPoint);
     }
 }
 
@@ -362,6 +473,62 @@ void TriangleMesh::RayUpdateVoxel(const Eigen::Vector3f& vRayStart, pcl::Distanc
     }
 }
 
+void TriangleMesh::RayUpdateVoxelOnlyDistance(const Eigen::Vector3f& vRayStart, pcl::DistanceIoVoxel& oQueryPoint) {
+
+    std::vector<Triangle>& vTriangles = this->mesh;
+    std::vector<int> vPredictIndex;
+    vPredictIndex.reserve(vTriangles.size());
+    Eigen::Vector3f vRay = oQueryPoint.getVector3fMap() - vRayStart;
+
+    // search
+    std::vector<char> searchSymbol(vTriangles.size(), false);
+    double yaw = GetYaw(vRay);
+    int left = 0, right = this->vTriangleMinYawIndex.size();
+    while(left < right) {
+        int mid = (left + right) >> 1;
+        if(vTriangles[this->vTriangleMinYawIndex[mid]].minYaw <= yaw) left = mid + 1;
+        else right = mid;
+    }
+    for(int i = 0; i < left; ++i) searchSymbol[this->vTriangleMinYawIndex[i]] = true;
+
+    left = 0;
+    right = this->vTriangleMaxYawIndex.size() - 1;
+    while(left < right) {
+        int mid = (left + right) >> 1;
+        if(vTriangles[this->vTriangleMaxYawIndex[mid]].maxYaw < yaw) left = mid + 1;
+        else right = mid;
+    }
+    for(int i = left; i < this->vTriangleMaxYawIndex.size(); ++i)
+        if(searchSymbol[this->vTriangleMaxYawIndex[i]])
+            vPredictIndex.push_back(this->vTriangleMaxYawIndex[i]);
+
+    //遍历三角形并判断内外
+    for(auto&& oTriangleIndex : vPredictIndex) {
+
+        Triangle& oTriangle = vTriangles[oTriangleIndex];
+        float fIntersectDepth = -(vRayStart.dot(oTriangle.n()) + oTriangle.D()) / vRay.dot(oTriangle.n());
+
+        if(fIntersectDepth <= 0) continue;
+
+        Eigen::Vector3f oIntersectPoint = vRayStart + fIntersectDepth * vRay;
+        if(oTriangle.ab.cross(oIntersectPoint - oTriangle.a).dot(oTriangle.n()) < 0) continue;
+        if(oTriangle.bc.cross(oIntersectPoint - oTriangle.b).dot(oTriangle.n()) < 0) continue;
+        if(oTriangle.ca.cross(oIntersectPoint - oTriangle.c).dot(oTriangle.n()) < 0) continue;
+
+        float fDistance = - oQueryPoint.getVector3fMap().dot(oTriangle.n()) - oTriangle.D();
+        fDistance = fabs(fDistance);
+
+        std::unique_lock<std::mutex> lock(TriangleMesh::mSetPointIntensity);
+        if(oQueryPoint.io == 0.0f) oQueryPoint.distance = fDistance;
+        else oQueryPoint.distance = std::min(oQueryPoint.distance, fDistance);
+
+        break;
+    }
+}
+
+/////////////////////////////////////////////////////////
+///////////////////// Mesh Updater //////////////////////
+/////////////////////////////////////////////////////////
 void MeshUpdater::UpdateVolume(
     const SectorMesh& oSectorMesh, 
     DistanceIoVolume* const pDistanceIoVolume, 
@@ -457,84 +624,7 @@ const static HashPos vNeighborDirs[] = {
     {-1, -1, -1}, {1, -1, -1}, {-1, 1, -1}, {-1, -1, 1}, // 26-neighbor
 };
 
-void MeshUpdater::MakeDynamicObject(const DistanceIoVolume* pDistanceIoVolume, const pcl::PointCloud<pcl::PointXYZI>& vDynamicPoints) {
-
-    HashPosSet vDynamicVoxels;
-    std::unordered_map<HashPos, std::vector<pcl::PointXYZI>, HashFunc> vPosPoints;
-    for(auto&& oPoint : vDynamicPoints) {
-        HashPos oPos;
-        pDistanceIoVolume->PointBelongVoxelPos(oPoint, oPos);
-        vDynamicVoxels.emplace(oPos);
-        vPosPoints[oPos].push_back(oPoint);
-    }
-    m_oRpManager.PublishBlockSet(vDynamicVoxels, pDistanceIoVolume->GetVoxelLength(), "/dynamic_voxels");
-
-    constexpr int iNeighborNum = 18;
-    UnionSet oDynamicSetMaker;
-    for(auto&& oPos : vDynamicVoxels) {
-        oDynamicSetMaker.Find(oPos);
-        for(int i = 0; i < iNeighborNum; ++i) {
-            HashPos oNeighborPos = oPos + vNeighborDirs[i];
-            if(vDynamicVoxels.count(oNeighborPos)) {
-                oDynamicSetMaker.Union(oPos, oNeighborPos);
-            }
-        }
-    }
-
-    auto vDynamicSets = oDynamicSetMaker.GetSets();
-    std::vector<tools::BoundingBox> vBoundingBoxList;
-    for(auto&& [_,vDynamicSet] : vDynamicSets) {
-        tools::BoundingBox oBoundingBox;
-        for(auto&& oPos : vDynamicSet) {
-            for(auto&& oPoint : vPosPoints[oPos]) {
-                if(!oBoundingBox.inited) {
-                    oBoundingBox.GetMinBound() = oPoint.getVector3fMap();
-                    oBoundingBox.GetMaxBound() = oPoint.getVector3fMap();
-                    oBoundingBox.inited = 1.0f;
-                }
-                else {
-                    oBoundingBox.GetMinBound() = oBoundingBox.GetMinBound().cwiseMin(oPoint.getVector3fMap());
-                    oBoundingBox.GetMaxBound() = oBoundingBox.GetMaxBound().cwiseMax(oPoint.getVector3fMap());
-                }
-            }
-        }
-        vBoundingBoxList.push_back(oBoundingBox);
-    }
-    m_oRpManager.PublishBoundingBoxList(vBoundingBoxList, "/dynamic_clusters", 0);
-    m_oFuseTimer.DebugTime("dynamic_cluster");
-}
-
-
-void MeshUpdater::MeshFusion(
-    const pcl::PointNormal& oLidarPos,
-    std::vector<pcl::PolygonMesh>& vSingleMeshList,
-    std::vector<std::vector<float>>& vMeshConfidence,
-    VolumeBase& oVolume,
-    bool bKeepVoxel)
-{
-    m_oFuseTimer.NewLine();
-
-    DistanceIoVolume* pDistanceIoVolume = dynamic_cast<DistanceIoVolume*>(&oVolume);
-    if(pDistanceIoVolume == nullptr) {
-        ROS_ERROR("[updater/MeshUpdater] The volume type is not DistanceIoVolume!");
-        return;
-    }
-
-    std::unordered_map<HashPos, pcl::PointXYZI, HashFunc> vHashCorner;
-    SectorMeshPtr pSectorMesh(new SectorMesh);
-    // m_vFrameMeshes.FrameEnqueue(pSectorMesh);
-
-	// std::vector<Tools::TaskPtr> tasks;
-    int iConfidenceIndex = 0;
-    for(auto && oSingleMesh : vSingleMeshList) {
-        // triangle mesh init
-        TriangleMesh::Ptr pTriangles = TriangleMesh::GetFromPolygonMesh(oSingleMesh);
-        pTriangles->GetAABB();
-        pTriangles->GetYawSortedIndex();
-        pTriangles->SetTriangleConfidence(vMeshConfidence.at(iConfidenceIndex++));
-        pSectorMesh->push_back(pTriangles);
-        m_oFuseTimer.DebugTime("convert_mesh");
-    }
+void MeshUpdater::MakeDynamicObject(DistanceIoVolume* pDistanceIoVolume, const SectorMeshPtr& pSectorMesh) {
 
     // Search For sdf of points and show if the point is judged to be dynamic
     pcl::PointCloud<pcl::PointXYZI> vSearchedPoints, vDynamicPoints;
@@ -553,10 +643,114 @@ void MeshUpdater::MeshFusion(
         }
     }
     m_oRpManager.PublishPointCloud(vSearchedPoints, vSearchedAssociation, "/searched_point_cloud");
-    m_oFuseTimer.DebugTime("search_io");
+
+    // voxelize
+    HashPosSet vDynamicVoxels;
+    std::unordered_map<HashPos, std::vector<pcl::PointXYZI>, HashFunc> vPosPoints;
+    for(auto&& oPoint : vDynamicPoints) {
+        HashPos oPos;
+        pDistanceIoVolume->PointBelongVoxelPos(oPoint, oPos);
+        vDynamicVoxels.emplace(oPos);
+        vPosPoints[oPos].push_back(oPoint);
+    }
+    m_oRpManager.PublishBlockSet(vDynamicVoxels, pDistanceIoVolume->GetVoxelLength(), "/dynamic_voxels");
+
+    // cluster
+    constexpr int iNeighborNum = 18;
+    UnionSet oDynamicSetMaker;
+    for(auto&& oPos : vDynamicVoxels) {
+        oDynamicSetMaker.Find(oPos);
+        for(int i = 0; i < iNeighborNum; ++i) {
+            HashPos oNeighborPos = oPos + vNeighborDirs[i];
+            if(vDynamicVoxels.count(oNeighborPos)) {
+                oDynamicSetMaker.Union(oPos, oNeighborPos);
+            }
+        }
+    }
+
+    // make-object
+    auto vDynamicSets = oDynamicSetMaker.GetSets();
+    std::vector<tools::BoundingBox> vBoundingBoxList;
+    for(auto&& [_,vDynamicSet] : vDynamicSets) {
+        tools::BoundingBox oBoundingBox;
+        for(auto&& oPos : vDynamicSet) {
+            for(auto&& oPoint : vPosPoints[oPos]) {
+                if(!oBoundingBox.inited) {
+                    oBoundingBox.GetMinBound() = oPoint.getVector3fMap();
+                    oBoundingBox.GetMaxBound() = oPoint.getVector3fMap();
+                    oBoundingBox.inited = true;
+                }
+                else {
+                    oBoundingBox.GetMinBound() = oBoundingBox.GetMinBound().cwiseMin(oPoint.getVector3fMap());
+                    oBoundingBox.GetMaxBound() = oBoundingBox.GetMaxBound().cwiseMax(oPoint.getVector3fMap());
+                }
+                ++oBoundingBox.point_count;
+            }
+        }
+        vBoundingBoxList.push_back(oBoundingBox);
+    }
+
+    // cluster filter
+    constexpr float density_min_threshold = 1.0f;
+    constexpr float density_max_threshold = 128.0f;
+    std::cout << "filter begin" << std::endl;
+    if(!vBoundingBoxList.empty()) {
+        for(int i = 0; i < vBoundingBoxList.size();) {
+            auto&& oBox = vBoundingBoxList[i];
+            Eigen::Vector3f vBoxSize = oBox.GetMaxBound() - oBox.GetMinBound();
+            float density = oBox.point_count / vBoxSize.prod() * vBoxSize.minCoeff();
+            std::cout << oBox.point_count << " " << density << " " 
+                << (density >= density_min_threshold && density <= density_max_threshold) << std::endl;
+            if(density < density_min_threshold || density > density_max_threshold) {
+                vBoundingBoxList.erase(vBoundingBoxList.begin()+i);
+            }
+            else ++i;
+        }
+    }
+    std::cout << "filter end" << std::endl;
+    m_oRpManager.PublishBoundingBoxList(vBoundingBoxList, "/dynamic_clusters", 0);
+
+    m_oObjectManager.ReceiveClustersAndUpdate(vBoundingBoxList, m_fFrameCounter);
+    m_oRpManager.PublishObjectList(m_oObjectManager.GetActivedObjects(m_fFrameCounter), "/dynamic_objects", 0);
+}
+
+
+void MeshUpdater::MeshFusion(
+    const pcl::PointNormal& oLidarPos,
+    std::vector<pcl::PolygonMesh>& vSingleMeshList,
+    std::vector<std::vector<float>>& vMeshConfidence,
+    VolumeBase& oVolume,
+    bool bKeepVoxel)
+{
+    m_oFuseTimer.NewLine();
+
+    DistanceIoVolume* pDistanceIoVolume = dynamic_cast<DistanceIoVolume*>(&oVolume);
+    if(pDistanceIoVolume == nullptr) {
+        ROS_ERROR("[updater/MeshUpdater] The volume type is not DistanceIoVolume!");
+        return;
+    }
+
+    ++m_fFrameCounter;
+
+    std::unordered_map<HashPos, pcl::PointXYZI, HashFunc> vHashCorner;
+    SectorMeshPtr pSectorMesh(new SectorMesh);
+    // m_vFrameMeshes.FrameEnqueue(pSectorMesh);
+
+	// std::vector<Tools::TaskPtr> tasks;
+    int iConfidenceIndex = 0;
+    for(auto && oSingleMesh : vSingleMeshList) {
+        // triangle mesh init
+        TriangleMesh::Ptr pTriangles = TriangleMesh::GetFromPolygonMesh(oSingleMesh);
+        pTriangles->GetAABB();
+        pTriangles->GetYawSortedIndex();
+        pTriangles->SetTriangleConfidence(vMeshConfidence.at(iConfidenceIndex++));
+        pSectorMesh->push_back(pTriangles);
+        m_oFuseTimer.DebugTime("convert_mesh");
+    }
 
     // voxelize and cluster, out put the dynamic objects
-    MakeDynamicObject(pDistanceIoVolume, vDynamicPoints);
+    MakeDynamicObject(pDistanceIoVolume, pSectorMesh);
+    m_oFuseTimer.DebugTime("dynamic_extract");
 
     // update local volume
     std::unique_ptr<DistanceIoVolume> pLocalVolume(new DistanceIoVolume);

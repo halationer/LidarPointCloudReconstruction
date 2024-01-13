@@ -100,12 +100,21 @@ void RosPublishManager::PublishVoxelSet(const HashPosDic& vVoxelSet, const Eigen
     });
 }
 
-void RosPublishManager::PublishBoundingBoxList(const std::vector<tools::BoundingBox> vBoundingBoxList, const std::string & sTopicName, const int iIdOffset) {
+void RosPublishManager::PublishBoundingBoxList(const std::vector<tools::BoundingBox>& vBoundingBoxList, const std::string & sTopicName, const int iIdOffset) {
 
     visualization_msgs::MarkerArray oOutputLines;
     PublishMarkerArray(oOutputLines, sTopicName, [&](visualization_msgs::MarkerArray& oMarkerArray){
         std::cout << output::format_purple << " Cluster Num: " << vBoundingBoxList.size()  << output::format_white << std::endl;
         RosPublishManager::BoundingBoxMaker(vBoundingBoxList, oMarkerArray, iIdOffset);
+    });
+}
+
+void RosPublishManager::PublishObjectList(const std::vector<tools::Object>& vObjectList, const std::string & sTopicName, const int iIdOffset) {
+    
+    visualization_msgs::MarkerArray oOutputObjects;
+    PublishMarkerArray(oOutputObjects, sTopicName, [&](visualization_msgs::MarkerArray& oMarkerArray){
+        std::cout << output::format_purple << " Object Num: " << vObjectList.size()  << output::format_white << std::endl;
+        RosPublishManager::ObjectMaker(vObjectList, oMarkerArray, iIdOffset);
     });
 }
 
@@ -384,5 +393,97 @@ void RosPublishManager::BoundingBoxMaker(const std::vector<tools::BoundingBox>& 
         }
 
         oOutputLines.markers.push_back(oLineMarker);
+    }
+}
+
+
+void RosPublishManager::ObjectMaker(const std::vector<tools::Object>& vObjectList, visualization_msgs::MarkerArray& oOutputObjects, int iIdOffset) {
+ 
+    constexpr int index = 5e4;
+
+    // clear boxes out of time
+    visualization_msgs::Marker oSphereMarker;
+    oSphereMarker.header.frame_id = "map";
+    oSphereMarker.header.stamp = ros::Time::now();
+    oSphereMarker.type = visualization_msgs::Marker::SPHERE;
+    oSphereMarker.action = visualization_msgs::Marker::DELETEALL;
+    oOutputObjects.markers.push_back(oSphereMarker);
+
+    visualization_msgs::Marker oArrowMarker;
+    oArrowMarker.header.frame_id = "map";
+    oArrowMarker.header.stamp = ros::Time::now();
+    oArrowMarker.type = visualization_msgs::Marker::ARROW;
+    oArrowMarker.action = visualization_msgs::Marker::DELETEALL;
+    oOutputObjects.markers.push_back(oArrowMarker);
+
+    oArrowMarker.action = visualization_msgs::Marker::ADD;
+    oArrowMarker.id = index + 1;
+
+    // make boxes
+    for(int i = 0; i < vObjectList.size(); ++i) {
+
+        auto& oObject = vObjectList[i];
+
+        // sphere
+        visualization_msgs::Marker oSphereMarker;
+        oSphereMarker.header.frame_id = "map";
+        oSphereMarker.header.stamp = ros::Time::now();
+        oSphereMarker.type = visualization_msgs::Marker::SPHERE;
+        oSphereMarker.action = visualization_msgs::Marker::MODIFY;
+        oSphereMarker.id = index + iIdOffset + i * 2; 
+
+        // oSphereMarker.scale.x = vObjectList[i].radius;
+        // oSphereMarker.scale.y = vObjectList[i].radius;
+        // oSphereMarker.scale.z = vObjectList[i].radius;
+        oSphereMarker.scale.x = 0.4;
+        oSphereMarker.scale.y = 0.4;
+        oSphereMarker.scale.z = 0.4;
+        oSphereMarker.pose.orientation.w = 1.0;
+
+        oSphereMarker.color.a = 0.5f;
+        oSphereMarker.color.r = 0.5f;
+        oSphereMarker.color.g = 0.0f;
+        oSphereMarker.color.b = 1.0f;
+
+        oSphereMarker.pose.position.x = oObject.GetPosition().x();
+        oSphereMarker.pose.position.y = oObject.GetPosition().y();
+        oSphereMarker.pose.position.z = oObject.GetPosition().z();
+
+        oOutputObjects.markers.push_back(oSphereMarker);
+
+        // arrow
+        visualization_msgs::Marker oArrowMarker;
+        oArrowMarker.header.frame_id = "map";
+        oArrowMarker.header.stamp = ros::Time::now();
+        oArrowMarker.type = visualization_msgs::Marker::ARROW;
+        oArrowMarker.action = visualization_msgs::Marker::MODIFY;
+        oArrowMarker.id = index + iIdOffset + i * 2 + 1; 
+
+        oArrowMarker.scale.x = 0.1;
+        oArrowMarker.scale.y = 0.15;
+        oArrowMarker.scale.z = 0.15;
+        oArrowMarker.pose.orientation.w = 1.0;
+
+        oArrowMarker.color.a = 1.0f;
+        oArrowMarker.color.r = 0.5f;
+        oArrowMarker.color.g = 0.0f;
+        oArrowMarker.color.b = 1.0f;
+
+        geometry_msgs::Point oPoint;
+        oPoint.x = oObject.GetPosition().x();
+        oPoint.y = oObject.GetPosition().y();
+        oPoint.z = oObject.GetPosition().z();
+        oArrowMarker.points.push_back(oPoint);
+        constexpr float velocity_length = 2.0f;
+        Eigen::Vector3f vVelocity = oObject.GetVelocity();
+        vVelocity.z() = 0;
+        vVelocity.normalize();
+        vVelocity *= velocity_length;
+        oPoint.x += vVelocity.x();
+        oPoint.y += vVelocity.y();
+        oPoint.z += vVelocity.z();
+        oArrowMarker.points.push_back(oPoint);
+
+        oOutputObjects.markers.push_back(oArrowMarker);
     }
 }

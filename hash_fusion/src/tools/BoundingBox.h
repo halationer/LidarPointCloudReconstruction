@@ -10,15 +10,16 @@ namespace tools {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
         union EIGEN_ALIGN32{
-            float data[8];
+            float data[12];
             struct{
                 float data_min[4];
-                float data_max[3];
+                float data_max[4];
                 float inited;
+                float point_count;
             };
         };
 
-        BoundingBox():inited(0) {}
+        BoundingBox():data({}) {}
 
         inline Eigen::Map<Eigen::Vector3f> GetMinBound() { return Eigen::Map<Eigen::Vector3f>(data_min); }
         inline Eigen::Map<Eigen::Vector3f> GetMaxBound() { return Eigen::Map<Eigen::Vector3f>(data_max); }

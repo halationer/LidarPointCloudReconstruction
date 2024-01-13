@@ -8,6 +8,7 @@
 #include <unordered_set>
 #include <list>
 #include <cmath>
+#include <vector>
 
 #include "volume/VolumeBase.h"
 #include "volume/HashBlock.h"
@@ -18,6 +19,7 @@
 #include "tools/HashPos.h"
 #include "tools/DebugManager.h"
 #include "tools/ThreadPool.h"
+#include "tools/Object.h"
 
 namespace Updater{
 
@@ -79,6 +81,7 @@ public:
 
 private:
     void RayUpdateVoxel(const Eigen::Vector3f& vRayStart, pcl::DistanceIoVoxel& oQueryPoint);
+    void RayUpdateVoxelOnlyDistance(const Eigen::Vector3f& vRayStart, pcl::DistanceIoVoxel& oQueryPoint);
 
 private:
     static std::mutex mSetPointIntensity;
@@ -116,6 +119,26 @@ public:
     static pcl::PointCloud<pcl::PointXYZI> GetSectorMeshCloud(SectorMeshPtr pMesh);
 };
 
+class ObjectManager {
+
+public:
+    typedef std::vector<tools::Object> Sequence;
+    typedef std::vector<Sequence>::iterator SequenceIter;
+
+    // main function
+    void ReceiveClustersAndUpdate(const std::vector<tools::BoundingBox>& vClusterList, const int& iFrameStamp);
+    // debug function
+    std::vector<tools::Object> GetActivedObjects(const int& iFrameStamp);
+
+private:
+    SequenceIter FindCorrespondingSequence(const Eigen::Vector3f& vCenter, const float& fRadius, const int& iFrameStamp);
+    void UpdateObjectSequence(SequenceIter pSequence, const Eigen::Vector3f& vCenter, const float& fRadius, const int& iFrameStamp);
+    void CreateObjectSequence(const Eigen::Vector3f& vCenter, const float& fRadius, const int& iFrameStamp);
+    void DeleteOutDatedSequence(const int& iFrameStamp);
+
+    std::vector<Sequence> m_vObjectSequenceList;
+};
+
 // main class
 class MeshUpdater {
 
@@ -125,6 +148,9 @@ private:
     RosPublishManager& m_oRpManager;
     SectorMeshFrames m_vFrameMeshes;
     std::vector<pcl::PointCloud<pcl::PointXYZI>> m_vDebugOutClouds;
+
+    ObjectManager m_oObjectManager;
+    int m_fFrameCounter = 0;
 
 public:
     static constexpr int m_iMaxFrameWindow = 5;
@@ -158,7 +184,9 @@ private:
         std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
         size_t iLevel = 0);
 
-    void MakeDynamicObject(const DistanceIoVolume* pDistanceIoVolume, const pcl::PointCloud<pcl::PointXYZI>& vDynamicPoints);
+    void MakeDynamicObject(
+        DistanceIoVolume* pDistanceIoVolume, 
+        const SectorMeshPtr& pSectorMesh);
 
 public:
     // use ghpr-space to get in-or-out info

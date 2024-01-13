@@ -270,7 +270,7 @@ const pcl::DistanceIoVoxel* DistanceIoVolume::GetVoxel(const HashPos& oPos) {
 }
 
 
-std::array<HashPos, 8> DistanceIoVolume::GetCornerPoses(const HashPos& oPos, size_t iLevel) {
+std::array<HashPos, 8> DistanceIoVolume::GetCornerPoses(const HashPos& oPos, size_t iLevel) const {
 
     int step = 1 << iLevel;
 

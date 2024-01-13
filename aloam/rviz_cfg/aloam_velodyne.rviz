@@ -9,9 +9,9 @@ Panels:
         - /SingleFrame1
         - /SingleFrame1/AlgoMesh1
         - /FramesFusion1
-        - /FramesFusion1/SdfLayers1
         - /FramesFusion1/SdfLayers1/GridMap1
-        - /FramesFusion1/Dynamics1/DynaCluster1
+        - /FramesFusion1/Dynamics1
+        - /FramesFusion1/Dynamics1/DynaObject1
         - /Debug1/point_searched1
       Splitter Ratio: 0.5083333253860474
     Tree Height: 848
@@ -406,22 +406,30 @@ Visualization Manager:
               Unreliable: false
               Use Rainbow: true
               Value: true
-          Enabled: true
+          Enabled: false
           Name: SdfLayers
         - Class: rviz/Group
           Displays:
             - Class: rviz/MarkerArray
-              Enabled: true
+              Enabled: false
               Marker Topic: /dynamic_voxels
               Name: DynaVoxel
+              Namespaces:
+                {}
+              Queue Size: 100
+              Value: false
+            - Class: rviz/MarkerArray
+              Enabled: true
+              Marker Topic: /dynamic_clusters
+              Name: DynaCluster
               Namespaces:
                 "": true
               Queue Size: 100
               Value: true
             - Class: rviz/MarkerArray
               Enabled: true
-              Marker Topic: /dynamic_clusters
-              Name: DynaCluster
+              Marker Topic: /dynamic_objects
+              Name: DynaObject
               Namespaces:
                 "": true
               Queue Size: 100
@@ -962,25 +970,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 83.88629913330078
+      Distance: 44.14972686767578
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 4.791684150695801
-        Y: 1.8381190299987793
+        X: -10.655345916748047
+        Y: 2.228780746459961
         Z: 4.258443004800938e-5
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5847967863082886
+      Pitch: 0.8247969150543213
       Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 0.6169153451919556
+      Yaw: 2.3601021766662598
     Saved: ~
 Window Geometry:
   Displays:

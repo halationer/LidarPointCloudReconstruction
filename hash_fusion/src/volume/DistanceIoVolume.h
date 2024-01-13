@@ -147,10 +147,11 @@ public:
 
 private:
   pcl::DistanceIoVoxel& CreateAndGetVoxel(const HashPos& oPos);
-  std::array<HashPos, 8> GetCornerPoses(const HashPos& oPos, size_t iLevel);
+  std::array<HashPos, 8> GetCornerPoses(const HashPos& oPos, size_t iLevel) const;
   float InterpolateCorners(const HashPos& oPos, const Eigen::Vector3f& vPoint, size_t iLevel);
   float GetSdf(const pcl::DistanceIoVoxel& oVoxel) const;
   void VolumeDataMoveNext(size_t capacity = 1e6) {m_vVolumeData.emplace_back(); m_vVolumeData.back().reserve(capacity);}
+  const pcl::DistanceIoVoxel& GetVoxelData(const pcl::VoxelIndex& oIndex) const {return m_vVolumeData[oIndex.arr_index][oIndex.cloud_index];}
   pcl::DistanceIoVoxel& GetVoxelData(const pcl::VoxelIndex& oIndex) {return m_vVolumeData[oIndex.arr_index][oIndex.cloud_index];}
 
 private:
