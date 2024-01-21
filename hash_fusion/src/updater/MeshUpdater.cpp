@@ -81,7 +81,7 @@ void ObjectManager::CreateObjectSequence(const Eigen::Vector3f& vCenter, const f
     // make object
     tools::Object oObject;
     oObject.GetPosition() = vCenter;
-    oObject.GetVelocity() = Eigen::Vector3f::UnitY();
+    oObject.GetVelocity() = Eigen::Vector3f::UnitZ();
     oObject.inited = true;
     oObject.radius = fRadius;
     oObject.framestamp = iFrameStamp;
@@ -613,6 +613,102 @@ void MeshUpdater::UpdateVisibleVolume(
 }
 
 
+void MeshUpdater::UpdateVolume(
+    const pcl::PointXYZ& oViewPoint,
+    const int iSectorNum,
+    DistanceIoVolume* const pDistanceIoVolume, 
+    std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
+    size_t iLevel) 
+{
+    
+	std::vector<Tools::TaskPtr> tasks;
+    std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> vNewCorners;
+    
+    // y - height limit
+    Eigen::Vector3f vLimitZ = Eigen::Vector3f(
+        std::numeric_limits<float>().infinity(),
+        std::numeric_limits<float>().infinity(),
+        oViewPoint.z + 2.0f);
+
+    // first level
+    if(vCorners.size() == 0) {
+        for(int i = 0; i < iSectorNum; ++i) {
+            tools::BoundingBox oBoundingBox = m_oSdfMaker.GetBoundingBox(i);
+            vCorners.emplace_back(new pcl::PointCloud<pcl::DistanceIoVoxel>(std::move( 
+                pDistanceIoVolume->CreateAndGetCornersAABB(oBoundingBox.GetMinBound(), oBoundingBox.GetMaxBound().cwiseMin(vLimitZ), iLevel))));
+            auto pCorners = vCorners.back();
+            tasks.emplace_back(m_oThreadPool.AddTask([&,i,pCorners](){
+                m_oSdfMaker.QuerySdf(oViewPoint, *pCorners, i);
+                pDistanceIoVolume->Update(*pCorners);
+            }));
+        }
+    }
+    // other level
+    else {
+        std::mutex mCornerCombine;
+        // assert vCorners.size() == oSectorMesh.size()
+        for(int i = 0; i < vCorners.size(); ++i) {
+            auto sub_corners = pDistanceIoVolume->CreateAndGetSubdivideCorners(*vCorners[i], iLevel);
+            vNewCorners.emplace_back(new pcl::PointCloud<pcl::DistanceIoVoxel>(*vCorners[i]));
+            auto pNewCorner = vNewCorners.back();
+            for(auto sub_corner : sub_corners) {
+                tasks.emplace_back(m_oThreadPool.AddTask([&,i,sub_corner,pNewCorner](){
+                    m_oSdfMaker.QuerySdf(oViewPoint, *sub_corner, i);
+                    pDistanceIoVolume->Update(*sub_corner);
+                    std::unique_lock<std::mutex> lock(mCornerCombine);
+                    *pNewCorner += *sub_corner;
+                }));
+            }
+        }
+    }
+
+    // wait tasks finish
+    for(auto& task : tasks) task->Join();
+
+    // recursive
+    if(vNewCorners.size()) vCorners.assign(vNewCorners.begin(), vNewCorners.end());
+    if(iLevel > 0) UpdateVolume(oViewPoint, iSectorNum, pDistanceIoVolume, vCorners, iLevel-1);
+}
+
+void MeshUpdater::UpdateVisibleVolume(
+    const pcl::PointXYZ& oViewPoint,
+    const int iSectorNum,
+    const std::vector<pcl::PointCloud<pcl::PointXYZI>>& vSinglePoints,
+    DistanceIoVolume* const pDistanceIoVolume,
+    std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
+    size_t iLevel)
+{
+    const size_t step = 1 << iLevel;
+
+	std::vector<Tools::TaskPtr> tasks;
+
+    HashPos oPos;
+    for(int i = 0; i < iSectorNum; ++i) {
+
+        auto&& vSectorPoints = vSinglePoints[i];
+
+        // 1. 提取mesh中的点云, 对于每个点，找到对应level的体素
+        HashPosSet vVoxelPoses;
+        for(auto&& oPoint : vSectorPoints) {
+            if(oPoint.intensity > pDistanceIoVolume->GetStaticExpandDistance()) continue;
+            pDistanceIoVolume->PointBelongVoxelPos(oPoint, oPos);
+            AlignToStepFloor(oPos, step);
+            vVoxelPoses.emplace(oPos);
+        }
+
+        // 2. 根据mesh更新所有对应体素的角点
+        auto pCornerPoints = pDistanceIoVolume->CreateAndGetCornersByPos(vVoxelPoses, iLevel);
+        vCorners.emplace_back(pCornerPoints);
+        tasks.emplace_back(m_oThreadPool.AddTask([&, i, pCornerPoints](){
+            m_oSdfMaker.QuerySdf(oViewPoint, *pCornerPoints, i);
+            pDistanceIoVolume->UpdateLimitDistance(*pCornerPoints, iLevel);
+        }));
+    }
+
+    // wait for task finish
+    for(auto& task : tasks) task->Join();
+}
+
 const static HashPos vNeighborDirs[] = {
     {1, 0, 0}, {0, 1, 0}, {0, 0, 1},
     {-1, 0, 0}, {0, -1, 0}, {0, 0, -1}, // 6-neighbor
@@ -624,24 +720,24 @@ const static HashPos vNeighborDirs[] = {
     {-1, -1, -1}, {1, -1, -1}, {-1, 1, -1}, {-1, -1, 1}, // 26-neighbor
 };
 
-void MeshUpdater::MakeDynamicObject(DistanceIoVolume* pDistanceIoVolume, const SectorMeshPtr& pSectorMesh) {
+void MeshUpdater::MakeDynamicObject(DistanceIoVolume* pDistanceIoVolume, std::vector<pcl::PointCloud<pcl::PointXYZI>>& vSinglePoints) {
 
     // Search For sdf of points and show if the point is judged to be dynamic
     pcl::PointCloud<pcl::PointXYZI> vSearchedPoints, vDynamicPoints;
     std::vector<float> vSearchedAssociation;
-    for(auto && pTriangle : *pSectorMesh) {
-        auto& vPoints = pTriangle->cloud;
-        for(auto& oPoint : vPoints) {
+    for(auto& vSectorPoints : vSinglePoints) {
+        for(auto& oPoint : vSectorPoints) {
             oPoint.intensity = pDistanceIoVolume->SearchSdf(oPoint.getVector3fMap());
-            vSearchedPoints.push_back(oPoint);
             float color_value = 0.4f;
-            if(oPoint.intensity > pDistanceIoVolume->GetStaticExpandDistance()) {
+            if(oPoint.intensity > pDistanceIoVolume->GetVoxelLength().x()) {
                 color_value = 1.0f;
                 vDynamicPoints.push_back(oPoint);
             }
+            vSearchedPoints.push_back(oPoint);
             vSearchedAssociation.push_back(color_value);
         }
     }
+
     m_oRpManager.PublishPointCloud(vSearchedPoints, vSearchedAssociation, "/searched_point_cloud");
 
     // voxelize
@@ -693,25 +789,25 @@ void MeshUpdater::MakeDynamicObject(DistanceIoVolume* pDistanceIoVolume, const S
     // cluster filter
     constexpr float density_min_threshold = 1.0f;
     constexpr float density_max_threshold = 128.0f;
-    std::cout << "filter begin" << std::endl;
+    // std::cout << "filter begin" << std::endl;
     if(!vBoundingBoxList.empty()) {
         for(int i = 0; i < vBoundingBoxList.size();) {
             auto&& oBox = vBoundingBoxList[i];
             Eigen::Vector3f vBoxSize = oBox.GetMaxBound() - oBox.GetMinBound();
             float density = oBox.point_count / vBoxSize.prod() * vBoxSize.minCoeff();
-            std::cout << oBox.point_count << " " << density << " " 
-                << (density >= density_min_threshold && density <= density_max_threshold) << std::endl;
+            // std::cout << oBox.point_count << " " << density << " " 
+            //     << (density >= density_min_threshold && density <= density_max_threshold) << std::endl;
             if(density < density_min_threshold || density > density_max_threshold) {
                 vBoundingBoxList.erase(vBoundingBoxList.begin()+i);
             }
             else ++i;
         }
     }
-    std::cout << "filter end" << std::endl;
+    // std::cout << "filter end" << std::endl;
     m_oRpManager.PublishBoundingBoxList(vBoundingBoxList, "/dynamic_clusters", 0);
 
-    m_oObjectManager.ReceiveClustersAndUpdate(vBoundingBoxList, m_fFrameCounter);
-    m_oRpManager.PublishObjectList(m_oObjectManager.GetActivedObjects(m_fFrameCounter), "/dynamic_objects", 0);
+    m_oObjectManager.ReceiveClustersAndUpdate(vBoundingBoxList, m_iFrameCounter);
+    m_oRpManager.PublishObjectList(m_oObjectManager.GetActivedObjects(m_iFrameCounter), "/dynamic_objects", 0);
 }
 
 
@@ -730,7 +826,111 @@ void MeshUpdater::MeshFusion(
         return;
     }
 
-    ++m_fFrameCounter;
+    ++m_iFrameCounter;
+
+    std::unordered_map<HashPos, pcl::PointXYZI, HashFunc> vHashCorner;
+    SectorMeshPtr pSectorMesh(new SectorMesh);
+
+    // mesh init scene
+    pcl::PointXYZ oViewPoint;
+    std::vector<pcl::PointCloud<pcl::PointXYZI>> vSinglePoints;
+    for(int i = 0; i < vSingleMeshList.size(); ++i) {
+
+        pcl::PolygonMesh& oMesh = vSingleMeshList[i];
+        pcl::PointCloud<pcl::PointXYZI> vSectorPoints;
+        pcl::MsgFieldMap field_map;
+        pcl::createMapping<pcl::PointXYZ>(oMesh.cloud.fields, field_map);
+        pcl::fromPCLPointCloud2(oMesh.cloud, vSectorPoints, field_map);
+        m_oSdfMaker.NewScene(vSectorPoints, oMesh.polygons, i);
+        vSinglePoints.push_back(vSectorPoints);
+        
+        if(vSectorPoints.size()) {
+            oViewPoint.getVector3fMap() = vSectorPoints.back().getVector3fMap();
+            vSinglePoints.back().erase(vSinglePoints.back().end()-1);
+        }
+    }
+    m_oFuseTimer.DebugTime("make_scene");
+
+    // voxelize and cluster, out put the dynamic objects
+    MakeDynamicObject(pDistanceIoVolume, vSinglePoints);
+    m_oFuseTimer.DebugTime("dynamic_extract");
+
+    // update local volume
+    std::unique_ptr<DistanceIoVolume> pLocalVolume(new DistanceIoVolume);
+    std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> corners;
+    pcl::PointXYZ oLength;
+    oLength.getVector3fMap() = oVolume.GetVoxelLength();
+    pLocalVolume->SetResolution(oLength);
+    UpdateVolume(oViewPoint, vSingleMeshList.size(), pLocalVolume.get(), corners, m_iOctreeLevel);
+    UpdateVisibleVolume(oViewPoint, vSingleMeshList.size(), vSinglePoints, pLocalVolume.get(), corners);
+    m_oFuseTimer.DebugTime("single_io");
+
+    // sector 分布
+    // 2 | 1
+    // 3 | 0
+    // show local voxel results
+    pcl::PointCloud<pcl::DistanceIoVoxel> vAllCorners;
+    std::vector<float> associate, associate2;
+    for(int i = 0; i < corners.size(); ++i) {
+        for(auto& point : *corners[i]) {
+            if(point.io == 0.0) continue;
+            HashPos oPos;
+            pLocalVolume->PointBelongVoxelPos(point, oPos);
+            const pcl::DistanceIoVoxel* pVoxel = pLocalVolume->GetVoxel(oPos);
+            if(pVoxel == nullptr) continue;
+            vAllCorners.push_back(*pVoxel);
+            associate.push_back(std::min(pVoxel->distance * 0.5f + 0.4f, 1.0f));
+        }
+    }
+    ROS_INFO_PURPLE("corner size: %d, volume point: %d,%d", vAllCorners.size(), 
+        pLocalVolume->m_vVolumeData.size(), pLocalVolume->m_vVolumeData.back().size());
+    m_oRpManager.PublishPointCloud(vAllCorners, associate, "/corner_is_free_debug");
+    
+    // local to global
+    pDistanceIoVolume->Fuse(*pLocalVolume);
+    m_oFuseTimer.DebugTime("voxelize");
+
+    // show global voxel result
+    vAllCorners.clear();
+    associate.clear();
+    for(auto&& vVoxelList : pDistanceIoVolume->m_vVolumeData) {
+        for(auto&& oVoxel : vVoxelList) {
+            // if(oVoxel.io == 0.0) continue;
+            if(oVoxel.distance > 1.5f) continue;
+            vAllCorners.push_back(oVoxel);
+            associate.push_back(std::min(oVoxel.distance + 0.4f, 1.0f));
+            associate2.push_back(oVoxel.io > 0.5f ? 0.8f : -1.0f);
+        }
+    }
+    ROS_INFO_PURPLE("global size: %d, volume point: %d,%d", vAllCorners.size(), 
+        pDistanceIoVolume->m_vVolumeData.size(), pDistanceIoVolume->m_vVolumeData.back().size());
+    m_oRpManager.PublishPointCloud(vAllCorners, associate, "/global_distance_volume");
+    m_oRpManager.PublishPointCloud(vAllCorners, associate2, "/global_io_volume");
+
+    m_oFuseTimer.CoutCurrentLine();
+}
+
+#define HISTORY_VERSION_MESHUPDATER
+#ifndef HISTORY_VERSION_MESHUPDATER
+
+//////////////////////////////////////////////////////////
+// 思路：八叉树更新方法+hash更新，并且对于动态物体有基础的判断和提取能力
+void MeshUpdater::MeshFusionV5(
+    const pcl::PointNormal& oLidarPos,
+    std::vector<pcl::PolygonMesh>& vSingleMeshList,
+    std::vector<std::vector<float>>& vMeshConfidence,
+    VolumeBase& oVolume,
+    bool bKeepVoxel)
+{
+    m_oFuseTimer.NewLine();
+
+    DistanceIoVolume* pDistanceIoVolume = dynamic_cast<DistanceIoVolume*>(&oVolume);
+    if(pDistanceIoVolume == nullptr) {
+        ROS_ERROR("[updater/MeshUpdater] The volume type is not DistanceIoVolume!");
+        return;
+    }
+
+    ++m_iFrameCounter;
 
     std::unordered_map<HashPos, pcl::PointXYZI, HashFunc> vHashCorner;
     SectorMeshPtr pSectorMesh(new SectorMesh);
@@ -807,9 +1007,8 @@ void MeshUpdater::MeshFusion(
     m_oFuseTimer.CoutCurrentLine();
 }
 
-#define HISTORY_VERSION_MESHUPDATER
-#ifndef HISTORY_VERSION_MESHUPDATER
-
+/////////////////////////////////////////////////////////////////////
+// 思路：简单的八叉树更新方法，是V5的前身
 void MeshUpdater::MeshFusionV4(
     const pcl::PointNormal& oLidarPos,
     std::vector<pcl::PolygonMesh>& vSingleMeshList,

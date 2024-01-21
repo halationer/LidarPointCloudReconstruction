@@ -12,6 +12,7 @@ Panels:
         - /FramesFusion1/SdfLayers1/GridMap1
         - /FramesFusion1/Dynamics1
         - /FramesFusion1/Dynamics1/DynaObject1
+        - /Debug1
         - /Debug1/point_searched1
       Splitter Ratio: 0.5083333253860474
     Tree Height: 848
@@ -252,17 +253,17 @@ Visualization Manager:
           Marker Topic: /frame_meshs
           Name: GHPRMesh
           Namespaces:
-            {}
+            "": true
           Queue Size: 100
           Value: true
         - Class: rviz/Marker
-          Enabled: true
+          Enabled: false
           Marker Topic: /frame_mesh_algo_view
           Name: AlgoMesh
           Namespaces:
             {}
           Queue Size: 100
-          Value: true
+          Value: false
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -291,7 +292,7 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: true
           Value: false
-      Enabled: false
+      Enabled: true
       Name: SingleFrame
     - Class: rviz/Group
       Displays:
@@ -970,25 +971,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 44.14972686767578
+      Distance: 88.74192810058594
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -10.655345916748047
-        Y: 2.228780746459961
-        Z: 4.258443004800938e-5
+        X: -2.620669364929199
+        Y: 1.8157992362976074
+        Z: 5.1822189561789855e-5
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.8247969150543213
+      Pitch: 0.6597980260848999
       Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 2.3601021766662598
+      Yaw: 0.14510342478752136
     Saved: ~
 Window Geometry:
   Displays:

@@ -20,6 +20,7 @@
 #include "tools/DebugManager.h"
 #include "tools/ThreadPool.h"
 #include "tools/Object.h"
+#include "tools/SdfMaker.h"
 
 namespace Updater{
 
@@ -148,9 +149,11 @@ private:
     RosPublishManager& m_oRpManager;
     SectorMeshFrames m_vFrameMeshes;
     std::vector<pcl::PointCloud<pcl::PointXYZI>> m_vDebugOutClouds;
+    SdfMaker m_oSdfMaker;
 
     ObjectManager m_oObjectManager;
-    int m_fFrameCounter = 0;
+    int m_iFrameCounter = 0;
+    int m_iOctreeLevel = 0;
 
 public:
     static constexpr int m_iMaxFrameWindow = 5;
@@ -169,6 +172,7 @@ public:
     static MeshUpdater& GetInstance() {
         return instance;
     }
+    void SetOctreeLevel(int level) { m_iOctreeLevel = level; }
     // ~MeshUpdater(){ SaveDebugOutClouds(); }
 
 private:
@@ -184,9 +188,23 @@ private:
         std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
         size_t iLevel = 0);
 
+    void UpdateVolume(
+        const pcl::PointXYZ& oViewPoint,
+        const int iSectorNum,
+        DistanceIoVolume* const pDistanceIoVolume, 
+        std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
+        size_t iLevel);
+    void UpdateVisibleVolume(
+        const pcl::PointXYZ& oViewPoint,
+        const int iSectorNum,
+        const std::vector<pcl::PointCloud<pcl::PointXYZI>>& vSinglePoints,
+        DistanceIoVolume* const pDistanceIoVolume,
+        std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
+        size_t iLevel = 0);
+
     void MakeDynamicObject(
         DistanceIoVolume* pDistanceIoVolume, 
-        const SectorMeshPtr& pSectorMesh);
+        std::vector<pcl::PointCloud<pcl::PointXYZI>>& vSinglePoints);
 
 public:
     // use ghpr-space to get in-or-out info
@@ -212,6 +230,13 @@ public:
     void MeshFusionV4(
         const pcl::PointNormal& oLidarPos, 
         std::vector<pcl::PolygonMesh>& vSingleMeshList,
+        VolumeBase& oVolume,
+        bool bKeepVoxel);
+
+    void MeshFusionV5(
+        const pcl::PointNormal& oLidarPos, 
+        std::vector<pcl::PolygonMesh>& vSingleMeshList,
+        std::vector<std::vector<float>>& vMeshConfidence,
         VolumeBase& oVolume,
         bool bKeepVoxel);
 

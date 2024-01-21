@@ -8,18 +8,6 @@
 #include <fstream>
 #include <iostream>
 
-class DebugManager {
-
-public:
-
-    
-
-private:
-    
-    std::unordered_map<std::string, ros::Publisher> m_vPublisherList;
-
-};
-
 // 计时类，用于统计算法运行时间
 class TimeDebugger {
 

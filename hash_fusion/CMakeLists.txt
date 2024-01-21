@@ -26,6 +26,10 @@ find_package(catkin REQUIRED COMPONENTS
              grid_map_ros
 )
 
+# embree find
+SET(embree_DIR "/home/yudong/embree-4.0.0.x86_64.linux/lib/cmake/embree-4.0.0/")
+FIND_PACKAGE(embree 4 REQUIRED)
+
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES record_odomlaser
@@ -51,4 +55,4 @@ add_executable(hash_fusion ${DIR_SRCS})
 
 target_include_directories(hash_fusion PUBLIC src)
 
-target_link_libraries(hash_fusion ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+target_link_libraries(hash_fusion ${catkin_LIBRARIES} ${PCL_LIBRARIES} embree)

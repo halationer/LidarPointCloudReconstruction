@@ -139,7 +139,7 @@ public:
   pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr CreateAndGetCornersByPos(const HashPosSet& vVoxelPoses, size_t iLevel);
   std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> CreateAndGetSubdivideCorners(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel);
   void Fuse(DistanceIoVolume& oLocal);
-  void Update(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners);
+  void Update(pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners);
   void UpdateLimitDistance(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel);
   float SearchSdf(const Eigen::Vector3f& vPoint);
   const pcl::DistanceIoVoxel* GetVoxel(const HashPos& oPos);

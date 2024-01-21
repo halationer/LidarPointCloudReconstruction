@@ -399,6 +399,11 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	// m_pSdf = new SignedDistance(m_iKeepTime, m_iConvDim, m_iConvAddPointNumRef, m_fConvFusionDistanceRef1);
 	// m_pVolume->m_iMaxRecentKeep = max(500u, (uint32_t)m_iKeepTime);
 
+	// octree params
+	int octree_level;
+	nodeHandle.param("octree_level", octree_level, 0);
+	m_oMeshUpdater.SetOctreeLevel(octree_level);
+
 	return true;
 
 }
