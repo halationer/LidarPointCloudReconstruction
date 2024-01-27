@@ -220,7 +220,12 @@ void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vS
 					oViewGroundP.x = m_oViewPoint.x;
 					oViewGroundP.y = m_oViewPoint.y;
 					oViewGroundP.z = m_oViewPoint.z - m_fViewElevation;
-					pSectorCloud->points.push_back(oViewGroundP);
+					pSectorCloud->push_back(oViewGroundP);
+					
+					oViewGroundP.x = m_oViewPoint.x;
+					oViewGroundP.y = m_oViewPoint.y;
+					oViewGroundP.z = m_oViewPoint.z + m_fViewElevation;
+					pSectorCloud->push_back(oViewGroundP);
 				}
 
 				//******Mesh building******
@@ -354,13 +359,14 @@ void ExplicitRec::FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vS
 
 
 	//output 1ms
-	for (int i = 0; i != vPointSecIdxs.size(); ++i)
-		for (int j = 0; j != vCombinedNormalList[i].size(); ++j)
-			vScenePNormal.points.push_back(vCombinedNormalList[i].points[j]);
+	for (int i = 0; i < vCombinedNormalList.size(); ++i)
+		vScenePNormal += vCombinedNormalList[i];
 }
 
-void ExplicitRec::OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud, const int line_min, const int line_max) {
+void ExplicitRec::OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud, pcl::PointCloud<pcl::PointNormal> & vScenePNormal, const int line_min, const int line_max) {
 
+	vScenePNormal.clear();
+	
 	//******Sector division******
 	//point index for each sector
 	std::vector<std::vector<int>> vPointSecIdxs;
@@ -392,7 +398,8 @@ void ExplicitRec::OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> &
 	std::vector<std::function<void(void)>> thread_func(vPointSecIdxs.size());
 	const bool bMultiThread = m_bMultiThread;
 
-	for(int i = 0; i != vPointSecIdxs.size(); ++i) {
+	for(int i = 0; i < vPointSecIdxs.size(); ++i) {
+		
 		thread_func[i] = [&, i, bMultiThread]() { 
 			//If the points in a sector is sufficient to calculate
 			if (vPointSecIdxs[i].size() > m_iSectorMinPNum){
@@ -413,7 +420,12 @@ void ExplicitRec::OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> &
 					oViewGroundP.x = m_oViewPoint.x;
 					oViewGroundP.y = m_oViewPoint.y;
 					oViewGroundP.z = m_oViewPoint.z - m_fViewElevation;
-					pSectorCloud->points.push_back(oViewGroundP);
+					pSectorCloud->push_back(oViewGroundP);
+
+					oViewGroundP.x = m_oViewPoint.x;
+					oViewGroundP.y = m_oViewPoint.y;
+					oViewGroundP.z = m_oViewPoint.z + m_fViewElevation;
+					pSectorCloud->push_back(oViewGroundP);
 				}
 
 				//******Mesh building******
@@ -456,6 +468,8 @@ void ExplicitRec::OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> &
 				//Remove pseudo triangles according to scanning rules of LiDAR
 				RemovePseudoFaces(*pCenterPoints, vOneFaces, oMatNormal, vTrueFaceStatus, vFaceWeight);
 
+				oMeshOper.LocalFaceNormalAndDistanceConfidence(*pSectorCloud, vOneFaces, oMatNormal, m_oViewPoint, vTrueFaceStatus, vCombinedNormalList[i]);
+				
 				//collect the vertices and faces in each sector
 				pSectorCloud->push_back(m_oViewPoint);
 
@@ -517,6 +531,10 @@ void ExplicitRec::OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> &
 		for(int i = 0; i != vPointSecIdxs.size(); ++i)
 			thread_func[i]();
 	}
+
+	//output 1ms
+	for (int i = 0; i < vCombinedNormalList.size(); ++i)
+		vScenePNormal += vCombinedNormalList[i];
 }
 
 /*=======================================

@@ -25,8 +25,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <!-- output evaluation files (point cloud and mesh )-->
     <arg name="sf_output_path" default=""/>
     <param name="sf_output_path" type="string" value="$(arg sf_output_path)" />
-    <arg name="mf_output_path" default=""/>
     <arg name="dy_output_path" default=""/>
+    <arg name="mf_output_path" default=""/>
 
     <!--Use simulated time to prevent the public time of the TF structure from being unable to match with other messages-->
     <param name="use_sim_time" value="true"/>
@@ -58,7 +58,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     </include>
 
     <!-- rosbag related: replay with rate = 1 speed up-->    
-    <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 $(arg rosbag) --topics /velodyne_points -s $(arg jump)"/>
+    <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 $(arg rosbag) --topics /husky_lio_sam/secial_output/SingleFramePoints -s $(arg jump)">
+        <remap from="/husky_lio_sam/secial_output/SingleFramePoints" to="/velodyne_points"/>
+    </node>
 
     <!--
     <node pkg="rosbag" type="play" name="rosbag" args="-'-clock -r 1 $(arg rosbag) -s $(arg jump)">

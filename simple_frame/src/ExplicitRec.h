@@ -65,7 +65,7 @@ public:
 
 	//reconstruction of one frame scanning point cloud and ouput mesh normal
 	void FrameReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud, pcl::PointCloud<pcl::PointNormal> & vScenePNormal, const int line_min = 0, const int line_max = 15);
-	void OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud, const int line_min, const int line_max);
+	void OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> & vSceneCloud, pcl::PointCloud<pcl::PointNormal> & vScenePNormal, const int line_min, const int line_max);
 
 	//combine and output all vertices
 	void OutputAllMeshes(pcl::PolygonMesh & MeshModel);

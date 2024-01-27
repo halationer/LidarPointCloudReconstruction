@@ -153,12 +153,12 @@ bool FrameRecon::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 	//number of sectors
 	nodeHandle.param("sector_num", m_iSectorNum, 1);
 	m_oExplicitBuilder.HorizontalSectorSize(m_iSectorNum);
-	m_oMeshAlgoBuilder.HorizontalSectorSize(4);
+	m_oMeshAlgoBuilder.HorizontalSectorSize(m_iSectorNum);
 
 	bool bMultiThread;
 	nodeHandle.param("multi_thread", bMultiThread, true);
 	m_oExplicitBuilder.SetMultiThread(bMultiThread);
-	m_oMeshAlgoBuilder.SetMultiThread(true);
+	m_oMeshAlgoBuilder.SetMultiThread(bMultiThread);
 
 	//count processed point cloud frame
 	m_iPCFrameCount = 0;
@@ -528,19 +528,17 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		// gettimeofday(&reconstruct_start, NULL);
 
 		pcl::PointCloud<pcl::PointNormal>::Ptr pFramePNormal(new pcl::PointCloud<pcl::PointNormal>);
-		m_oExplicitBuilder.setWorkingFrameCount(m_iPCFrameCount);
-		m_oExplicitBuilder.SetViewPoint(oCurrentViewP, m_fViewZOffset);
-		m_oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal, m_iLidarLineMin, m_iLidarLineMax);	//得到带法向的点云
-
 		m_oMeshAlgoBuilder.setWorkingFrameCount(m_iPCFrameCount);
 		m_oMeshAlgoBuilder.SetViewPoint(oCurrentViewP, m_fViewZOffset);
-		m_oMeshAlgoBuilder.OriginalReconstruction(*pSceneCloud, m_iLidarLineMin, m_iLidarLineMax); // 得到带权重的mesh
+		m_oMeshAlgoBuilder.OriginalReconstruction(*pSceneCloud, *pFramePNormal, m_iLidarLineMin, m_iLidarLineMax); // 得到带权重的mesh
+
+		// m_oExplicitBuilder.setWorkingFrameCount(m_iPCFrameCount);
+		// m_oExplicitBuilder.SetViewPoint(oCurrentViewP, m_fViewZOffset);
+		// m_oExplicitBuilder.FrameReconstruction(*pSceneCloud, *pFramePNormal, m_iLidarLineMin, m_iLidarLineMax);	//得到带法向的点云
 
 		// 添加中心视点，方便多帧进程识别
 		pcl::PointNormal oViewPoint;
-		oViewPoint.x = oCurrentViewP.x;
-		oViewPoint.y = oCurrentViewP.y;
-		oViewPoint.z = oCurrentViewP.z;
+		oViewPoint.getVector3fMap() = oCurrentViewP.getVector3fMap();
 		oViewPoint.curvature = -1;      //识别码
 		pFramePNormal->push_back(oViewPoint);
 
@@ -553,7 +551,7 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		
 
 		// publish
-		PublishMeshs();	//发布 m_oExplicitBuilder 中建立的 mesh
+		// PublishMeshs();	//发布 m_oExplicitBuilder 中建立的 mesh
 		PublishMeshForAlgorithm();
 		PublishViewMeshForAlgorithm();
 		PublishPointCloud(*pFramePNormal);
@@ -587,7 +585,7 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 			// output mesh
 			pcl::PolygonMesh oFullMesh;
 			pcl::PointCloud<pcl::PointXYZI> vFullCloud;
-			for(int sector_index = 0; sector_index < m_oExplicitBuilder.m_vAllSectorClouds.size(); ++sector_index) {
+			for(int sector_index = 0; sector_index < m_oMeshAlgoBuilder.m_vAllSectorClouds.size(); ++sector_index) {
 
 				// pcl::PolygonMesh oCurrentMesh;
 				// pcl::toPCLPointCloud2(*m_oExplicitBuilder.m_vAllSectorClouds[sector_index], oCurrentMesh.cloud);
@@ -596,15 +594,15 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 				// sOutputPath << m_sFileHead << m_iReconstructFrameNum << "_" << sector_index << ".ply";
 				// pcl::io::savePLYFileBinary(sOutputPath.str(), oCurrentMesh); 
 
-				for(int face_index = 0; face_index < m_oExplicitBuilder.m_vAllSectorFaces[sector_index].size(); ++face_index) {
+				for(int face_index = 0; face_index < m_oMeshAlgoBuilder.m_vAllSectorFaces[sector_index].size(); ++face_index) {
 
 					pcl::Vertices oCurrentFace;
-					oCurrentFace.vertices.push_back(m_oExplicitBuilder.m_vAllSectorFaces[sector_index][face_index].vertices[0] + vFullCloud.size());
-					oCurrentFace.vertices.push_back(m_oExplicitBuilder.m_vAllSectorFaces[sector_index][face_index].vertices[1] + vFullCloud.size());
-					oCurrentFace.vertices.push_back(m_oExplicitBuilder.m_vAllSectorFaces[sector_index][face_index].vertices[2] + vFullCloud.size());
+					oCurrentFace.vertices.push_back(m_oMeshAlgoBuilder.m_vAllSectorFaces[sector_index][face_index].vertices[0] + vFullCloud.size());
+					oCurrentFace.vertices.push_back(m_oMeshAlgoBuilder.m_vAllSectorFaces[sector_index][face_index].vertices[1] + vFullCloud.size());
+					oCurrentFace.vertices.push_back(m_oMeshAlgoBuilder.m_vAllSectorFaces[sector_index][face_index].vertices[2] + vFullCloud.size());
 					oFullMesh.polygons.push_back(oCurrentFace);
 				} 
-				vFullCloud += *m_oExplicitBuilder.m_vAllSectorClouds[sector_index];
+				vFullCloud += *m_oMeshAlgoBuilder.m_vAllSectorClouds[sector_index];
 			}
 			pcl::toPCLPointCloud2(vFullCloud, oFullMesh.cloud);
 			
@@ -623,7 +621,7 @@ void FrameRecon::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData)
 		//*/
 
 		//clear this frame result
-		m_oExplicitBuilder.ClearData();
+		// m_oExplicitBuilder.ClearData();
 
 
 		//结束算法计时并记录执行时间

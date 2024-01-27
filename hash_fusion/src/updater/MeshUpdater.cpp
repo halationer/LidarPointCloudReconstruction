@@ -133,7 +133,7 @@ pcl::PointCloud<pcl::PointXYZI> SectorMeshFrames::GetSectorMeshCloud(SectorMeshP
         for(auto mesh : *pMesh) {
             vCloud += mesh->cloud;
         }
-        ROS_INFO_PURPLE("get cloud: sectors count %d, point %d, mesh %d", pMesh->size(), vCloud.size(), iMeshSize);
+        ROS_INFO_CYAN("get cloud: sectors count %d, point %d, mesh %d", pMesh->size(), vCloud.size(), iMeshSize);
     }
     return vCloud;
 }
@@ -180,8 +180,8 @@ void TriangleMesh::GetAABB() {
     float min_z = vSingleCloud.row(2).minCoeff();
     this->min = pcl::PointXYZ(min_x, min_y, min_z);
     this->max = pcl::PointXYZ(max_x, max_y, max_z);
-    // ROS_INFO_PURPLE("cloud matrix col-row: %d, %d", vSingleCloud.cols(), vSingleCloud.rows());
-    // ROS_INFO_PURPLE("AABB: (%f, %f, %f) - (%f, %f, %f)", min_x, min_y, min_z, max_x, max_y, max_z);
+    // ROS_INFO_CYAN("cloud matrix col-row: %d, %d", vSingleCloud.cols(), vSingleCloud.rows());
+    // ROS_INFO_CYAN("AABB: (%f, %f, %f) - (%f, %f, %f)", min_x, min_y, min_z, max_x, max_y, max_z);
 }
 
 void TriangleMesh::GetYawSortedIndex() {
@@ -613,6 +613,7 @@ void MeshUpdater::UpdateVisibleVolume(
 }
 
 
+// embree update function
 void MeshUpdater::UpdateVolume(
     const pcl::PointXYZ& oViewPoint,
     const int iSectorNum,
@@ -620,7 +621,6 @@ void MeshUpdater::UpdateVolume(
     std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
     size_t iLevel) 
 {
-    
 	std::vector<Tools::TaskPtr> tasks;
     std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> vNewCorners;
     
@@ -634,6 +634,12 @@ void MeshUpdater::UpdateVolume(
     if(vCorners.size() == 0) {
         for(int i = 0; i < iSectorNum; ++i) {
             tools::BoundingBox oBoundingBox = m_oSdfMaker.GetBoundingBox(i);
+            if(m_fRangeRadius > 0) {
+                oBoundingBox.GetMinBound() = oBoundingBox.GetMinBound().cwiseMax(
+                    oViewPoint.getVector3fMap() - Eigen::Vector3f::Ones() * m_fRangeRadius);
+                oBoundingBox.GetMaxBound() = oBoundingBox.GetMaxBound().cwiseMin(
+                    oViewPoint.getVector3fMap() + Eigen::Vector3f::Ones() * m_fRangeRadius);
+            }
             vCorners.emplace_back(new pcl::PointCloud<pcl::DistanceIoVoxel>(std::move( 
                 pDistanceIoVolume->CreateAndGetCornersAABB(oBoundingBox.GetMinBound(), oBoundingBox.GetMaxBound().cwiseMin(vLimitZ), iLevel))));
             auto pCorners = vCorners.back();
@@ -670,6 +676,7 @@ void MeshUpdater::UpdateVolume(
     if(iLevel > 0) UpdateVolume(oViewPoint, iSectorNum, pDistanceIoVolume, vCorners, iLevel-1);
 }
 
+// embree update function
 void MeshUpdater::UpdateVisibleVolume(
     const pcl::PointXYZ& oViewPoint,
     const int iSectorNum,
@@ -849,11 +856,11 @@ void MeshUpdater::MeshFusion(
             vSinglePoints.back().erase(vSinglePoints.back().end()-1);
         }
     }
-    m_oFuseTimer.DebugTime("make_scene");
+    m_oFuseTimer.DebugTime("1_make_scene");
 
     // voxelize and cluster, out put the dynamic objects
     MakeDynamicObject(pDistanceIoVolume, vSinglePoints);
-    m_oFuseTimer.DebugTime("dynamic_extract");
+    m_oFuseTimer.DebugTime("2_dynamic_extract");
 
     // update local volume
     std::unique_ptr<DistanceIoVolume> pLocalVolume(new DistanceIoVolume);
@@ -862,8 +869,9 @@ void MeshUpdater::MeshFusion(
     oLength.getVector3fMap() = oVolume.GetVoxelLength();
     pLocalVolume->SetResolution(oLength);
     UpdateVolume(oViewPoint, vSingleMeshList.size(), pLocalVolume.get(), corners, m_iOctreeLevel);
+    m_oFuseTimer.DebugTime("3_freespace");
     UpdateVisibleVolume(oViewPoint, vSingleMeshList.size(), vSinglePoints, pLocalVolume.get(), corners);
-    m_oFuseTimer.DebugTime("single_io");
+    m_oFuseTimer.DebugTime("3_freespace_nearpoint");
 
     // sector 分布
     // 2 | 1
@@ -882,13 +890,13 @@ void MeshUpdater::MeshFusion(
             associate.push_back(std::min(pVoxel->distance * 0.5f + 0.4f, 1.0f));
         }
     }
-    ROS_INFO_PURPLE("corner size: %d, volume point: %d,%d", vAllCorners.size(), 
+    ROS_INFO_CYAN("corner size: %d, volume point: %d,%d", vAllCorners.size(), 
         pLocalVolume->m_vVolumeData.size(), pLocalVolume->m_vVolumeData.back().size());
     m_oRpManager.PublishPointCloud(vAllCorners, associate, "/corner_is_free_debug");
     
     // local to global
     pDistanceIoVolume->Fuse(*pLocalVolume);
-    m_oFuseTimer.DebugTime("voxelize");
+    m_oFuseTimer.DebugTime("4_voxelize");
 
     // show global voxel result
     vAllCorners.clear();
@@ -902,11 +910,12 @@ void MeshUpdater::MeshFusion(
             associate2.push_back(oVoxel.io > 0.5f ? 0.8f : -1.0f);
         }
     }
-    ROS_INFO_PURPLE("global size: %d, volume point: %d,%d", vAllCorners.size(), 
+    ROS_INFO_CYAN("global size: %d, volume point: %d,%d", vAllCorners.size(), 
         pDistanceIoVolume->m_vVolumeData.size(), pDistanceIoVolume->m_vVolumeData.back().size());
     m_oRpManager.PublishPointCloud(vAllCorners, associate, "/global_distance_volume");
     m_oRpManager.PublishPointCloud(vAllCorners, associate2, "/global_io_volume");
 
+    m_oFuseTimer.GetCurrentLineTime();
     m_oFuseTimer.CoutCurrentLine();
 }
 
@@ -979,7 +988,7 @@ void MeshUpdater::MeshFusionV5(
             associate.push_back(std::min(pVoxel->distance * 0.5f + 0.4f, 1.0f));
         }
     }
-    ROS_INFO_PURPLE("corner size: %d, volume point: %d,%d", vAllCorners.size(), 
+    ROS_INFO_CYAN("corner size: %d, volume point: %d,%d", vAllCorners.size(), 
         pLocalVolume->m_vVolumeData.size(), pLocalVolume->m_vVolumeData.back().size());
     m_oRpManager.PublishPointCloud(vAllCorners, associate, "/corner_is_free_debug");
     
@@ -999,7 +1008,7 @@ void MeshUpdater::MeshFusionV5(
             associate2.push_back(oVoxel.io > 0.5f ? 0.8f : -1.0f);
         }
     }
-    ROS_INFO_PURPLE("global size: %d, volume point: %d,%d", vAllCorners.size(), 
+    ROS_INFO_CYAN("global size: %d, volume point: %d,%d", vAllCorners.size(), 
         pDistanceIoVolume->m_vVolumeData.size(), pDistanceIoVolume->m_vVolumeData.back().size());
     m_oRpManager.PublishPointCloud(vAllCorners, associate, "/global_distance_volume");
     m_oRpManager.PublishPointCloud(vAllCorners, associate2, "/global_io_volume");
@@ -1054,7 +1063,7 @@ void MeshUpdater::MeshFusionV4(
             pCorners->push_back(oPoint);
         }}}
         corners.push_back(pCorners);
-        // ROS_INFO_PURPLE("%d %d %d %d", lenx, leny, lenz, lenx*leny*lenz);
+        // ROS_INFO_CYAN("%d %d %d %d", lenx, leny, lenz, lenx*leny*lenz);
 
         // 由于计算下一层之前，必须先计算出上一层的内容，因此只能做到分层并行，这里暂时把并行去掉
         // tasks.emplace_back(m_oThreadPool.AddTask([&,pTriangles,pCorners](){
@@ -1101,7 +1110,7 @@ void MeshUpdater::MeshFusionV4(
                 }
             }
             pSubCorners->erase(pSubCorners->end()-delete_count, pSubCorners->end());
-            ROS_INFO_PURPLE("delete_count: %d/%d->%d", delete_count, pCorners->size(), pSubCorners->size());
+            ROS_INFO_CYAN("delete_count: %d/%d->%d", delete_count, pCorners->size(), pSubCorners->size());
 
             tasks.emplace_back(m_oThreadPool.AddTask([&,pTriangles,pSubCorners](){
 
@@ -1129,7 +1138,7 @@ void MeshUpdater::MeshFusionV4(
         // vAllCorners += *corners[i];
         // associate.insert(associate.end(), corners[i]->size(), (i % 8 ? 1 : 0) * 0.4);
     }
-    ROS_INFO_PURPLE("corner size: %d", vAllCorners.size());
+    ROS_INFO_CYAN("corner size: %d", vAllCorners.size());
     
     m_oFuseTimer.DebugTime("voxelize");
     m_oRpManager.PublishPointCloud(vAllCorners, associate, "/corner_is_free_debug");
@@ -1217,7 +1226,7 @@ void MeshUpdater::MeshFusionV3(
                 oMeshCenters.push_back(oPoint);
             }
         }
-        ROS_INFO_PURPLE("Full Mesh Size: %d", oMeshCenters.size());
+        ROS_INFO_CYAN("Full Mesh Size: %d", oMeshCenters.size());
     });
 
     pcl::PointCloud<pcl::PointXYZI> vAllCorners;
@@ -1270,7 +1279,7 @@ void MeshUpdater::MeshFusionV2(
         pcl::fromPCLPointCloud2(oSingleMesh.cloud, oSingleCloud_);
         pcl::copyPointCloud(oSingleCloud_, oSingleCloud);
         Eigen::MatrixXf vSingleCloud = oSingleCloud.getMatrixXfMap();
-        ROS_INFO_PURPLE("cloud matrix col-row: %d, %d", vSingleCloud.cols(), vSingleCloud.rows());
+        ROS_INFO_CYAN("cloud matrix col-row: %d, %d", vSingleCloud.cols(), vSingleCloud.rows());
 
         // pcl::toPCLPointCloud2(oSingleCloud, oSingleMesh.cloud);
         // pcl::io::savePLYFileBinary("/home/yudong/test.ply", oSingleMesh);
@@ -1284,7 +1293,7 @@ void MeshUpdater::MeshFusionV2(
         float min_z = vSingleCloud.row(2).minCoeff();
         pcl::PointXYZ vMin(min_x, min_y, min_z);
         pcl::PointXYZ vMax(max_x, max_y, max_z);
-        ROS_INFO_PURPLE("AABB: (%f, %f, %f) - (%f, %f, %f)", min_x, min_y, min_z, max_x, max_y, max_z);
+        ROS_INFO_CYAN("AABB: (%f, %f, %f) - (%f, %f, %f)", min_x, min_y, min_z, max_x, max_y, max_z);
 
         // Get Updated Blocks
         HashPos oMinPos, oMaxPos;
@@ -1407,7 +1416,7 @@ void MeshUpdater::MeshFusionV1(
     pcl::fromPCLPointCloud2(oSingleMesh.cloud, oSingleCloud_);
     Eigen::MatrixXf vSingleCloud = oSingleCloud_.getMatrixXfMap();
     GhprConvertCloud(oSingleCloud_.back(), oSingleCloud_, oSingleCloud);
-    ROS_INFO_PURPLE("cloud matrix col-row: %d, %d", vSingleCloud.cols(), vSingleCloud.rows());
+    ROS_INFO_CYAN("cloud matrix col-row: %d, %d", vSingleCloud.cols(), vSingleCloud.rows());
 
     // pcl::toPCLPointCloud2(oSingleCloud, oSingleMesh.cloud);
     // pcl::io::savePLYFileBinary("/home/yudong/test.ply", oSingleMesh);
@@ -1421,7 +1430,7 @@ void MeshUpdater::MeshFusionV1(
     float min_z = vSingleCloud.row(2).minCoeff();
     pcl::PointXYZ vMin(min_x, min_y, min_z);
     pcl::PointXYZ vMax(max_x, max_y, max_z);
-    ROS_INFO_PURPLE("AABB: (%f, %f, %f) - (%f, %f, %f)", min_x, min_y, min_z, max_x, max_y, max_z);
+    ROS_INFO_CYAN("AABB: (%f, %f, %f) - (%f, %f, %f)", min_x, min_y, min_z, max_x, max_y, max_z);
 
     // Get Updated Blocks
     HashPosSet vUpdatedPos;

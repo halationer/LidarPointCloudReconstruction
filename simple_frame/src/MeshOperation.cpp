@@ -301,40 +301,40 @@ void MeshOperation::LocalFaceNormalAndDistanceConfidence(
 	pcl::PointCloud<pcl::PointNormal> & vCombinedNormal) {
 	
 	//the vector indicating the normal of point is computed or not
-	std::vector<unsigned int> vNormalCount(vVertices.points.size());
+	std::vector<unsigned int> vNormalCount(vVertices.size());
 
 	//define output
 	vCombinedNormal.clear();
-	vCombinedNormal.reserve(vVertices.points.size());
+	vCombinedNormal.reserve(vVertices.size());
 	//initialization
-	for (int i = 0; i != vVertices.points.size(); ++i){
+	for (int i = 0; i < vVertices.size(); ++i){
 		//a point and its normal starting with (0,0,0)
 		pcl::PointNormal oPointN;
-		oPointN.x = vVertices.points[i].x;
-		oPointN.y = vVertices.points[i].y;
-		oPointN.z = vVertices.points[i].z;
+		oPointN.x = vVertices[i].x;
+		oPointN.y = vVertices[i].y;
+		oPointN.z = vVertices[i].z;
 		oPointN.normal_x = 0.0;
 		oPointN.normal_y = 0.0;
 		oPointN.normal_z = 0.0;
-		oPointN.curvature = vVertices.points[i].intensity;
-		vCombinedNormal.points.push_back(oPointN);
+		oPointN.curvature = vVertices[i].intensity;
+		vCombinedNormal.push_back(oPointN);
 	}
 
 	//for each face
-	for (int i = 0; i != vMeshVertexIdxs.size(); ++i){
+	for (int i = 0; i < vMeshVertexIdxs.size(); ++i){
 		
 		if(vFaceTrueStatus[i] == false) continue;
 
 		//for each vertice
-		for (int j = 0; j != vMeshVertexIdxs[i].vertices.size(); ++j){
-			
+		for (int j = 0; j < vMeshVertexIdxs[i].vertices.size(); ++j){
+
 			//get the vertice id
 			int iVertexId = vMeshVertexIdxs[i].vertices[j];
 			
+			if(iVertexId >= vCombinedNormal.size()) continue;
+
 			//get the face id for the iVertexId point
-			vCombinedNormal.points[iVertexId].normal_x += oMatNormal.row(i)(0);
-			vCombinedNormal.points[iVertexId].normal_y += oMatNormal.row(i)(1);
-			vCombinedNormal.points[iVertexId].normal_z += oMatNormal.row(i)(2);
+			vCombinedNormal[iVertexId].getNormalVector3fMap() += oMatNormal.row(i);
 
 			//count hit
 			vNormalCount[iVertexId] += 1;
@@ -348,28 +348,26 @@ void MeshOperation::LocalFaceNormalAndDistanceConfidence(
 	//Mode 1(*), compute ray from point to viewpoint as normals (note: consistently reversed)
 	//Mode 2, culling
 	unsigned int uFinalSize = vNormalCount.size();
-	for (int i = 0; i != uFinalSize; ++i){
+	for (int i = 0; i < uFinalSize; ++i){
 		
 		//if the normal of this query point is computed
 		if (vNormalCount[i]){
 			
-			vCombinedNormal.points[i].normal_x /= float(vNormalCount[i]);
-			vCombinedNormal.points[i].normal_y /= float(vNormalCount[i]);
-			vCombinedNormal.points[i].normal_z /= float(vNormalCount[i]);
+			vCombinedNormal[i].getNormalVector3fMap() /= float(vNormalCount[i]);
 			//get unit vector
-			VectorNormalization(vCombinedNormal.points[i].normal_x, vCombinedNormal.points[i].normal_y, vCombinedNormal.points[i].normal_z);
+			VectorNormalization(vCombinedNormal[i].normal_x, vCombinedNormal[i].normal_y, vCombinedNormal[i].normal_z);
 		
 		//instead by rays if normal vector loss
 		}else{
-			std::swap(vCombinedNormal.points[i], vCombinedNormal.points[--uFinalSize]);
+			std::swap(vCombinedNormal[i], vCombinedNormal[--uFinalSize]);
 			std::swap(vNormalCount[i], vNormalCount[uFinalSize]);
 			--i;
 			continue;
 		}
 
 		// XXX: Confidence compute
-		Eigen::Vector3f oToCenterVec(vCombinedNormal.points[i].x - oViewPoint.x, vCombinedNormal.points[i].y - oViewPoint.y, vCombinedNormal.points[i].z - oViewPoint.z);
-		vCombinedNormal.points[i].data_n[3] = Confidence::GetDepthConfidence_Inverse(oToCenterVec.norm());
+		Eigen::Vector3f oToCenterVec(vCombinedNormal[i].x - oViewPoint.x, vCombinedNormal[i].y - oViewPoint.y, vCombinedNormal[i].z - oViewPoint.z);
+		vCombinedNormal[i].data_n[3] = Confidence::GetDepthConfidence_Inverse(oToCenterVec.norm());
 
 	}//end for i
 	vCombinedNormal.erase(vCombinedNormal.begin()+uFinalSize, vCombinedNormal.end());

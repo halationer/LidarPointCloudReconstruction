@@ -10,10 +10,6 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 
-#include <grid_map_msgs/GridMap.h>
-#include <grid_map_core/grid_map_core.hpp>
-#include <grid_map_ros/GridMapRosConverter.hpp>
-
 #include "tools/ThreadPool.h"
 
 /*************************************************
@@ -40,7 +36,10 @@ FramesFusion::FramesFusion(ros::NodeHandle & node,
 	ReadLaunchParams(nodeHandle);
 
 	//***subscriber related*** 
-	//subscribe (hear) the point cloud topic 
+	//subscribe (hear) the point cloud topic
+	m_oCloudSuber = nodeHandle.subscribe(m_sInCloudTopic, 5, &FramesFusion::HandleCloud, this);
+
+	// subscribe mesh topic
 	m_oMeshSuber = nodeHandle.subscribe(m_sInMeshTopic, 5, &FramesFusion::HandleMesh, this);
 
 	//subscribe (hear) the odometry information (trajectory)
@@ -81,13 +80,13 @@ Output: a file storing the point clouds with correct normal for accurate reconst
 *************************************************/
 FramesFusion::~FramesFusion() {
 
-	std::cout << output::format_purple
+	std::cout << output::format_cyan
 	<< "Fusion frame numbers: " << m_iFusionFrameNum << std::endl
 	<< "Average fusion per frame: " << m_dAverageFusionTime / m_iFusionFrameNum << "ms;\t"
 	<< "Max fusion time: " << m_dMaxFusionTime << "ms"
 	<< output::format_white << std::endl;
 
-	std::cout << output::format_blue
+	std::cout << output::format_cyan
 	<< "Reconstruct frame numbers: " << m_iReconstructFrameNum << std::endl
 	<< "Average recontime per frame: " << m_dAverageReconstructTime / m_iReconstructFrameNum << "ms;\t"
 	<< "Max frame time: " << m_dMaxReconstructTime << "ms" << std::endl
@@ -114,11 +113,14 @@ FramesFusion::~FramesFusion() {
 	// for(auto& task : tasks) {
 	// 	task->Join();
 	// }
-	// std::cout << output::format_purple << "thread_all finish" << output::format_white << std::endl;
+	// std::cout << output::format_cyan << "thread_all finish" << output::format_white << std::endl;
 
 	//output point clouds with computed normals to the files when the node logs out
 	if(m_bOutputFiles) {
 		
+		std::cout << "Please do not force killing the programe, the process is writing output PLY file." << std::endl;
+		std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
+
 		//output times
 		std::stringstream sFuseEvalFileName;
 		sFuseEvalFileName << m_sFileHead << "FuseTime.csv";
@@ -130,10 +132,26 @@ FramesFusion::~FramesFusion() {
 		std::cout << "The output eval file is " << sReconEvalFileName.str() << std::endl;
 		reconstruct_timer.OutputDebug(sReconEvalFileName.str());
 
-		SaveFinalMeshAndPointCloud();
-	}
+		std::stringstream sDynaEvalFileName;
+		sDynaEvalFileName << m_sFileHead << "DynamicExtractTime.csv";
+		std::cout << "The output eval file is " << sDynaEvalFileName.str() << std::endl;
+		dynamic_timer.OutputDebug(sDynaEvalFileName.str());
 
-	system("rm -r /tmp/lidar_recon_temp/");
+		// SaveFinalMeshAndPointCloud();
+		SaveVoxels();
+
+		std::stringstream sFreeSpaceFileName;
+		sFreeSpaceFileName << m_sFileHead << "FreeSpaceTime.csv";
+		std::cout << "The output eval file is " << sFreeSpaceFileName.str() << std::endl;
+		m_oMeshUpdater.OutputTimeCost(sFreeSpaceFileName.str());
+
+		/** 
+			if the point cloud has too many points, ros may not wait it to save.
+			to solve this problem, change the file: /opt/ros/melodic/lib/python2.7/dist-packages/roslaunch/nodeprocess.py
+				DEFAULT_TIMEOUT_SIGINT = 15.0  ->  DEFAULT_TIMEOUT_SIGINT = 60.0 
+		**/
+		std::cout << "Output is complete! The process will be automatically terminated. Thank you for waiting. " << std::endl;
+	}
 }
 
 /*************************************************
@@ -146,9 +164,6 @@ void FramesFusion::SaveFinalMeshAndPointCloud() {
 	//define ouput ply file name
 	std::stringstream sOutPCNormalFileName;
 	sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply";
-
-	std::cout << "Please do not force closing the programe, the process is writing output PLY file." << std::endl;
-	std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
 
 	if(m_bUseAdditionalPoints) {
 	
@@ -185,7 +200,7 @@ void FramesFusion::SaveFinalMeshAndPointCloud() {
 		std::stringstream sOutputPath;
 		sOutputPath << m_sFileHead << "final_mesh.ply";
 		pcl::io::savePLYFileBinary(sOutputPath.str(), oResultMesh);
-		std::cout << output::format_purple << "The output file is " << sOutputPath.str() << output::format_white << std::endl;
+		std::cout << output::format_cyan << "The output file is " << sOutputPath.str() << output::format_white << std::endl;
 	}
 	// output mesh dynamic
 	{
@@ -205,7 +220,7 @@ void FramesFusion::SaveFinalMeshAndPointCloud() {
 		std::stringstream sOutputPath;
 		sOutputPath << m_sFileHead << "final_mesh_worm.ply";
 		pcl::io::savePLYFileBinary(sOutputPath.str(), oResultMesh);
-		std::cout << output::format_purple << "The output file is " << sOutputPath.str() << output::format_white << std::endl;
+		std::cout << output::format_cyan << "The output file is " << sOutputPath.str() << output::format_white << std::endl;
 	}
 
 	// output pc
@@ -273,15 +288,6 @@ void FramesFusion::SaveFinalMeshAndPointCloud() {
 	pcl::io::savePLYFileBinary(sOutPCNormalFileName.str(), pc);
 	pcl::io::savePLYFileBinary(sOutPCNormalFileName.str()+".static.ply", static_pc);
 	pcl::io::savePLYFileBinary(sOutPCNormalFileName.str()+".dynamic.ply", dynamic_pc);
-	std::cout << output::format_purple << "The output file is " << sOutPCNormalFileName.str() << output::format_white << std::endl;
-
-	/** 
-		if the point cloud has too many points, ros may not wait it to save.
-		to solve this problem, change the file: /opt/ros/melodic/lib/python2.7/dist-packages/roslaunch/nodeprocess.py
-			DEFAULT_TIMEOUT_SIGINT = 15.0  ->  DEFAULT_TIMEOUT_SIGINT = 60.0 
-	**/
-
-	std::cout << "Output is complete! The process will be automatically terminated. Thank you for waiting. " << std::endl;
 }
 
 
@@ -311,16 +317,17 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
 	if(m_bOutputFiles) {
 
-		std::cout << output::format_blue << "mf_output_path:=" << m_sFileHead << output::format_white << std::endl;
+		std::cout << output::format_cyan << "mf_output_path:=" << m_sFileHead << output::format_white << std::endl;
 		if(m_sFileHead.back() != '/') m_sFileHead += "/";
 		std::stringstream sOutputCommand;
 		sOutputCommand << "mkdir -p " << m_sFileHead;
 		system(sOutputCommand.str().c_str());
-		m_sFileHead += "mf_";
+		m_sFileHead += "dy_";
 	}
 
 
  	//input point cloud topic
+	nodeHandle.param("cloud_in_topic", m_sInCloudTopic, std::string("/frame_cloudnormals"));
 	nodeHandle.param("mesh_in_topic", m_sInMeshTopic, std::string("/frame_mesh_algo"));
 
 	//input odom topic
@@ -344,7 +351,8 @@ bool FramesFusion::ReadLaunchParams(ros::NodeHandle & nodeHandle) {
 
 	//nearbt lengths
 	nodeHandle.param("voxel_total_size", m_fNearLengths, 20.0f);
-	m_fNearLengths = m_fNearLengths / 2.0f;
+	m_fNearLengths = m_fNearLengths / 2.0f;	
+	m_oMeshUpdater.SetUpdateRange(m_fNearLengths);
 
 	//point cloud sampling number
 	nodeHandle.param("sample_pcframe_num", m_iFrameSmpNum, 1);
@@ -514,6 +522,22 @@ void FramesFusion::PublishMeshs(const pcl::PolygonMesh & oMeshModel){
 	oMeshMsgList.markers.push_back(oMeshFused);
 
 	m_oMeshPublisher.publish(oMeshMsgList);
+}
+
+void FramesFusion::PublishPointCloud(const pcl::PointCloud<pcl::PointNormal> & vCloudNormal){
+
+    //convert to pc2 message
+	sensor_msgs::PointCloud2 vCloudData;
+
+	pcl::toROSMsg(vCloudNormal, vCloudData);
+
+	//other informations
+	vCloudData.header.frame_id = m_sOutCloudTFId;
+
+	vCloudData.header.stamp = ros::Time::now();
+
+	//publish
+	m_oCloudPublisher.publish(vCloudData);
 }
 
 void FramesFusion::FusionNormalBackToPoint(const pcl::PointCloud<pcl::PointNormal>& pNearCloud, pcl::PointCloud<pcl::PointNormal> & pRawCloud, int offset, int point_num) {
@@ -767,7 +791,7 @@ void FramesFusion::GenerateHotMap(const Eigen::Vector3f& vCenter, const int iFra
 	
 	DistanceIoVolume* pDistanceIoVolume = dynamic_cast<DistanceIoVolume*>(m_pVolume.get());
 	if(pDistanceIoVolume == nullptr) {
-		ROS_INFO_PURPLE("%s", "[FramesFusion] Volume type is not DistanceIoVolume!");
+		ROS_INFO_CYAN("%s", "[FramesFusion] Volume type is not DistanceIoVolume!");
 		return;
 	}
 
@@ -849,18 +873,18 @@ void FramesFusion::ExtractSdfMaps(const Eigen::Vector3f& vCenter, const int iFra
 {
 	TimeDebuggerProxy timer(iFrameId, &reconstruct_timer);
 
-	grid_map::GridMap oSdfMap({"elevation"});
+	grid_map::GridMap oSdfMap({"height"});
 	oSdfMap.setFrameId(m_sOutHotMapTFId);
 	oSdfMap.setGeometry(grid_map::Length(100.0, 100.0), 1.0, grid_map::Position(vCenter.x(), vCenter.y()));
 	
 	DistanceIoVolume* pDistanceIoVolume = dynamic_cast<DistanceIoVolume*>(m_pVolume.get());
 	if(pDistanceIoVolume == nullptr) {
-		ROS_INFO_PURPLE("%s", "[FramesFusion] Volume type is not DistanceIoVolume!");
+		ROS_INFO_CYAN("%s", "[FramesFusion] Volume type is not DistanceIoVolume!");
 		return;
 	}
 
-	constexpr int iLayerNumber = 11; // 应该设置为奇数(如果中心是0的话)
-	constexpr double dLayerCenterOffset = 0.0;
+	constexpr int iLayerNumber = 7; // 应该设置为奇数(如果中心是0的话)
+	constexpr double dLayerCenterOffset = 0;
 	constexpr double dLayerStep = 0.5;
 
 	std::vector<double> vHeightList(iLayerNumber);
@@ -883,11 +907,13 @@ void FramesFusion::ExtractSdfMaps(const Eigen::Vector3f& vCenter, const int iFra
 		// sdf
 		grid_map::Position position;
 		oSdfMap.getPosition(*it, position);
+		oSdfMap.at("height", *it) = -2.0;
 
 		for(int i = 0; i < iLayerNumber; ++i) {
 
 			Eigen::Vector3f vQueryPoint(position.x(), position.y(), vCenter.z() + vHeightList[i]);
 			float fSdf = pDistanceIoVolume->SearchSdf(vQueryPoint);
+			if(fSdf == -std::numeric_limits<float>().infinity()) fSdf = -1.0f;
 			oSdfMap.at(vLayerNameList[i], *it) = fSdf;
 		}
 	}
@@ -902,6 +928,132 @@ void FramesFusion::ExtractSdfMaps(const Eigen::Vector3f& vCenter, const int iFra
 	timer.DebugTime("2_publish_sdfmap");
 
 	timer.GetCurrentLineTime();
+	timer.CoutCurrentLine();
+
+	if(m_bOutputFiles) {
+		OutputSdfMapImage(vCenter, oSdfMap, iFrameId);
+	}
+}
+
+void FramesFusion::OutputSdfMapImage(const Eigen::Vector3f& vCenter, grid_map::GridMap& oSdfMap, int iFrameIndex) {
+
+	constexpr int iLayerNumber = 5; // 应该设置为奇数(如果中心是0的话)
+	constexpr float scaler = 2.56f;
+	constexpr double dLayerCenterOffset = 0;
+	constexpr double dLayerStep = 0.5;
+
+	int width = oSdfMap.getSize().x(), height = oSdfMap.getSize().y();
+	std::vector<std::string> vLayerNameList(iLayerNumber);
+	std::vector<cv::Mat> vImageList(vLayerNameList.size());
+	for(auto& oImage : vImageList) {
+		oImage.create(width * scaler, height * scaler, CV_8UC3);
+	}
+
+	///* 
+	DistanceIoVolume* pDistanceIoVolume = dynamic_cast<DistanceIoVolume*>(m_pVolume.get());
+	if(pDistanceIoVolume == nullptr) {
+		ROS_INFO_CYAN("%s", "[FramesFusion] Volume type is not DistanceIoVolume!");
+		return;
+	}
+	
+	std::vector<double> vHeightList(vLayerNameList.size());
+	for(int i = 0; i < vLayerNameList.size(); ++i) {
+
+		double dLayerHeight = dLayerCenterOffset - (i - iLayerNumber / 2) * dLayerStep;
+
+		std::stringstream sLayerNameMaker;
+		sLayerNameMaker << "sdf_" << dLayerHeight;
+		oSdfMap.add(sLayerNameMaker.str());
+
+		vHeightList[i] = dLayerHeight;
+		vLayerNameList[i] = sLayerNameMaker.str();
+	}
+
+	for(int x = 0; x < width * scaler; ++x) {
+		float fx = x / scaler + vCenter.x() - width / 2;
+	for(int y = 0; y < height * scaler; ++y) {
+		float fy = y / scaler + vCenter.y() - height / 2;
+		for(int i = 0; i < vLayerNameList.size(); ++i) {
+			Eigen::Vector3f vQueryPoint(fx, fy, vCenter.z() + vHeightList[i]);
+			float fSdf = pDistanceIoVolume->SearchSdf(vQueryPoint);
+			if(fSdf == -std::numeric_limits<float>().infinity()) fSdf = -1.0f;
+			fSdf = 0.5f - fSdf / 2.0f;
+			// fSdf = 0.5f - (fSdf - 2.0f) / 6.0f;
+			fSdf = std::clamp(fSdf, 0.0f, 0.8f) * 360.0f;
+			cv::Vec3b& pixel = vImageList[i].at<cv::Vec3b>(x, y);
+			m_oRpManager.HSVToRGB(fSdf, 1, 1, pixel[2], pixel[1], pixel[0]);
+		}
+	}}
+	//*/
+
+	/*
+	for(grid_map::GridMapIterator it(oSdfMap); !it.isPastEnd(); ++it) {
+
+		// sdf
+		grid_map::Position position;
+		oSdfMap.getPosition(*it, position);
+		position += oSdfMap.getSize().cast<double>().matrix() * 0.5;
+		position -= vCenter.topRows(2).cast<double>();
+
+		for(int i = 0; i < vLayerNameList.size(); ++i) {
+			float fSdf = oSdfMap.at(vLayerNameList[i], *it);
+			fSdf = 0.5f - (fSdf - 2.0f) / 6.0f;
+			fSdf = std::clamp(fSdf, 0.0f, 0.8f) * 360.0f;
+			cv::Vec3b& pixel = vImageList[i].at<cv::Vec3b>(position.x(), position.y());
+			m_oRpManager.HSVToRGB(fSdf, 1, 1, pixel[2], pixel[1], pixel[0]);
+		}
+	}
+	//*/
+
+	for(int i = 0; i < vLayerNameList.size(); ++i) {
+		std::stringstream sFileName;
+		sFileName << m_sFileHead << iFrameIndex << "_" << vLayerNameList[i] << ".png";
+		cv::resize(vImageList[i], vImageList[i], cv::Size(), 2, 2);
+		cv::imwrite(sFileName.str(), vImageList[i]);
+	}
+}
+
+void FramesFusion::HandleCloud(const sensor_msgs::PointCloud2 & vCloud) {
+
+	dynamic_timer.NewLine();
+
+	++m_iPCFrameCount;
+
+	pcl::PointCloud<pcl::PointNormal> oCloud;
+	pcl::fromROSMsg(vCloud, oCloud);
+
+	DistanceIoVolume* pDistanceIoVolume = dynamic_cast<DistanceIoVolume*>(m_pVolume.get());
+	if(pDistanceIoVolume == nullptr) {
+		ROS_INFO_CYAN("%s", "[FramesFusion] Volume type is not DistanceIoVolume!");
+		return;
+	}
+
+    pcl::PointCloud<pcl::PointNormal> vStaticPoints, vDynamicPoints;
+    for(auto& oPoint : oCloud) {
+        if(pDistanceIoVolume->SearchSdf(oPoint.getVector3fMap()) <= pDistanceIoVolume->GetStaticExpandDistance()) {
+            vStaticPoints.push_back(oPoint);
+        }
+		else vDynamicPoints.push_back(oPoint);
+    }
+	
+	PublishPointCloud(vStaticPoints);
+
+	double process_time = dynamic_timer.GetCurrentLineTime();
+	std::cout << output::format_green 
+		<< "The No." << m_iPCFrameCount << ";\t static extract time: " << process_time << "ms"
+		<< "\tpoint number: " << vStaticPoints.size()
+		<< output::format_white << std::endl;
+
+	m_oRpManager.PublishPointCloud(vDynamicPoints, std::vector<float>(vDynamicPoints.size(), 0), "/dynamic_clouds");
+
+	
+	if(m_bOutputFiles) {
+
+		std::stringstream sOutputPath;
+		sOutputPath << m_sFileHead << std::setw(4) << std::setfill('0') << m_iPCFrameCount;
+		pcl::io::savePLYFileBinary(sOutputPath.str() + ".static.ply", vStaticPoints);
+		pcl::io::savePLYFileBinary(sOutputPath.str() + ".dyamic.ply", vDynamicPoints);
+	}
 }
 
 void FramesFusion::HandleMesh(const fusion_msgs::MeshArray & vMeshRosData)
@@ -944,7 +1096,7 @@ void FramesFusion::HandleMesh(const fusion_msgs::MeshArray & vMeshRosData)
 
 	double frames_fusion_time = fuse_timer.DebugTime("2_main_fusion");
 	
-	std::cout << output::format_purple 
+	std::cout << output::format_cyan 
 		<< "The No. " << m_iFusionFrameNum 
 		<< ";\tframes_fusion_time: " << frames_fusion_time << "ms" 
 		<< output::format_white;
@@ -954,7 +1106,7 @@ void FramesFusion::HandleMesh(const fusion_msgs::MeshArray & vMeshRosData)
 	//merge one frame data
 	// UpdateOneFrame(oViewPoint, *pFramePN);
 	// double voxelize_time = fuse_timer.DebugTime("3_main_voxelize");
-	// std::cout << output::format_blue << ";\tvoxelize_time: " << voxelize_time << "ms" << output::format_white;
+	// std::cout << output::format_cyan << ";\tvoxelize_time: " << voxelize_time << "ms" << output::format_white;
 	std::cout << std::endl;
 
 
@@ -1101,13 +1253,13 @@ void FramesFusion::HandleTrajectory(const nav_msgs::Odometry & oTrajectory)
 	// if(!m_bSurfelFusion && m_bUseAdditionalPoints) 
 	// 	SurroundModelingWithPointProcessing(oOdomPoint.oLocation, oNearbyMeshes, m_iReconstructFrameNum);
 	// else 
-	SlideModeling(oNearbyMeshes, oLidarPos, m_iReconstructFrameNum);
+	// SlideModeling(oNearbyMeshes, oLidarPos, m_iReconstructFrameNum);
 	// GenerateHotMap(oLidarPos, m_iReconstructFrameNum, oTrajectory.header.stamp);
 	ExtractSdfMaps(oLidarPos, m_iReconstructFrameNum, oTrajectory.header.stamp);
 	clock_t frames_fusion_time = 1000.0 * (clock() - start_time) / CLOCKS_PER_SEC;
 
 	++m_iReconstructFrameNum;
-	std::cout << output::format_blue 
+	std::cout << output::format_cyan 
 		<< "The No. " << m_iReconstructFrameNum 
 		<< ";\tframes_fusion_time: " << frames_fusion_time << "ms" 
 		<< output::format_white << std::endl;
@@ -1151,7 +1303,7 @@ void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory
 
 	auto ModelingFunction = [&, now_frame_num, oLidarPos]() {
 
-		std::cout << output::format_purple << "No. " << now_frame_num << " reconstruct start" << output::format_white << std::endl;
+		std::cout << output::format_cyan << "No. " << now_frame_num << " reconstruct start" << output::format_white << std::endl;
 
 		//get the reconstructed surfaces
 		pcl::PolygonMesh oResultMeshes;
@@ -1162,23 +1314,22 @@ void FramesFusion::HandleTrajectoryThread(const nav_msgs::Odometry & oTrajectory
 		// if(!m_bSurfelFusion && m_bUseAdditionalPoints) 
 		// 	SurroundModelingWithPointProcessing(oOdomPoint.oLocation, oResultMeshes, now_frame_num);
 		// else 
-		SlideModeling(oResultMeshes, oLidarPos, now_frame_num);
+		// SlideModeling(oResultMeshes, oLidarPos, now_frame_num);
 		// GenerateHotMap(oLidarPos, now_frame_num, oTrajectory.header.stamp);
 		ExtractSdfMaps(oLidarPos, now_frame_num, oTrajectory.header.stamp);
 
 		struct timeval end;
 		gettimeofday(&end,NULL);
 		double frame_reconstruct_time = (end.tv_sec - start.tv_sec) * 1000.0 +(end.tv_usec - start.tv_usec) * 0.001;
-		std::cout << output::format_blue 
+		std::cout << output::format_cyan 
 			<< "The No. " << now_frame_num
-			<< ";\tframes_reconstruct_time: " << frame_reconstruct_time << "ms" 
-			<< ";\tgen_face_num: " << oResultMeshes.polygons.size()
+			<< ";\tsdf_map_extract_time: " << frame_reconstruct_time << "ms" 
 			<< output::format_white << std::endl;
 		m_dAverageReconstructTime += frame_reconstruct_time;
 		m_dMaxReconstructTime = frame_reconstruct_time > m_dMaxReconstructTime ? frame_reconstruct_time : m_dMaxReconstructTime;
 
 		//output the nearby surfaces
-		PublishMeshs(oResultMeshes);
+		// PublishMeshs(oResultMeshes);
 	};
 
 	std::thread Modeling(ModelingFunction);
@@ -1298,4 +1449,31 @@ void FramesFusion::OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, c
 pcl::PointCloud<pcl::PointNormal>::Ptr AllCloud(pcl::PointCloud<pcl::PointNormal>& cloud_vector) {
 
     return cloud_vector.makeShared();
+}
+
+void FramesFusion::SaveVoxels() {
+
+	//define ouput ply file name
+	std::stringstream sOutVoxelFileName;
+	sOutVoxelFileName << m_sFileHead << "Voxel.ply";
+
+	DistanceIoVolume* pDistanceIoVolume = dynamic_cast<DistanceIoVolume*>(m_pVolume.get());
+	if(pDistanceIoVolume == nullptr) {
+		ROS_INFO_CYAN("%s", "[FramesFusion] Volume type is not DistanceIoVolume!");
+		return;
+	}
+
+	pcl::PointCloud<pcl::PointXYZRGB> vVoxels;
+	for(auto&& [oPos,_] : pDistanceIoVolume->m_vVolume) {
+		int iLevel = pDistanceIoVolume->SearchLevel(oPos);
+		int iIo = pDistanceIoVolume->SearchIo(oPos);
+		if(iLevel >= 0) {
+			float fLength = m_oVoxelResolution.x * (1 << iLevel);
+			vVoxels.push_back(pcl::PointXYZRGB(255 - iLevel * 50, iIo ? 0 : 255, iLevel));
+			vVoxels.back().getVector3fMap() = Eigen::Vector3f(oPos.x, oPos.y, oPos.z);
+		}
+	}
+
+	pcl::io::savePLYFileBinary(sOutVoxelFileName.str(), vVoxels);
+	std::cout << output::format_cyan << "The output file is " << sOutVoxelFileName.str() << output::format_white << std::endl;
 }

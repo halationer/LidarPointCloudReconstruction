@@ -296,7 +296,7 @@ void SdfMaker::CastRay(RTCScene & scene, const pcl::PointXYZ& oViewPoint, pcl::P
     for(int i = vQueryPoints.size(); i < iListSize; ++i) vValidList[i] = invalid_mask;
 
     // make rayhit packages
-    RTCRayHit8 rayhit;
+    RTCRayHit8 rayhit, downhit, uphit;
     for(int i = 0; i < vQueryPoints.size(); ++i) {
         
         const int offset = i % ray_group_size;
@@ -317,17 +317,55 @@ void SdfMaker::CastRay(RTCScene & scene, const pcl::PointXYZ& oViewPoint, pcl::P
         rayhit.ray.flags  [offset] = 0;
         rayhit.hit.geomID [offset] = RTC_INVALID_GEOMETRY_ID;
 
+        // another ray to keep the floor
+        downhit.ray.org_x  [offset] = vQueryPoints[i].x;
+        downhit.ray.org_y  [offset] = vQueryPoints[i].y;
+        downhit.ray.org_z  [offset] = vQueryPoints[i].z;
+        downhit.ray.dir_x  [offset] = 0.0f;
+        downhit.ray.dir_y  [offset] = 0.0f;
+        downhit.ray.dir_z  [offset] = -1.0f;
+        downhit.ray.tnear  [offset] = 0.1f;
+        downhit.ray.tfar   [offset] = std::numeric_limits<float>::infinity();
+        downhit.ray.mask   [offset] = -1;
+        downhit.ray.flags  [offset] = 0;
+        downhit.hit.geomID [offset] = RTC_INVALID_GEOMETRY_ID;
+
+        // another ray to keep the floor
+        uphit.ray.org_x  [offset] = vQueryPoints[i].x;
+        uphit.ray.org_y  [offset] = vQueryPoints[i].y;
+        uphit.ray.org_z  [offset] = vQueryPoints[i].z;
+        uphit.ray.dir_x  [offset] = 0.0f;
+        uphit.ray.dir_y  [offset] = 0.0f;
+        uphit.ray.dir_z  [offset] = 1.0f;
+        uphit.ray.tnear  [offset] = 0.1f;
+        uphit.ray.tfar   [offset] = std::numeric_limits<float>::infinity();
+        uphit.ray.mask   [offset] = -1;
+        uphit.ray.flags  [offset] = 0;
+        uphit.hit.geomID [offset] = RTC_INVALID_GEOMETRY_ID;
+
         // do ray intersect
         if(offset == ray_group_size - 1 || i == vQueryPoints.size() - 1) {
 
             rtcIntersect8(vValidList+i-offset, scene, &rayhit, &m_oIntersectArgument);
+            rtcIntersect8(vValidList+i-offset, scene, &downhit, &m_oIntersectArgument);
+            rtcIntersect8(vValidList+i-offset, scene, &uphit, &m_oIntersectArgument);
 
             for(int k = 0; k <= offset; ++k) {
+
                 pcl::DistanceIoVoxel& oQueryPoint = vQueryPoints[i-offset+k];
+
                 if(rayhit.hit.geomID[k] != RTC_INVALID_GEOMETRY_ID) {
                     float sdf = rayhit.ray.tfar[k] - oQueryPoint.distance;
                     oQueryPoint.io = sdf < 0 ? 0.0f : 1.0f;
                     oQueryPoint.distance = abs(sdf);
+                    if(downhit.hit.geomID[k] != RTC_INVALID_GEOMETRY_ID) {
+                        float sdf = downhit.ray.tfar[k];
+                        oQueryPoint.distance = std::min(oQueryPoint.distance, abs(sdf));
+                    }
+                    if(uphit.hit.geomID[k] != RTC_INVALID_GEOMETRY_ID) {
+                        float sdf = uphit.ray.tfar[k];
+                        oQueryPoint.distance = std::min(oQueryPoint.distance, abs(sdf));
+                    }
                 }
                 else {
                     oQueryPoint.io = 0.0f;

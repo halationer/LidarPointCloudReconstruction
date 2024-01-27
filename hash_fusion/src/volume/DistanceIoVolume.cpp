@@ -218,20 +218,24 @@ void DistanceIoVolume::Update(pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners) {
     }
 }
 
-void DistanceIoVolume::UpdateLimitDistance(const pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel) {
+void DistanceIoVolume::UpdateLimitDistance(pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel) {
 
     const float limit_distance = m_fStaticExpandDistance * (1 << iLevel);
 
     for(auto& oCorner : vCorners) {
 
-        if(oCorner.io == 0.0f) continue;
+        float& update_io = oCorner.io;
+        if(update_io == 0.0f && oCorner.distance < 1.0f)
+            update_io = -1.0f;
+
+        if(update_io == 0.0f) continue;
         HashPos oPos;
         PointBelongVoxelPos(oCorner, oPos);
         auto& oVoxel = CreateAndGetVoxel(oPos);
 
         // combine code
         std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
-        oVoxel.io = oVoxel.io == 0.0f ? oCorner.io : std::max(oVoxel.io, oCorner.io);
+        oVoxel.io = oVoxel.io == 0.0f ? update_io : std::max(oVoxel.io, update_io);
         oVoxel.distance = std::max(oVoxel.distance, oCorner.distance);
         oVoxel.distance = std::min(oVoxel.distance, limit_distance);
     }
@@ -273,13 +277,51 @@ float DistanceIoVolume::SearchSdf(const Eigen::Vector3f& vPoint) {
     return -INFINITY;
 }
 
+
+int DistanceIoVolume::SearchLevel(const HashPos& oPos) {
+
+    for(int level = 0; level <= 3; ++level) {
+        auto vCorners = GetCornerPoses(oPos, level);
+        int iValidCornerNum = 0;
+        for(auto&& oCorner : vCorners) {
+            if(m_vVolume.count(oCorner)) 
+                ++iValidCornerNum;
+        }
+        if(iValidCornerNum == 8) return level;
+    }
+    return -1;
+}
+
+int DistanceIoVolume::SearchIo(const HashPos& oPos) {
+
+    for(int level = 0; level <= 3; ++level) {
+        auto vCorners = GetCornerPoses(oPos, level);
+        int iValidCornerNum = 0;
+        int mask = 0;
+        for(auto&& oCorner : vCorners) {
+            float io = 0;
+            if(m_vVolume.count(oCorner)){
+                ++iValidCornerNum;
+                io = GetVoxel(oCorner)->io;
+            }
+            mask <<= 1;
+            if(io > 0) mask |= 1;
+        }
+        if(mask == (1 << iValidCornerNum) - 1) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 /**
  * 
 */
 pcl::DistanceIoVoxel& DistanceIoVolume::CreateAndGetVoxel(const HashPos& oPos) {
     
+    std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
     if(!m_vVolume.count(oPos)) {
-        std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
         if(!m_vVolume.count(oPos)) {
             if(m_vVolumeData.size() == 0 || m_vVolumeData.back().size() == m_vVolumeData.back().points.capacity()) {
                 VolumeDataMoveNext();

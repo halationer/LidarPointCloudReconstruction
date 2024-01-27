@@ -15,11 +15,17 @@
 //ros related
 #include <ros/ros.h>
 #include <nav_msgs/Odometry.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/Image.h>
 #include <shape_msgs/Mesh.h>
 #include <fusion_msgs/MeshArray.h>
 #include <geometry_msgs/PointStamped.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
+
+#include <grid_map_msgs/GridMap.h>
+#include <grid_map_core/grid_map_core.hpp>
+#include <grid_map_ros/GridMapRosConverter.hpp>
 
 //pcl related
 #include <pcl_ros/transforms.h>
@@ -94,6 +100,7 @@ public:
     //Destructor
     virtual ~FramesFusion();
     void SaveFinalMeshAndPointCloud();
+    void SaveVoxels();
 
     //Reads and verifies the ROS parameters.
     bool ReadLaunchParams(ros::NodeHandle & nodeHandle);  
@@ -102,6 +109,8 @@ public:
     //handle the ground point clouds topic
     // void HandleMesh(const shape_msgs::Mesh & vMeshRosData);
     void HandleMesh(const fusion_msgs::MeshArray & vMeshRosData);
+    void HandleCloud(const sensor_msgs::PointCloud2 & vCloud);
+    void PublishPointCloud(const pcl::PointCloud<pcl::PointNormal> & vCloudNormal);
 
     //handle the trajectory information
     void HandleTrajectory(const nav_msgs::Odometry & oTrajectory);
@@ -136,6 +145,8 @@ public:
     //reload, output point cloud with given feature for test
     void OutputPCFile(const pcl::PointCloud<pcl::PointXYZ> & vCloud, const std::vector<float> & vFeatures, bool bAllRecord = false);
 
+    void OutputSdfMapImage(const Eigen::Vector3f& vCenter, grid_map::GridMap& oSdfMap, int iFrameIndex);
+
 protected:
 
     //***file related***
@@ -152,6 +163,10 @@ protected:
 
     //ouput file
     std::ofstream m_oOutPCFile;
+
+    //***for input cloud topic***
+    ros::Subscriber m_oCloudSuber;
+    std::string m_sInCloudTopic;
 
     //***for input mesh topic***
     //the m_oMeshSuber subscirber is to hear input mesh topic
@@ -286,6 +301,7 @@ protected:
 
     TimeDebugger fuse_timer;
     TimeDebuggerThread reconstruct_timer;
+    TimeDebugger dynamic_timer;
 };
 
 #endif

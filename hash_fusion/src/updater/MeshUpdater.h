@@ -154,6 +154,7 @@ private:
     ObjectManager m_oObjectManager;
     int m_iFrameCounter = 0;
     int m_iOctreeLevel = 0;
+    float m_fRangeRadius = -1.0f;
 
 public:
     static constexpr int m_iMaxFrameWindow = 5;
@@ -164,7 +165,7 @@ private:
     MeshUpdater():
         m_oRpManager(RosPublishManager::GetInstance()),
         m_vFrameMeshes(m_iMaxFrameWindow),
-        m_oThreadPool(4),
+        m_oThreadPool(12),
         m_vDebugOutClouds(16, pcl::PointCloud<pcl::PointXYZI>()) {}
     MeshUpdater(MeshUpdater&)=delete;
 
@@ -173,6 +174,8 @@ public:
         return instance;
     }
     void SetOctreeLevel(int level) { m_iOctreeLevel = level; }
+    void SetUpdateRange(float range) { m_fRangeRadius = range; }
+    void OutputTimeCost(const std::string& file_name) { m_oFuseTimer.OutputDebug(file_name); }
     // ~MeshUpdater(){ SaveDebugOutClouds(); }
 
 private:

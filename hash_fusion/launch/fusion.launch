@@ -18,8 +18,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
 <launch>
 
-    <arg name="mf_output_path" default="" />
+    <arg name="dy_output_path" default="" />
 
+    <arg name="cloud_in_topic" default="/frame_cloudnormals" />
     <arg name="mesh_in_topic" default="/frame_mesh_algo" />
 
     <!-- use slam transfer -->
@@ -28,7 +29,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <!-- aloam -->
     <arg name="odom_in_topic" default="/aft_mapped_to_init" />
 
-    <arg name="cloud_out_opic" default="/processed_clouds" />
+    <arg name="cloud_out_opic" default="/static_clouds" />
     <arg name="polygon_out_opic" default="/surrounding_meshes" />
 
     <arg name="async_reconstruct" default="true"/>
@@ -42,9 +43,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="sample_inp_num"  default="1" />
 
     <arg name="voxel_cube_size" default="0.5"/> 
-    <arg name="octree_level" default="2" />
+    <arg name="octree_level" default="0" />
 
-    <arg name="voxel_total_size" default="160.0"/> 
+    <arg name="voxel_total_size" default="30.0"/> 
 
     <arg name="mesh_u_period" default="2.0"/> 
 
@@ -97,11 +98,11 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
         <!-- parameters-->  
 
-        <param name="file_output_path" type="string" value="$(arg mf_output_path)"  />
+        <param name="file_output_path" type="string" value="$(arg dy_output_path)"  />
 
         <!-- define input topic name-->
+        <param name="cloud_in_topic" type="string" value="$(arg cloud_in_topic)" />
         <param name="mesh_in_topic" type="string" value="$(arg mesh_in_topic)"  />
-
         <param name="odom_in_topic" type="string" value="$(arg odom_in_topic)" />
 
         <!-- define output topic name-->
