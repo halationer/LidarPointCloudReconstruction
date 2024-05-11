@@ -1,0 +1,156 @@
+<?xml version="1.0"?>
+<!--
+Software License Agreement (BSD)
+
+\file      fusion.launch
+\authors   Pengdi Huang <alualu628628@163.com>
+\copyright Copyright (c) 2022, 06, All rights reserved.
+
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WAR-
+RANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, IN-
+DIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<launch>
+
+    <arg name="mf_output_path" default="" />
+
+    <arg name="cloud_in_topic" default="/frame_cloudnormals" />
+
+    <!-- use slam transfer -->
+    <!-- <arg name="odom_in_topic" default="/slam_odom" /> -->
+
+    <!-- aloam -->
+    <arg name="odom_in_topic" default="/aft_mapped_to_init" />
+
+    <arg name="cloud_out_opic" default="/processed_clouds" />
+    <arg name="polygon_out_opic" default="/surrounding_meshes" />
+
+    <arg name="async_reconstruct" default="true"/>
+    <arg name="additional_points" default="false"/>
+
+    <arg name="out_cloud_tf_id" default="map"/>
+    <arg name="polygon_tf_id" default="map"/>
+
+    <arg name="sample_pc_frame_num"  default="1" />
+
+    <arg name="sample_inp_num"  default="1" />
+
+    <arg name="voxel_cube_size" default="0.4"/> 
+
+    <arg name="voxel_total_size" default="160.0"/> 
+
+    <arg name="mesh_u_period" default="2.0"/> 
+
+    <!-- dynamic control -->
+    <arg name="use_surfel_fusion"   default="true"/>
+    <arg name="strategy_type"       default="2"/>
+    <!-- union set -->
+    <arg name="use_union_set"       default="true"/>
+    <arg name="only_max_union_set"  default="false"/>
+    <arg name="strict_dot_ref"      default="0.95"/>
+    <arg name="soft_dot_ref"        default="0.3"/>
+    <arg name="remove_size_ref"     default="100"/>
+    <arg name="remove_time_ref"     default="10.0"/>
+    <arg name="confidence_level_length" default="3"/>
+
+    <!-- fusion mode:
+        0 - normal fusion 
+        1 - multi-resolution fusion
+        2 - pre-conv fusion
+    -->
+    <arg name="fusion_mode" default="0"/>
+    <arg name="expand_distribution_ref" default="0.99"/>
+    
+    <!-- meshing params -->
+    <arg name="keep_time" default="-1" />
+    <arg name="conv_dim" default="3" />
+    <arg name="conv_add_point_ref" default="3" />
+    <arg name="conv_distance_ref" default="0.95" />
+
+    <arg name="center_based_recon" default="false" />
+    <arg name="dynamic_debug" default="false" />
+    <arg name="keep_voxel" default="true" />
+    <arg name="recon_range" default="80.0" /> <!-- 80 for show -->
+    
+
+    <!-- frames_fusion node in frames_fusion pkg-->
+    <node name="hash_fusion" pkg="hash_fusion" type="hash_fusion" output="screen">
+
+        <!-- parameters-->  
+
+        <param name="file_output_path" type="string" value="$(arg mf_output_path)"  />
+
+        <!-- define input topic name-->
+        <param name="cloud_in_topic" type="string" value="$(arg cloud_in_topic)"  />
+
+        <param name="odom_in_topic" type="string" value="$(arg odom_in_topic)" />
+
+        <!-- define output topic name-->
+        <param name="cloud_out_topic" type="string" value="$(arg cloud_out_opic)" />
+
+        <param name="polygon_out_topic" type="string" value="$(arg polygon_out_opic)" />
+        
+        <!-- frame id related-->
+        <param name="sample_pcframe_num" type="int" value="$(arg sample_pc_frame_num)" />
+
+        <!-- sampling number-->
+        <param name="sample_inputpoints_num"  type="int" value="$(arg sample_inp_num)" />
+
+        <!-- voxel related-->
+        <param name="voxel_cube_size"  type="double" value="$(arg voxel_cube_size)" />
+
+        <param name="voxel_total_size"  type="double" value="$(arg voxel_total_size)" />
+
+        <param name="strategy_type" type="int" value="$(arg strategy_type)" />
+
+        <!-- mesh related-->
+
+        <param name="mesh_update_period" type="double" value="$(arg mesh_u_period)"/>
+
+        <!-- tf id related-->
+        <param name="outcloud_tf_id" type="string" value="$(arg out_cloud_tf_id)" />
+
+        <param name="polygon_tf_id" type="string" value="$(arg polygon_tf_id)" />
+
+        <!-- data association related -->
+        <param name="use_surfel_fusion" type="bool" value="$(arg use_surfel_fusion)" />
+
+        <param name="additional_points" type="bool" value="$(arg additional_points)" />
+
+        <param name="async_reconstruct" type="bool" value="$(arg async_reconstruct)" />
+
+        <!-- meshing params -->
+        <param name="keep_time" type="int" value="$(arg keep_time)" />
+
+        <param name="conv_dim" type="int" value="$(arg conv_dim)" />
+
+        <param name="conv_add_point_ref" type="int" value="$(arg conv_add_point_ref)" />
+
+        <param name="conv_distance_ref" type="double" value="$(arg conv_distance_ref)" />
+        <param name="recon_range" type="double" value="$(arg recon_range)" />
+        <param name="dynamic_debug" type="bool" value="$(arg dynamic_debug)" />
+        <param name="keep_voxel" type="bool" value="$(arg keep_voxel)" />
+        
+        <!-- dynamic judge params-->
+        <param name="use_union_set" type="bool" value="$(arg use_union_set)" />
+        <param name="only_max_union_set" type="bool" value="$(arg only_max_union_set)" />
+        <param name="strict_dot_ref" type="double" value="$(arg strict_dot_ref)" />
+        <param name="soft_dot_ref" type="double" value="$(arg soft_dot_ref)" />
+        <param name="remove_size_ref" type="int" value="$(arg remove_size_ref)" />
+        <param name="remove_time_ref" type="double" value="$(arg remove_time_ref)" />
+        <param name="confidence_level_length" type="double" value="$(arg confidence_level_length)" />
+
+        <!-- multi_resolution -->
+        <param name="fusion_mode" type="int" value="$(arg fusion_mode)"/>
+        <param name="center_based_recon" type="bool" value="$(arg center_based_recon)"/>
+        <param name="expand_distribution_ref" type="double" value="$(arg expand_distribution_ref)"/>
+    </node>
+
+
+</launch>
