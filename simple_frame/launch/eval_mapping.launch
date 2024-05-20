@@ -17,11 +17,16 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 -->
 
 <launch>
+    <arg name="ori" default="false" />
     <arg name="rosbag" default="$(find frame_reconstruction)/../data/nsh_indoor_outdoor.bag" />
     <arg name="gtpos" default="$(find frame_reconstruction)/../data/nsh_indoor_outdoor_pos.txt" />
     <arg name="jump" default="0" />
     <arg name="sample" default="1" />
     <arg name="delay" default="1.0" />
+
+    <!-- if use kitti dataset, please check and fix these args-->
+    <arg name="point_topic" default="/velodyne_points" />
+    <arg name="is_kitti" default="false" />
 
     <!-- output evaluation files (point cloud and mesh )-->
     <arg name="sf_output_path" default=""/>
@@ -39,6 +44,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <arg name="jump_frame" value="$(arg jump)" />
         <arg name="publish_delay" value="$(arg delay)" />
         <arg name="sample_frame" value="$(arg sample)" />
+        <arg name="point_topic" value="$(arg point_topic)" />
+        <arg name="is_kitti" value="$(arg is_kitti)" />
     </include>
     <!-- <node pkg="tf" type="static_transform_publisher" name="camera_init_to_map"  args="0 0 0 0 0 0 /map /camera_init 10" /> -->
 
@@ -53,9 +60,17 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <arg name="dy_output_path" value="$(arg dy_output_path)"/>
     </include>
 
-    <include file="$(find frames_fusion)/launch/fusion.launch" >
-        <arg name="mf_output_path" value="$(arg mf_output_path)" />
-    </include>
+    <group if="$(arg ori)">
+        <include file="$(find frames_fusion)/launch/fusion.launch" >
+            <arg name="mf_output_path" value="$(arg mf_output_path)" />
+        </include>
+    </group>
+    
+    <group unless="$(arg ori)">
+        <include file="$(find recon_fusion)/launch/fusion.launch" >
+            <arg name="rc_output_path" value="$(arg mf_output_path)" />
+        </include>
+    </group>
 
 </launch>
 

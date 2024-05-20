@@ -180,6 +180,7 @@ public:
 
 private:
     void SaveDebugOutClouds();
+    // old version ray tracing funcs
     void UpdateVolume(
         const SectorMesh& oSectorMesh, 
         DistanceIoVolume* const pDistanceIoVolume, 
@@ -191,6 +192,7 @@ private:
         std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
         size_t iLevel = 0);
 
+    // embree ray tracing funcs(top to bottom)
     void UpdateVolume(
         const pcl::PointXYZ& oViewPoint,
         const int iSectorNum,
@@ -198,6 +200,15 @@ private:
         std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
         size_t iLevel);
     void UpdateVisibleVolume(
+        const pcl::PointXYZ& oViewPoint,
+        const int iSectorNum,
+        const std::vector<pcl::PointCloud<pcl::PointXYZI>>& vSinglePoints,
+        DistanceIoVolume* const pDistanceIoVolume,
+        std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
+        size_t iLevel = 0);
+
+    // embree ray tracing funcs(bottom to top)
+    void UpdateVolumeFromBottom(
         const pcl::PointXYZ& oViewPoint,
         const int iSectorNum,
         const std::vector<pcl::PointCloud<pcl::PointXYZI>>& vSinglePoints,

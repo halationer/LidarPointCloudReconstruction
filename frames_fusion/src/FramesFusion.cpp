@@ -84,41 +84,10 @@ FramesFusion::~FramesFusion() {
 	//output point clouds with computed normals to the files when the node logs out
 	if(m_bOutputFiles) {
 		
-		//define ouput ply file name
-		std::stringstream sOutPCNormalFileName;
-		sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply";
-
 		std::cout << "Please do not force closing the programe, the process is writing output PLY file." << std::endl;
 		std::cout << "It may take times (Writing 500M file takes about 20 seconds in usual)." << std::endl;
-		std::cout << std::format_purple << "The output file is " << sOutPCNormalFileName.str() << std::format_white << std::endl;
 		
-		if(m_bUseAdditionalPoints) {
-		
-			m_vMapPCN += m_vMapPCNAdded;
-			m_vMapPCN += m_vMapPCNTrueAdded;
-		}
-		
-		auto vAllPoints = AllCloud(m_vMapPCN);
-
-		pcl::PointCloud<pcl::PointXYZINormal> pc;
-		for(auto point : *vAllPoints) {
-			pcl::PointXYZINormal new_point;
-			new_point.x = point.x;
-			new_point.y = point.y;
-			new_point.z = point.z;
-			new_point.normal_x = point.normal_x;
-			new_point.normal_y = point.normal_y;
-			new_point.normal_z = point.normal_z;
-			
-			// point confidence (impacted by depth & support & conflict)
-			new_point.intensity = point.data_n[3]; 
-			
-			// maybe use to save gauss distance, but now don't make scence
-			// new_point.curvature = point.data_c[3];
-
-			pc.push_back(new_point);
-		}
-		pcl::io::savePLYFileASCII(sOutPCNormalFileName.str(), pc);
+		SaveFinalMeshAndPointCloud();
 
 		/** 
 			if the point cloud has too many points, ros may not wait it to save.
@@ -133,7 +102,100 @@ FramesFusion::~FramesFusion() {
 
 }
 
+/*************************************************
+Function: SaveFinalMeshAndPointCloud
+Description: save mesh and point cloud of whole scene to files
+Called By: ~FramesFusion
+*************************************************/
+void FramesFusion::SaveFinalMeshAndPointCloud() {
 
+	//define ouput ply file name
+	std::stringstream sOutPCNormalFileName;
+	sOutPCNormalFileName << m_sFileHead << "Map_PCNormal.ply";
+
+	if(m_bUseAdditionalPoints) {
+	
+		m_vMapPCN += m_vMapPCNAdded;
+		m_vMapPCN += m_vMapPCNTrueAdded;
+	}
+
+	//output mesh
+	pcl::PolygonMesh oCBModel;
+	oCBModel.polygons.clear();
+
+	//get the target points for construction
+	pcl::PointCloud<pcl::PointNormal>::Ptr pNearCloud(&m_vMapPCN);
+
+	///* output nearby cloud
+	if(m_bOutputFiles) {
+
+		pcl::PointCloud<pcl::PointXYZINormal> spc, dpc;
+		for(auto point : *pNearCloud) {
+
+			pcl::PointXYZINormal new_point;
+			new_point.x = point.x;
+			new_point.y = point.y;
+			new_point.z = point.z;
+			new_point.normal_x = point.normal_x;
+			new_point.normal_y = point.normal_y;
+			new_point.normal_z = point.normal_z;
+			// point confidence (impacted by depth & support & conflict)
+			new_point.intensity = point.data_n[3];
+			// maybe use to save gauss distance, but now don't make scence
+			// new_point.curvature = point.data_c[3];
+
+			if(new_point.intensity <= 0) dpc.push_back(new_point);
+			else spc.push_back(new_point);
+		}
+		std::stringstream filename1;
+		filename1 << m_sFileHead << "final_static_pc.ply";
+		pcl::io::savePLYFileASCII(filename1.str(), spc);
+		std::stringstream filename2;
+		filename2 << m_sFileHead << "final_removed_pc.ply";
+		pcl::io::savePLYFileASCII(filename2.str(), dpc);
+
+		//******voxelization********
+		//set voxelization parameters based on point cloud extent
+		Voxelization oVoxeler(*pNearCloud);
+
+		//set the number of voxels
+		//set voxel resolution or voxel size
+		//oVoxeler.GetIntervalNum(100,100,100);
+		oVoxeler.GetResolution(m_oVoxelRes);
+
+		//voxelize the space
+		oVoxeler.VoxelizeSpace();
+
+		//using signed distance
+		SignedDistance oSDer;
+
+		//compute signed distance based on centroids and its normals within voxels
+		std::vector<float> vSignedDis = oSDer.NormalBasedGlance(pNearCloud, oVoxeler);
+
+		//record non-empty voxels
+		std::vector<bool> vVoxelStatus;
+		oVoxeler.OutputNonEmptyVoxels(vVoxelStatus);
+
+		//clear accelerated data
+		oVoxeler.ClearMiddleData();
+
+		//******construction********
+		//marching cuber
+		CIsoSurface<float> oMarchingCuber;
+		//get surface mesh based on voxel related algorithm
+		oMarchingCuber.GenerateSurface(vSignedDis, vVoxelStatus, 0,
+									oVoxeler.m_iFinalVoxelNum.ixnum - 1, oVoxeler.m_iFinalVoxelNum.iynum - 1, oVoxeler.m_iFinalVoxelNum.iznum - 1, 
+									oVoxeler.m_oVoxelLength.x, oVoxeler.m_oVoxelLength.y, oVoxeler.m_oVoxelLength.z);
+
+		//move the mesh position to the actual starting point
+		pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
+		oMarchingCuber.OutputMesh(oVoxeler.m_oOriCorner, oCBModel, pMCResultCloud);
+	
+		std::stringstream sOutputPath;
+		sOutputPath << m_sFileHead << "final_mesh.ply";
+		pcl::io::savePLYFileBinary(sOutputPath.str(), oCBModel);
+	}
+}
 
 /*************************************************
 Function: ReadLaunchParams
@@ -635,6 +697,9 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	int point_num = pNearCloud->size();
 	NearbyClouds(m_vMapPCNAdded, oBasedP, *pNearCloud, m_fNearLengths);
 	m_mPCNMutex.unlock();
+	
+	//TODO: Debug
+	std::cout << "recon cloud size: " << pNearCloud->size() << std::endl;
 
 	// 点云抽稀
 	int new_end = 0;
@@ -653,7 +718,7 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	std::vector<float> temp_feature(pNearCloud->size());
 	PublishPointCloud(*pNearCloud, temp_feature, "/temp_near_cloud");
 
-	///* output nearby cloud
+	/* output nearby cloud
 	if(m_bOutputFiles) {
 
 		pcl::PointCloud<pcl::PointXYZINormal> pc;
@@ -723,7 +788,7 @@ void FramesFusion::SurroundModeling(const pcl::PointXYZ & oBasedP, pcl::PolygonM
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pMCResultCloud(new pcl::PointCloud<pcl::PointXYZ>);
 	oMarchingCuber.OutputMesh(oVoxeler.m_oOriCorner, oCBModel, pMCResultCloud);
 	
-	///* output result mesh
+	// /* output result mesh
 	if(m_bOutputFiles) {
 
 		std::stringstream sOutputPath;
@@ -967,6 +1032,9 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 	oViewPoint.y = pFramePN->back().y;
 	oViewPoint.z = pFramePN->back().z;
 
+	//TODO: DEBUG
+	std::cout << "point odom: " << oViewPoint.getVector3fMap().transpose() << std::endl;
+
 	if(pFramePN->back().curvature == -1) { //标识码
 		pFramePN->erase(pFramePN->end()-1);
 	}
@@ -1002,7 +1070,7 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 		
 		++m_iFusionFrameNum;
 
-		if(m_bSurfelFusion) {
+		if(m_bSurfelFusion || true) {
 
 			clock_t start_time = clock();
 
@@ -1019,6 +1087,17 @@ void FramesFusion::HandlePointClouds(const sensor_msgs::PointCloud2 & vLaserData
 			m_dAverageFusionTime += frames_fusion_time;
 			m_dMaxFusionTime = frames_fusion_time > m_dMaxFusionTime ? frames_fusion_time : m_dMaxFusionTime;
 		}
+
+		//remove point out of range
+		int n = pFramePN->size();
+		for(int i = 0; i < n; ++i) {
+			auto & oPoint = pFramePN->at(i);
+			Eigen::Vector3f vDistance(oViewPoint.x - oPoint.x, oViewPoint.y - oPoint.y, oViewPoint.z - oPoint.z);
+			if(vDistance.norm() > m_fNearLengths) {
+				swap(pFramePN->at(i--), pFramePN->at(--n));
+			}
+		}
+		pFramePN->erase(pFramePN->begin()+n, pFramePN->end());
 
 		//merge one frame data
 		m_vMapPCN += *pFramePN;

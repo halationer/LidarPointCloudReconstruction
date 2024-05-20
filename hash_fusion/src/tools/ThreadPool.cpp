@@ -16,20 +16,20 @@ ThreadPool::~ThreadPool() {
     shutdown = true;
     // semaphore tells thread to shutdown
     for(auto& thread : threads) {
-        sem_post(&waitSemaphore);
+        WakeUpAnyThread();
     }
     for(auto& thread : threads) {
         thread->join();
     }
     sem_destroy(&waitSemaphore);
+
+    std::cout << "## THREAD POOL ALREADY RELEASED ##" << std::endl;
 }
 
 void ThreadPool::AddTask(TaskPtr task) {
-
     std::unique_lock<std::mutex> lock(waitListLock);
     waitList.push(task);
-    // semaphore tells the task is comming
-    sem_post(&waitSemaphore);
+    WakeUpAnyThread();
 }
 
 TaskPtr ThreadPool::AddTask(std::function<void(void)> func) {
@@ -60,6 +60,12 @@ void ThreadPool::DoTask() {
         }
 
     }
+}
+
+// semaphore tells the task is comming
+void ThreadPool::WakeUpAnyThread() {
+
+    sem_post(&waitSemaphore);
 }
 
 }

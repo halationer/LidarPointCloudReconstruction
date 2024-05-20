@@ -41,20 +41,21 @@ typedef std::shared_ptr<Task> TaskPtr;
 class ThreadPool {
 
 private:
-    sem_t waitSemaphore;
     std::atomic<bool> shutdown = false;
-    std::mutex waitListLock;
-    std::queue<TaskPtr> waitList;
     std::vector<std::shared_ptr<std::thread>> threads;
+    void DoTask();
 
 public:
     ThreadPool(size_t size);
-    ~ThreadPool();
-    void AddTask(TaskPtr task);
-    TaskPtr AddTask(std::function<void(void)> func); 
+    virtual ~ThreadPool();
+    virtual void AddTask(TaskPtr task);
+    virtual TaskPtr AddTask(std::function<void(void)> func); 
 
-private:
-    void DoTask();
+protected:
+    sem_t waitSemaphore;
+    std::mutex waitListLock;
+    std::queue<TaskPtr> waitList;
+    void WakeUpAnyThread();
 };
 
 }

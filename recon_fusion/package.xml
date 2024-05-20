@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>hash_fusion</name>
-  <version>1.1.0</version>
-  <description>The hash_fusion package</description>
+  <name>recon_fusion</name>
+  <version>1.0.0</version>
+  <description>The recon_fusion package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->

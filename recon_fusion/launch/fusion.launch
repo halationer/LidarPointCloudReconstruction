@@ -18,9 +18,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
 <launch>
 
-    <arg name="mf_output_path" default="" />
+    <arg name="rc_output_path" default="" />
 
-    <arg name="cloud_in_topic" default="/frame_cloudnormals" />
+    <arg name="cloud_in_topic" default="/static_clouds" />
 
     <!-- use slam transfer -->
     <!-- <arg name="odom_in_topic" default="/slam_odom" /> -->
@@ -80,11 +80,11 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     
 
     <!-- frames_fusion node in frames_fusion pkg-->
-    <node name="hash_fusion" pkg="hash_fusion" type="hash_fusion" output="screen">
+    <node name="recon_fusion" pkg="recon_fusion" type="recon_fusion" output="screen">
 
         <!-- parameters-->  
 
-        <param name="file_output_path" type="string" value="$(arg mf_output_path)"  />
+        <param name="file_output_path" type="string" value="$(arg rc_output_path)"  />
 
         <!-- define input topic name-->
         <param name="cloud_in_topic" type="string" value="$(arg cloud_in_topic)"  />

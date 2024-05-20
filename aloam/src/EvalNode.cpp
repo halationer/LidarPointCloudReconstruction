@@ -28,6 +28,8 @@ const double scanPeriod = 0.1;
 int N_SCANS = 0;
 std::string evalPoseFile;
 std::string bagFile;
+std::string point_topic;
+Eigen::Matrix4d R_transform;
 
 ros::Publisher pubLaserCloud, pubOdomAftMapped, pubLaserAfterMappedPath;
 nav_msgs::Path laserAfterMappedPath;
@@ -227,7 +229,7 @@ void readPoses(const std::string& fileName) {
         }
         gt_pose.row(3) = Eigen::RowVector4d(0, 0, 0, 1);
 
-        poses.push_back(gt_pose);
+        poses.push_back(R_transform.inverse() * gt_pose * R_transform);
     }
 
     poseFile.close();
@@ -238,6 +240,13 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "EvalNode");
     ros::NodeHandle nh;
     ros::NodeHandle localnh("~");
+    R_transform << 0,  -1,  0,  0,
+                   0,  0,  -1,  0,
+                   1,  0,  0,  0, 
+                   0,  0,  0,  1;
+    bool is_kitti = false;
+    localnh.param<bool>("is_kitti", is_kitti, false);
+    if(!is_kitti) R_transform = Eigen::Matrix4d::Identity();
 
     localnh.param<int>("scan_line", N_SCANS, 16);
     printf("scan line number %d \n", N_SCANS);
@@ -263,10 +272,11 @@ int main(int argc, char **argv)
     localnh.param<int>("jump_frame", jump_frame_ref, 0);
     localnh.param<int>("sample_frame", sample_frame_ref, 1);
     localnh.param<std::string>("bag_file", bagFile, "./underground.bag");
+    localnh.param<std::string>("point_topic", point_topic, "/velodyne_points");
     std::cout << "read_bag_file" << bagFile << std::endl;
     rosbag::Bag in_bag;
     in_bag.open(bagFile, rosbag::bagmode::Read);
-    rosbag::View view(in_bag, rosbag::TopicQuery("/velodyne_points"));
+    rosbag::View view(in_bag, rosbag::TopicQuery(point_topic));
 
     double publish_delay;
     localnh.param<double>("publish_delay", publish_delay, 1.0);

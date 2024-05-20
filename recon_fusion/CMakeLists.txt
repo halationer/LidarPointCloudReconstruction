@@ -1,6 +1,6 @@
 
 cmake_minimum_required(VERSION 2.8.3)
-project(hash_fusion)
+project(recon_fusion)
 
 ## Compile as C++11
 SET(CMAKE_C_COMPILER g++)
@@ -43,7 +43,7 @@ aux_source_directory(src DIR_SRCS)
 aux_source_directory(src/tools DIR_SRCS)
 
 ###### build ########
-add_executable(hash_fusion ${DIR_SRCS})
+add_executable(recon_fusion ${DIR_SRCS})
 
 
-target_link_libraries(hash_fusion ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+target_link_libraries(recon_fusion ${catkin_LIBRARIES} ${PCL_LIBRARIES})

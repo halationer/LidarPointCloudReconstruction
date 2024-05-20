@@ -48,6 +48,7 @@
 #include "tools/OutputUtils.h"
 #include "tools/DebugManager.h"
 #include "tools/RosPublishManager.h"
+#include "tools/BufferLimitThreadPool.h"
 
 #include "updater/ProjectUpdater.h"
 #include "updater/RayUpdater.h"
@@ -217,8 +218,6 @@ protected:
     //nearby mesh update period
     float m_fNearMeshPeriod;
 
-    //How many frames of point cloud have been calculated cumulatively
-    unsigned int m_iPCFrameCount;
 
     //circle vector of odom
     ros::Time m_oLastModelingTime;
@@ -244,6 +243,17 @@ protected:
     double m_dMaxReconstructTime;
     int m_iReconstructFrameNum;
 
+    // data associate time statics
+    double m_dAverageFusionTime;
+    double m_dMaxFusionTime;
+    int m_iFusionFrameNum;
+    std::unique_ptr<Tools::ThreadPool> m_pFusionThreadPool;
+
+    // static extract time statics
+    double m_dAverageExtractTime;
+    double m_dMaxExtractTime;
+    int m_iPCFrameCount;
+
     // data association switch
     bool m_bSurfelFusion;
     // viewpoint and current frame for surfel fusion
@@ -258,11 +268,6 @@ protected:
     virtual void UpdateOneFrame(const pcl::PointNormal& oViewPoint, pcl::PointCloud<pcl::PointNormal>& vFilteredMeasurementCloud);
 
     bool m_bAsyncReconstruction;
-
-    // data associate time statics
-    double m_dAverageFusionTime;
-    double m_dMaxFusionTime;
-    int m_iFusionFrameNum;
 
     // simple to publish in a new topic
     ros::NodeHandle& m_oGlobalNode;

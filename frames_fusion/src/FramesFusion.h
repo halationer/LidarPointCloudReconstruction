@@ -146,6 +146,7 @@ public:
 
     //Destructor
     virtual ~FramesFusion();
+    void SaveFinalMeshAndPointCloud();
 
     //Reads and verifies the ROS parameters.
     bool ReadLaunchParams(ros::NodeHandle & nodeHandle);  

@@ -308,6 +308,10 @@ void MeshOperation::LocalFaceNormalAndDistanceConfidence(
 	vCombinedNormal.reserve(vVertices.size());
 	//initialization
 	for (int i = 0; i < vVertices.size(); ++i){
+
+		// jump helper points
+		if(vVertices[i].intensity == -1) continue;
+
 		//a point and its normal starting with (0,0,0)
 		pcl::PointNormal oPointN;
 		oPointN.x = vVertices[i].x;

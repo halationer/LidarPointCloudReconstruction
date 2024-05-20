@@ -141,9 +141,9 @@ public:
   void Fuse(DistanceIoVolume& oLocal);
   void Update(pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners);
   void UpdateLimitDistance(pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners, size_t iLevel);
-  float SearchSdf(const Eigen::Vector3f& vPoint);
-  int SearchLevel(const HashPos& oPos);
-  int SearchIo(const HashPos& oPos);
+  float SearchSdf(const Eigen::Vector3f& vPoint, size_t iMaxLevel = 3);
+  int SearchLevel(const HashPos& oPos, size_t iMaxLevel = 3);
+  int SearchIo(const HashPos& oPos, size_t iMaxLevel = 3);
   const pcl::DistanceIoVoxel* GetVoxel(const HashPos& oPos);
   float GetStaticExpandDistance() const { return m_fStaticExpandDistance; } 
 

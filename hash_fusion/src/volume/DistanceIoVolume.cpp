@@ -200,13 +200,18 @@ std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> DistanceIoVolume::Create
 
 void DistanceIoVolume::Update(pcl::PointCloud<pcl::DistanceIoVoxel>& vCorners) {
 
+    // io 属性的说明: io = 0 在表面外 | io = 1 在表面内
     for(auto& oCorner : vCorners) {
         
+        // 只更新距离较近的外点
         float& update_io = oCorner.io;
         if(update_io == 0.0f && oCorner.distance < 1.0f)
             update_io = -1.0f;
 
+        // 距离较远的外点被抛弃
         if(update_io == 0.0f) continue;
+
+        // 获取数据对象
         HashPos oPos;
         PointBelongVoxelPos(oCorner, oPos);
         auto& oVoxel = CreateAndGetVoxel(oPos);
@@ -262,14 +267,14 @@ void DistanceIoVolume::Fuse(DistanceIoVolume& oLocal) {
 /**
  * 
 */
-float DistanceIoVolume::SearchSdf(const Eigen::Vector3f& vPoint) {
+float DistanceIoVolume::SearchSdf(const Eigen::Vector3f& vPoint, size_t iMaxLevel) {
 
     HashPos oPos;
     PointBelongVoxelPos(vPoint, oPos);
     // AlignToStepFloor(oPos, 1);
 
     std::unique_lock<std::mutex> lock(m_mVolumeDataMutex);
-    for(int level = 0; level <= 3; ++level) {
+    for(int level = 0; level <= iMaxLevel; ++level) {
         float res = InterpolateCorners(oPos, vPoint, level);
         if(res != -INFINITY) return res;
     }
@@ -278,9 +283,9 @@ float DistanceIoVolume::SearchSdf(const Eigen::Vector3f& vPoint) {
 }
 
 
-int DistanceIoVolume::SearchLevel(const HashPos& oPos) {
+int DistanceIoVolume::SearchLevel(const HashPos& oPos, size_t iMaxLevel) {
 
-    for(int level = 0; level <= 3; ++level) {
+    for(int level = 0; level <= iMaxLevel; ++level) {
         auto vCorners = GetCornerPoses(oPos, level);
         int iValidCornerNum = 0;
         for(auto&& oCorner : vCorners) {
@@ -292,9 +297,9 @@ int DistanceIoVolume::SearchLevel(const HashPos& oPos) {
     return -1;
 }
 
-int DistanceIoVolume::SearchIo(const HashPos& oPos) {
+int DistanceIoVolume::SearchIo(const HashPos& oPos, size_t iMaxLevel) {
 
-    for(int level = 0; level <= 3; ++level) {
+    for(int level = 0; level <= iMaxLevel; ++level) {
         auto vCorners = GetCornerPoses(oPos, level);
         int iValidCornerNum = 0;
         int mask = 0;
@@ -373,6 +378,7 @@ float DistanceIoVolume::InterpolateCorners(const HashPos& oPos, const Eigen::Vec
 
     auto vCorners = GetCornerPoses(oPos, iLevel);
     std::vector<const pcl::DistanceIoVoxel*> pVoxels;
+    pVoxels.reserve(8);
     for(auto&& oCorner : vCorners) {
         if(!m_vVolume.count(oCorner))
             return -INFINITY;

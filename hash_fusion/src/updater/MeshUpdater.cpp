@@ -628,7 +628,7 @@ void MeshUpdater::UpdateVolume(
     Eigen::Vector3f vLimitZ = Eigen::Vector3f(
         std::numeric_limits<float>().infinity(),
         std::numeric_limits<float>().infinity(),
-        oViewPoint.z + 2.0f);
+        oViewPoint.z + 3.0f);
 
     // first level
     if(vCorners.size() == 0) {
@@ -713,6 +713,74 @@ void MeshUpdater::UpdateVisibleVolume(
     }
 
     // wait for task finish
+    for(auto& task : tasks) task->Join();
+}
+
+// embree func, new func to build octree
+void MeshUpdater::UpdateVolumeFromBottom(
+    const pcl::PointXYZ& oViewPoint,
+    const int iSectorNum,
+    const std::vector<pcl::PointCloud<pcl::PointXYZI>>& vSinglePoints,
+    DistanceIoVolume* const pDistanceIoVolume,
+    std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr>& vCorners,
+    size_t iLevel)
+{
+	std::vector<Tools::TaskPtr> tasks;
+
+    // y - height limit
+    Eigen::Vector3f vLimitZ = Eigen::Vector3f(
+        std::numeric_limits<float>().infinity(),
+        std::numeric_limits<float>().infinity(),
+        oViewPoint.z + 3.0f);
+    
+    // 先计算顶层的所有角点(level = iLevel)
+    for(int i = 0; i < iSectorNum; ++i) {
+        tools::BoundingBox oBoundingBox = m_oSdfMaker.GetBoundingBox(i);
+        if(m_fRangeRadius > 0) {
+            oBoundingBox.GetMinBound() = oBoundingBox.GetMinBound().cwiseMax(
+                oViewPoint.getVector3fMap() - Eigen::Vector3f::Ones() * m_fRangeRadius);
+            oBoundingBox.GetMaxBound() = oBoundingBox.GetMaxBound().cwiseMin(
+                oViewPoint.getVector3fMap() + Eigen::Vector3f::Ones() * m_fRangeRadius);
+        }
+        vCorners.emplace_back(new pcl::PointCloud<pcl::DistanceIoVoxel>(std::move( 
+            pDistanceIoVolume->CreateAndGetCornersAABB(oBoundingBox.GetMinBound(), oBoundingBox.GetMaxBound().cwiseMin(vLimitZ), iLevel))));
+        auto pCorners = vCorners.back();
+        tasks.emplace_back(m_oThreadPool.AddTask([&,i,pCorners](){
+            m_oSdfMaker.QuerySdf(oViewPoint, *pCorners, i);
+            pDistanceIoVolume->Update(*pCorners);
+        }));
+    }
+
+    // 再从底层向上依次计算(level from 1 to iLevel-1)
+    for(int level = 1; level < iLevel; ++level) {
+            
+        const size_t step = 1 << level;
+        
+        HashPos oPos;
+        for(int i = 0; i < iSectorNum; ++i) {
+
+            auto&& vSectorPoints = vSinglePoints[i];
+
+            // 1. 提取mesh中的点云, 对于每个点，找到对应level的体素
+            HashPosSet vVoxelPoses;
+            for(auto&& oPoint : vSectorPoints) {
+                if(oPoint.intensity > pDistanceIoVolume->GetStaticExpandDistance()) continue;
+                pDistanceIoVolume->PointBelongVoxelPos(oPoint, oPos);
+                AlignToStepFloor(oPos, step);
+                vVoxelPoses.emplace(oPos);
+            }
+
+            // 2. 根据mesh更新所有对应体素的角点
+            auto pCornerPoints = pDistanceIoVolume->CreateAndGetCornersByPos(vVoxelPoses, level);
+            vCorners.emplace_back(pCornerPoints);
+            tasks.emplace_back(m_oThreadPool.AddTask([&, i, pCornerPoints](){
+                m_oSdfMaker.QuerySdf(oViewPoint, *pCornerPoints, i);
+                pDistanceIoVolume->Update(*pCornerPoints);
+            }));
+        }
+    }
+
+    // wait tasks finish
     for(auto& task : tasks) task->Join();
 }
 
@@ -859,19 +927,26 @@ void MeshUpdater::MeshFusion(
     m_oFuseTimer.DebugTime("1_make_scene");
 
     // voxelize and cluster, out put the dynamic objects
-    MakeDynamicObject(pDistanceIoVolume, vSinglePoints);
-    m_oFuseTimer.DebugTime("2_dynamic_extract");
+    // MakeDynamicObject(pDistanceIoVolume, vSinglePoints);
+    m_oFuseTimer.DebugTime("2_dynamic_extract(cancel)");
 
-    // update local volume
+    // update local volume 
     std::unique_ptr<DistanceIoVolume> pLocalVolume(new DistanceIoVolume);
     std::vector<pcl::PointCloud<pcl::DistanceIoVoxel>::Ptr> corners;
     pcl::PointXYZ oLength;
     oLength.getVector3fMap() = oVolume.GetVoxelLength();
     pLocalVolume->SetResolution(oLength);
-    UpdateVolume(oViewPoint, vSingleMeshList.size(), pLocalVolume.get(), corners, m_iOctreeLevel);
+    /* update func a (采用这种方式得到的corner数量为5k量级，八叉树层级为0)
+    UpdateVolume(oViewPoint, vSingleMeshList.size(), pLocalVolume.get(), corners, m_iOctreeLevel); 
     m_oFuseTimer.DebugTime("3_freespace");
     UpdateVisibleVolume(oViewPoint, vSingleMeshList.size(), vSinglePoints, pLocalVolume.get(), corners);
     m_oFuseTimer.DebugTime("3_freespace_nearpoint");
+    //*/
+    // /* update func b (自下而上更新，)
+    UpdateVolumeFromBottom(oViewPoint, vSingleMeshList.size(), vSinglePoints, pLocalVolume.get(), corners, m_iOctreeLevel);
+    UpdateVisibleVolume(oViewPoint, vSingleMeshList.size(), vSinglePoints, pLocalVolume.get(), corners);
+    m_oFuseTimer.DebugTime("3_freespace");
+    //*/
 
     // sector 分布
     // 2 | 1
@@ -890,8 +965,8 @@ void MeshUpdater::MeshFusion(
             associate.push_back(std::min(pVoxel->distance * 0.5f + 0.4f, 1.0f));
         }
     }
-    ROS_INFO_CYAN("corner size: %d, volume point: %d,%d", vAllCorners.size(), 
-        pLocalVolume->m_vVolumeData.size(), pLocalVolume->m_vVolumeData.back().size());
+    ROS_INFO_CYAN("corner size: %d, volume point: %d,%d, octree level: %d", vAllCorners.size(), 
+        pLocalVolume->m_vVolumeData.size(), pLocalVolume->m_vVolumeData.back().size(), m_iOctreeLevel);
     m_oRpManager.PublishPointCloud(vAllCorners, associate, "/corner_is_free_debug");
     
     // local to global

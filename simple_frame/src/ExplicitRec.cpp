@@ -415,16 +415,15 @@ void ExplicitRec::OriginalReconstruction(const pcl::PointCloud<pcl::PointXYZI> &
 					pSectorCloud->points.push_back(vSceneCloud.points[iSecPointInAllIdx]);
 				}
 
+				// add two helper points
 				if (m_bElevationFlag){
 					pcl::PointXYZI oViewGroundP;
 					oViewGroundP.x = m_oViewPoint.x;
 					oViewGroundP.y = m_oViewPoint.y;
+					oViewGroundP.intensity = -1; // helper point flag
 					oViewGroundP.z = m_oViewPoint.z - m_fViewElevation;
 					pSectorCloud->push_back(oViewGroundP);
-
-					oViewGroundP.x = m_oViewPoint.x;
-					oViewGroundP.y = m_oViewPoint.y;
-					oViewGroundP.z = m_oViewPoint.z + m_fViewElevation;
+					oViewGroundP.z = m_oViewPoint.z + m_fViewElevation * 2;
 					pSectorCloud->push_back(oViewGroundP);
 				}
 
