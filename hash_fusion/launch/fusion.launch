@@ -45,7 +45,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     <arg name="voxel_cube_size" default="0.5"/> 
     <arg name="octree_level" default="0" />
 
-    <!-- free space update range -->
+    <!-- free space update range 更新自由空间的范围，越大剔除越强，同时也存在错误剔除（由于单帧伪面存在）-->
     <arg name="voxel_total_size" default="60.0"/> 
 
     <arg name="mesh_u_period" default="2.0"/> 

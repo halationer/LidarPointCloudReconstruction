@@ -17,10 +17,12 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 -->
 
 <launch>
+    <arg name="ori" default="false" />
     <arg name="rosbag" default="$(find frame_reconstruction)/../data/nsh_indoor_outdoor.bag" />
     <arg name="jump" default="0" />
     <arg name="record_poses" default="false" />
     <arg name="record_path" default="./" />
+    <arg name="point_topic" default="/velodyne_points" />
 
     <!-- output evaluation files (point cloud and mesh )-->
     <arg name="sf_output_path" default=""/>
@@ -53,12 +55,20 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
         <arg name="dy_output_path" value="$(arg dy_output_path)"/>
     </include>
 
-    <include file="$(find frames_fusion)/launch/fusion.launch" >
-        <arg name="mf_output_path" value="$(arg mf_output_path)" />
-    </include>
+    <group if="$(arg ori)">
+        <include file="$(find frames_fusion)/launch/fusion.launch" >
+            <arg name="mf_output_path" value="$(arg mf_output_path)" />
+        </include>
+    </group>
+    
+    <group unless="$(arg ori)">
+        <include file="$(find recon_fusion)/launch/fusion.launch" >
+            <arg name="rc_output_path" value="$(arg mf_output_path)" />
+        </include>
+    </group>
 
     <!-- rosbag related: replay with rate = 1 speed up-->    
-    <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 $(arg rosbag) --topics /velodyne_points -s $(arg jump)"/>
+    <node pkg="rosbag" type="play" name="rosbag" args="--clock -r 1 $(arg rosbag) --topics $(arg point_topic) -s $(arg jump)"/>
 
     <!--
     <node pkg="rosbag" type="play" name="rosbag" args="-'-clock -r 1 $(arg rosbag) -s $(arg jump)">

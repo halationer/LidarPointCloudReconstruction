@@ -498,21 +498,21 @@ Visualization Manager:
     - Class: rviz/Group
       Displays:
         - Class: rviz/Marker
-          Enabled: false
-          Marker Topic: /surrounding_meshes
-          Name: CubeMesh
-          Namespaces:
-            {}
-          Queue Size: 100
-          Value: false
-        - Class: rviz/MarkerArray
           Enabled: true
           Marker Topic: /surrounding_meshes
-          Name: CubeMeshArray
+          Name: CubeMesh
           Namespaces:
             "": true
           Queue Size: 100
           Value: true
+        - Class: rviz/MarkerArray
+          Enabled: false
+          Marker Topic: /surrounding_meshes
+          Name: CubeMeshArray
+          Namespaces:
+            {}
+          Queue Size: 100
+          Value: false
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
@@ -1031,7 +1031,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 93.58796691894531
+      Distance: 65.47721862792969
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -1046,10 +1046,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5947974920272827
+      Pitch: 0.5647974610328674
       Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 3.0581119060516357
+      Yaw: 1.5931085348129272
     Saved: ~
 Window Geometry:
   Displays:

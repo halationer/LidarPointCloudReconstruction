@@ -1,5 +1,33 @@
 # 实时激光雷达点云重建
 
+## 更新说明 2024.05.26
+
+代码执行命令示例:
+```shell
+# GT pose 模式：
+#   KITTI 数据集：
+roslaunch simple_frame eval_mapping.launch rosbag:=kitti_seq/09/09.bag gtpos:=kitti_seq/09/poses.txt mf_output_path:=/multi-frame-result-output-path dy_output_path:=/dynamic-detect-result-output-path ori:=true delay:=1 jump:=1050 is_kitti:=true point_topic:=velodyne_points
+#   通用数据集：
+roslaunch simple_frame eval_mapping.launch rosbag:=seq/example.bag gtpos:=seq/example.txt mf_output_path:=/multi-frame-result-output-path dy_output_path:=/dynamic-detect-result-output-path ori:=true
+
+# Aloam 配准模式：
+roslaunch simple_frame hash_mapping.launch rosbag:=seq/example.bag mf_output_path:=/multi-frame-result-output-path dy_output_path:=/dynamic-detect-result-output-path ori:=true
+```
+常用参数解释：
+
+| 参数名称 | 默认值 | 说明 |
+| -------- | ------ | ---- |
+| rosbag | null(必填) | ros包的绝对路径 |
+| point_topic | /velodyne_points | 重新指定输入点云的主题来源，注意主题名称是否有`/` |
+| ori | false | 如果为true，则使用原始的重建方法，关闭区域生长的强力剔除方式 |
+| jump | 0 | 从第几帧开始播放 <b>(GT模式)</b>，从第几秒播放 <b>(Aloam模式)</b> |
+| gtpos | null(必填) | pos文件的绝对路径 <b>(只能用于GT模式)</b> |
+| kitti | false | 是否启用 kitti 模式 - kitti 模式的数据集需要进行一些变换计算才能正常运行 <b>(只能用于GT模式)</b> |
+| delay | 1 | 减慢播放的倍率，如delay=2时，代表0.5倍速播放 <b>(只能用于GT模式)</b> |
+| sf_output_path | "" | 将单帧重建结果输出到某个文件夹中 |
+| mf_output_path | "" | 将多帧重建结果输出到某个文件夹中 |
+| dy_output_path | "" | 将动态点检测结果输出到某个文件夹中 |
+
 ## 更新说明 2023.7.20
 
 编译时报错 error: conflicting declaration ‘typedef struct LZ4_streamDecode_t LZ4_streamDecode_t’
